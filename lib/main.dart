@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'services/account_service.dart';
+import 'dashboard_data.dart';
 import 'screens/login_screen.dart';
 
 void main() {
@@ -8,6 +9,7 @@ void main() {
     MultiProvider(
       providers: [
         ChangeNotifierProvider(create: (_) => AccountService()),
+        ChangeNotifierProvider(create: (_) => DashboardProvider()..start()),
       ],
       child: const AgricultureApp(),
     ),
