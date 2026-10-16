@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'services/account_service.dart';
 import 'dashboard_data.dart';
 import 'screens/login_screen.dart';
+import 'screens/thank_you_screen.dart';
 
 void main() {
   runApp(
@@ -40,6 +41,7 @@ class AgricultureApp extends StatelessWidget {
       initialRoute: '/',
       routes: {
         '/': (context) => const LoginScreen(),
+        '/thank_you': (context) => const ThankYouScreen(),
       },
     );
   }

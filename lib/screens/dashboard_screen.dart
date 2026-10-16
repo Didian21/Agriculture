@@ -1473,7 +1473,7 @@ class SettingsTab extends StatelessWidget {
             onPressed: () {
               Navigator.pop(ctx);
               p.logout();
-              Navigator.pushReplacementNamed(context, '/');
+              Navigator.pushReplacementNamed(context, '/thank_you');
             },
             child: Text(isTagalog ? 'I-log out' : 'Log Out'),
           ),

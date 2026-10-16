@@ -19,8 +19,22 @@ class PreviewApp extends StatelessWidget {
       providers: [
         ChangeNotifierProvider(create: (_) {
           final service = AccountService();
-          service.addFarmer('farmer1', 'pass', 'Juan dela Cruz');
-          service.addFarmer('farmer2', 'pass', 'Maria Santos');
+          service.addFarmer(
+            username: 'farmer1',
+            password: 'pass',
+            profileName: 'Juan dela Cruz',
+            barangay: 'Biñan',
+            contactNumber: '09171234567',
+            organization: 'Pagsanjan Rice Farmers Coop',
+          );
+          service.addFarmer(
+            username: 'farmer2',
+            password: 'pass',
+            profileName: 'Maria Santos',
+            barangay: 'Buboy',
+            contactNumber: '09189876543',
+            organization: 'Anibong Vegetable Planters Assoc.',
+          );
           return service;
         }),
       ],
@@ -83,9 +97,13 @@ class PreviewScreen extends StatelessWidget {
               label: const Text('Preview Farmer Dashboard'),
               onPressed: () {
                 final sampleFarmer = Farmer(
+                  id: 'F001',
                   username: 'farmer1',
                   password: 'pass',
                   profileName: 'Juan dela Cruz',
+                  barangay: 'Biñan',
+                  contactNumber: '09171234567',
+                  organization: 'Pagsanjan Rice Farmers Coop',
                   records: ['Harvest Jan: 500kg', 'Harvest Feb: 450kg'],
                 );
                 Navigator.push(
