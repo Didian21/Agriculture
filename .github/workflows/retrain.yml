@@ -1,0 +1,41 @@
+name: Retrain models and update Supabase
+
+on:
+  schedule:
+    - cron: "0 2 1 * *"      # 1st day of every month, 02:00 UTC (10:00 AM Philippine time)
+  workflow_dispatch:           # lets you press "Run workflow" manually
+    inputs:
+      dry_run:
+        description: "Train only, do not write to Supabase"
+        type: boolean
+        default: false
+
+jobs:
+  retrain:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - run: pip install -r requirements.txt
+
+      - name: Train and push results
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          DATA_SOURCE: supabase
+          DRY_RUN: ${{ inputs.dry_run && '1' || '0' }}
+        run: python train.py
+
+      - name: Keep model and reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: model-and-reports
+          path: out/
+          retention-days: 30
