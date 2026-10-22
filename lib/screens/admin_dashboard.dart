@@ -1,3 +1,5 @@
+import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
@@ -15,13 +17,10 @@ class AdminLocale {
 
   // Nav Items (WITHOUT NUMBERS)
   String get navDashboard => isTagalog ? 'Buod ng Dashboard' : 'Dashboard Summary';
-  String get navFarmers => isTagalog ? 'Mga Magsasaka' : 'Farmer Records';
-  String get navFarms => isTagalog ? 'Mga Sakahan' : 'Farm Records';
+  String get navFarmers => isTagalog ? 'Mga Magsasaka at Sakahan' : 'Farmer & Farm Records';
   String get navHistorical => isTagalog ? 'Nakaraang Datos' : 'Historical Data';
   String get navMap => isTagalog ? 'Mapang Interaktibo' : 'Interactive Map';
   String get navAccounts => isTagalog ? 'Mga Akawnt ng Farmer' : 'Farmer Accounts';
-  String get navCrops => isTagalog ? 'Pangangailangan ng Tanim' : 'Crop Requirements';
-  String get navModel => isTagalog ? 'ML Model Status' : 'Model Management';
   String get navAdminStaff => isTagalog ? 'Mga Admin at Staff' : 'Admin Accounts';
   String get navActivityLog => isTagalog ? 'Talaan ng Kilos (Log)' : 'Activity Log';
   String get navLogout => isTagalog ? 'Mag-logout (Exit)' : 'Logout';
@@ -34,7 +33,6 @@ class AdminLocale {
   String get filterTitle => isTagalog ? 'Mga Filter (Barangay, Tanim, Panahon)' : 'Filters (Barangay, Crop, Period)';
   String get kpiFarmers => isTagalog ? 'Rehistradong Magsasaka' : 'Registered Farmers';
   String get kpiFarmArea => isTagalog ? 'Kabuuan ng Lupaing Sakahan' : 'Total Farm Area';
-  String get kpiMlAccuracy => isTagalog ? 'Tumpak ng ML Prediction' : 'ML Prediction Accuracy';
   String get farmersPerBarangay => isTagalog ? 'Bilang ng Magsasaka Bawat Barangay' : 'Farmers per Barangay';
   String get areaPerCrop => isTagalog ? 'Lupaing Sakahan Bawat Uri ng Tanim' : 'Farm Area per Crop Type';
   String get historicalTrends => isTagalog ? 'Nakaraang Trend sa Ani at Presyo (MAO)' : 'Historical Production & Price Trends (MAO)';
@@ -45,14 +43,11 @@ class AdminLocale {
   String get weatherForecast => isTagalog ? '5-Araw na Ulat ng Panahon sa Sakahan' : '5-Day Agricultural Weather Forecast';
   String get weatherAdvisory => isTagalog ? '🌾 Payo: Angkop ang panahon para sa pagpapataba' : '🌾 Advisory: Favorable for fertilizer application';
 
-  // Farmer Records
-  String get farmerDirTitle => isTagalog ? 'Direktoryo ng mga Magsasaka' : 'Farmer Records Management';
+  // Farmer & Farm Records
+  String get farmerDirTitle => isTagalog ? 'Direktoryo ng mga Magsasaka at Sakahan' : 'Farmer & Farm Records Management';
   String get addFarmer => isTagalog ? 'Magdagdag ng Magsasaka' : 'Add Farmer';
+  String get addFarmRecord => isTagalog ? 'Magdagdag ng Sakahan' : 'Add Farm';
   String get searchFarmerPlaceholder => isTagalog ? 'Magsaliksik ng pangalan, username, o samahan...' : 'Search farmer name, username, or association...';
-
-  // Farm Records
-  String get farmRecordsTitle => isTagalog ? 'Pamamahala ng Lupa at Tanim' : 'Farm Records Management';
-  String get addFarmRecord => isTagalog ? 'Magdagdag ng Sakahan' : 'Add Farm Record';
 
   // Historical Data
   String get historicalTitle => isTagalog ? 'Mga Nakaraang Rekord ng MAO' : 'Historical Production & Price Data';
@@ -64,15 +59,6 @@ class AdminLocale {
 
   // Farmer Accounts
   String get accountsTitle => isTagalog ? 'Pamamahala ng mga Akawnt ng Farmer' : 'Farmer Accounts Management';
-
-  // Crop Requirements
-  String get cropReqTitle => isTagalog ? 'Especipikasyon sa Pagtatanim' : 'Crop Planting Requirements';
-  String get addCropSpecs => isTagalog ? 'Magdagdag ng Specs' : 'Add Crop Specs';
-
-  // ML Model
-  String get modelTitle => isTagalog ? 'Pamamahala sa ML Model at Accuracy' : 'ML Model Management & Accuracy';
-  String get retrainModel => isTagalog ? 'Muling I-train ang ML Model' : 'Re-train ML Model';
-  String get retrainingModel => isTagalog ? 'Sinasanay ang ML Model...' : 'Re-training ML Model...';
 
   // Admin Staff
   String get adminStaffTitle => isTagalog ? 'Mga Akawnt ng Admin at Tungkulin' : 'Admin Accounts & Staff Roles';
@@ -90,7 +76,7 @@ class AdminDashboard extends StatefulWidget {
 }
 
 class _AdminDashboardState extends State<AdminDashboard> {
-  int _selectedIndex = 0; // 0..9 for the 10 main modules
+  int _selectedIndex = 0; // 0..6 for the 7 main modules
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
 
@@ -99,23 +85,750 @@ class _AdminDashboardState extends State<AdminDashboard> {
   String _selectedBarangayFilter = 'All';
   String _selectedTimePeriodFilter = 'All';
 
+  final ScrollController _kpiScrollController = ScrollController();
+  final ScrollController _sidebarScrollController = ScrollController();
+
   @override
   void dispose() {
     _searchController.dispose();
+    _kpiScrollController.dispose();
+    _sidebarScrollController.dispose();
     super.dispose();
   }
 
-  void _triggerExport(BuildContext context, String type, bool isTagalog) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          isTagalog
-              ? 'Ginagawa at kino-kopya ang ulat sa $type para sa Pagsanjan MAO...'
-              : 'Generating and downloading $type report for Pagsanjan MAO...',
+  String _generateValidPdfContent(String title, String bodyText) {
+    final now = DateFormat('yyyy-MM-dd HH:mm:ss').format(DateTime.now());
+    final safeTitle = title.replaceAll('\\', '\\\\').replaceAll('(', '\\(').replaceAll(')', '\\)');
+
+    final lines = bodyText.replaceAll('\r', '').split('\n').take(30).toList();
+    final bodyLinesBuffer = StringBuffer();
+    for (final l in lines) {
+      if (l.trim().isEmpty) continue;
+      final safeLine = l.replaceAll('\\', '\\\\').replaceAll('(', '\\(').replaceAll(')', '\\)');
+      bodyLinesBuffer.writeln('($safeLine) Tj T*');
+    }
+
+    final streamText = '''BT
+/F1 14 Tf
+16 TL
+50 740 Td
+($safeTitle) Tj T*
+/F1 9 Tf
+12 TL
+(Generated on: $now | Pagsanjan MAO System) Tj T*
+0 -10 Td
+${bodyLinesBuffer.toString().trim()}
+ET''';
+
+    final streamBytesLength = streamText.length;
+
+    final header = '%PDF-1.4\n';
+
+    final obj1 = '''1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+''';
+
+    final obj2 = '''2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+''';
+
+    final obj3 = '''3 0 obj
+<< /Type /Page /Parent 2 0 R /Resources << /Font << /F1 << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >> >> >> /MediaBox [0 0 612 792] /Contents 4 0 R >>
+endobj
+''';
+
+    final obj4Header = '4 0 obj\n<< /Length $streamBytesLength >>\nstream\n';
+    final obj4Footer = '\nendstream\nendobj\n';
+
+    final offset1 = header.length;
+    final offset2 = offset1 + obj1.length;
+    final offset3 = offset2 + obj2.length;
+    final offset4 = offset3 + obj3.length;
+    final offsetXref = offset4 + obj4Header.length + streamBytesLength + obj4Footer.length;
+
+    String formatOffset(int offset) => offset.toString().padLeft(10, '0');
+
+    final xref = '''xref
+0 5
+0000000000 65535 f 
+${formatOffset(offset1)} 00000 n 
+${formatOffset(offset2)} 00000 n 
+${formatOffset(offset3)} 00000 n 
+${formatOffset(offset4)} 00000 n 
+trailer
+<< /Size 5 /Root 1 0 R >>
+startxref
+$offsetXref
+%%EOF''';
+
+    return '$header$obj1$obj2$obj3$obj4Header$streamText$obj4Footer$xref';
+  }
+
+  String _generateExportContent(String moduleName, String format, AccountService service) {
+    final now = DateTime.now();
+    final dateStr = DateFormat('yyyy-MM-dd HH:mm:ss').format(now);
+    final isCsv = format.toLowerCase().contains('excel') || format.toLowerCase().contains('csv');
+    final mod = moduleName.toLowerCase();
+
+    if (isCsv) {
+      final sb = StringBuffer();
+      sb.writeln('PAGSANJAN MUNICIPAL AGRICULTURE OFFICE (MAO)');
+      sb.writeln('OFFICIAL EXPORT REPORT: ${moduleName.toUpperCase()}');
+      sb.writeln('GENERATED ON: $dateStr');
+      sb.writeln('OPERATOR: ${service.activeUserName}');
+      sb.writeln('');
+
+      if (mod.contains('farmer') && mod.contains('farm')) {
+        sb.writeln('Farmer ID,Full Personal Name,Username,Barangay,Contact Details,Association / Org,Status,Farm Sitio,Land Area (ha),Tenure Status,Crop Type');
+        for (final f in service.farmers) {
+          final farmerFarms = service.farms.where((farm) => farm.farmerId == f.id || farm.farmerName == f.profileName).toList();
+          if (farmerFarms.isEmpty) {
+            sb.writeln('${f.id},"${f.profileName}",${f.username},${f.barangay},${f.contactNumber},"${f.organization}",${f.status},N/A,0.0,N/A,N/A');
+          } else {
+            for (final farm in farmerFarms) {
+              sb.writeln('${f.id},"${f.profileName}",${f.username},${f.barangay},${f.contactNumber},"${f.organization}",${f.status},"${farm.locationName}",${farm.landAreaHectares},${farm.tenureStatus},${farm.cropType}');
+            }
+          }
+        }
+      } else if (mod.contains('account')) {
+        if (mod.contains('admin')) {
+          sb.writeln('Staff ID,Staff Name,Username,Email Address,Role / Position,Status');
+          for (final s in service.adminStaffList) {
+            sb.writeln('${s.id},"${s.name}",${s.username},${s.email},"${s.role}",${s.status}');
+          }
+        } else {
+          sb.writeln('Farmer ID,Full Name,Username,Barangay,Contact Details,Organization,Account Status');
+          for (final f in service.farmers) {
+            sb.writeln('${f.id},"${f.profileName}",${f.username},${f.barangay},${f.contactNumber},"${f.organization}",${f.status}');
+          }
+        }
+      } else if (mod.contains('historical')) {
+        sb.writeln('Record ID,Crop,Year,Month,Production (MT),Price per Kg (PHP),Uploaded By');
+        for (final h in service.historicalRecords) {
+          sb.writeln('${h.id},${h.crop},${h.year},${h.month},${h.productionMT},${h.pricePerKg},"${h.uploadedBy}"');
+        }
+      } else if (mod.contains('map')) {
+        sb.writeln('Farm ID,Farmer Name,Sitio Location,Barangay,Latitude,Longitude,Land Area (ha),Tenure,Crop Type');
+        for (final farm in service.farms) {
+          sb.writeln('${farm.id},"${farm.farmerName}","${farm.locationName}",${farm.barangay},${farm.latitude},${farm.longitude},${farm.landAreaHectares},${farm.tenureStatus},${farm.cropType}');
+        }
+      } else if (mod.contains('activity') || mod.contains('log')) {
+        sb.writeln('Log ID,Timestamp,Operator User,Module,Action,Details');
+        for (final l in service.activityLogs) {
+          sb.writeln('${l.id},"${DateFormat('yyyy-MM-dd HH:mm').format(l.timestamp)}",${l.user},${l.module},${l.action},"${l.details}"');
+        }
+      } else {
+        sb.writeln('Metric Title,Value,Details');
+        sb.writeln('Registered Farmers,${service.farmers.length},Active Agricultural Directory');
+        final totalArea = service.farms.fold(0.0, (sum, item) => sum + item.landAreaHectares);
+        sb.writeln('Total Farm Area (ha),${totalArea.toStringAsFixed(1)},Pagsanjan Registered Farmlands');
+        sb.writeln('Historical Records,${service.historicalRecords.length},MAO Production Data');
+        sb.writeln('Audit Log Items,${service.activityLogs.length},Logged System Operations');
+      }
+      return sb.toString();
+    } else {
+      final textSb = StringBuffer();
+      if (mod.contains('farmer') && mod.contains('farm')) {
+        for (final f in service.farmers) {
+          final farmerFarms = service.farms.where((farm) => farm.farmerId == f.id || farm.farmerName == f.profileName).toList();
+          textSb.writeln('FARMER: ${f.profileName} (@${f.username}) - Brgy. ${f.barangay}');
+          textSb.writeln('Contact: ${f.contactNumber} | Org: ${f.organization} | Status: ${f.status}');
+          for (final farm in farmerFarms) {
+            textSb.writeln('  -> Farm: ${farm.cropType} (${farm.landAreaHectares} ha, ${farm.tenureStatus}) - ${farm.locationName}');
+          }
+          textSb.writeln('');
+        }
+      } else if (mod.contains('historical')) {
+        for (final h in service.historicalRecords) {
+          textSb.writeln('RECORD ${h.id}: ${h.crop} (${h.month} ${h.year}) - ${h.productionMT} MT @ PHP ${h.pricePerKg}/kg [By: ${h.uploadedBy}]');
+        }
+      } else if (mod.contains('map')) {
+        for (final farm in service.farms) {
+          textSb.writeln('PIN ${farm.id}: ${farm.farmerName} - ${farm.cropType} (${farm.landAreaHectares} ha) @ ${farm.locationName}, ${farm.barangay}');
+        }
+      } else if (mod.contains('activity') || mod.contains('log')) {
+        for (final l in service.activityLogs) {
+          textSb.writeln('[${DateFormat('MM-dd HH:mm').format(l.timestamp)}] ${l.user} (${l.action} in ${l.module}): ${l.details}');
+        }
+      } else {
+        textSb.writeln('REGISTERED FARMERS COUNT: ${service.farmers.length}');
+        textSb.writeln('TOTAL FARM AREA: ${service.farms.fold(0.0, (s, i) => s + i.landAreaHectares).toStringAsFixed(1)} hectares');
+        textSb.writeln('HISTORICAL RECORDS: ${service.historicalRecords.length} entries');
+      }
+      return _generateValidPdfContent('PAGSANJAN MAO REPORT: ${moduleName.toUpperCase()}', textSb.toString());
+    }
+  }
+
+  Future<String?> _saveContentToUserDirectory(String fileName, String content, String selectedFolder) async {
+    try {
+      String baseDir;
+      if (Platform.isWindows) {
+        final userProfile = Platform.environment['USERPROFILE'] ?? 'C:\\Users\\Public';
+        baseDir = '$userProfile\\$selectedFolder';
+      } else {
+        baseDir = Directory.systemTemp.path;
+      }
+      final dir = Directory(baseDir);
+      if (!await dir.exists()) {
+        await dir.create(recursive: true);
+      }
+      final filePath = '$baseDir\\$fileName';
+      final file = File(filePath);
+      await file.writeAsString(content);
+      return filePath;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  void _triggerExport(BuildContext context, String fullType, bool isTagalog) {
+    final service = Provider.of<AccountService>(context, listen: false);
+    final parts = fullType.split('(');
+    final moduleName = parts[0].trim();
+    final format = parts.length > 1 ? parts[1].replaceAll(')', '').trim() : 'CSV';
+    final isPdf = format.toLowerCase().contains('pdf');
+    final content = _generateExportContent(moduleName, format, service);
+    final ext = isPdf ? 'pdf' : 'csv';
+    final fileName = 'PAGSANJAN_MAO_${moduleName.replaceAll(' ', '_')}_${DateTime.now().millisecondsSinceEpoch}.$ext';
+
+    String chosenFolder = 'Downloads';
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: Row(
+            children: [
+              Icon(isPdf ? Icons.picture_as_pdf_rounded : Icons.table_chart_rounded, color: isPdf ? Colors.redAccent : const Color(0xFF0284C7)),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  isTagalog ? 'Export & Save File ($ext)' : 'Export & Save File ($ext)',
+                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                ),
+              ),
+            ],
+          ),
+          content: SizedBox(
+            width: 520,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  isTagalog
+                      ? 'Pumili kung saang folder sa iyong computer ilalagay ang idodownload na .$ext file:'
+                      : 'Choose which directory in your device to save the exported .$ext file:',
+                  style: const TextStyle(fontSize: 12, color: Colors.black87),
+                ),
+                const SizedBox(height: 12),
+
+                DropdownButtonFormField<String>(
+                  initialValue: chosenFolder,
+                  decoration: InputDecoration(
+                    labelText: isTagalog ? 'Pumili ng Folder/Directory' : 'Select Destination Directory',
+                    prefixIcon: const Icon(Icons.folder_special_rounded, color: Color(0xFF0056B3)),
+                    border: const OutlineInputBorder(),
+                  ),
+                  items: const [
+                    DropdownMenuItem(value: 'Downloads', child: Text('Downloads Folder (C:\\Users\\...\\Downloads)')),
+                    DropdownMenuItem(value: 'Documents', child: Text('Documents Folder (C:\\Users\\...\\Documents)')),
+                    DropdownMenuItem(value: 'Desktop', child: Text('Desktop Folder (C:\\Users\\...\\Desktop)')),
+                  ],
+                  onChanged: (val) {
+                    if (val != null) {
+                      setDialogState(() => chosenFolder = val);
+                    }
+                  },
+                ),
+                const SizedBox(height: 12),
+                Text('File Name: $fileName', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: Text(isTagalog ? 'Kanselahin' : 'Cancel'),
+            ),
+            FilledButton.icon(
+              style: FilledButton.styleFrom(backgroundColor: const Color(0xFF0056B3)),
+              onPressed: () async {
+                final savedPath = await _saveContentToUserDirectory(fileName, content, chosenFolder);
+                if (ctx.mounted) {
+                  Navigator.pop(ctx);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        savedPath != null
+                            ? (isTagalog
+                                ? 'Matagumpay na nai-save ang $fileName sa: $savedPath'
+                                : 'Successfully saved $fileName to: $savedPath')
+                            : (isTagalog
+                                ? 'Nai-save ang file na $fileName!'
+                                : 'File $fileName saved!'),
+                      ),
+                      backgroundColor: Colors.green,
+                      duration: const Duration(seconds: 5),
+                    ),
+                  );
+                }
+              },
+              icon: const Icon(Icons.download_rounded, size: 16),
+              label: Text(isTagalog ? 'I-download sa Selected Folder' : 'Download to Selected Folder'),
+            ),
+          ],
         ),
-        backgroundColor: const Color(0xFF0056B3),
-        duration: const Duration(seconds: 2),
       ),
+    );
+  }
+
+  Future<String?> _pickFileWithSystemExplorer() async {
+    try {
+      if (Platform.isWindows) {
+        const psScript = r'''
+Add-Type -AssemblyName System.Windows.Forms
+$dlg = New-Object System.Windows.Forms.OpenFileDialog
+$dlg.Filter = "Data Files (*.csv;*.txt;*.pdf)|*.csv;*.txt;*.pdf|All Files (*.*)|*.*"
+$dlg.Title = "Pagsanjan MAO - Select File to Import"
+$dlg.InitialDirectory = [Environment]::GetFolderPath('MyDocuments')
+if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
+    [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+    Write-Host $dlg.FileName
+}
+''';
+        final utf16Units = psScript.codeUnits;
+        final utf16Bytes = <int>[];
+        for (final unit in utf16Units) {
+          utf16Bytes.add(unit & 0xFF);
+          utf16Bytes.add((unit >> 8) & 0xFF);
+        }
+        final b64 = base64.encode(utf16Bytes);
+
+        final result = await Process.run('powershell', ['-NoProfile', '-EncodedCommand', b64]);
+        if (result.exitCode == 0) {
+          final path = (result.stdout as String).trim();
+          if (path.isNotEmpty && await File(path).exists()) {
+            return path;
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('File picker error: $e');
+    }
+    return null;
+  }
+
+  void _showImportDialog(BuildContext context, String moduleName, AccountService service, AdminLocale locale) {
+    final isTagalog = locale.isTagalog;
+    String selectedSourceDir = 'Downloads';
+    final fileNameCtrl = TextEditingController(text: '');
+    final csvCtrl = TextEditingController(text: '');
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: Row(
+            children: [
+              const Icon(Icons.upload_file_rounded, color: Color(0xFF16A34A)),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  isTagalog ? 'Mag-import ng File - $moduleName' : 'Import File - $moduleName',
+                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                ),
+              ),
+            ],
+          ),
+          content: SizedBox(
+            width: 500,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  isTagalog
+                      ? 'I-click ang button sa ibaba upang buksan ang File Explorer ng iyong computer at pumili ng file:'
+                      : 'Click the button below to open File Explorer and choose a file from your device:',
+                  style: const TextStyle(fontSize: 12, color: Colors.black87),
+                ),
+                const SizedBox(height: 14),
+
+                // NATIVE FILE EXPLORER BROWSE BUTTON
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF16A34A),
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      elevation: 2,
+                    ),
+                    onPressed: () async {
+                      final pickedPath = await _pickFileWithSystemExplorer();
+                      if (pickedPath != null && pickedPath.isNotEmpty) {
+                        final file = File(pickedPath);
+                        if (await file.exists()) {
+                          final content = await file.readAsString();
+                          setDialogState(() {
+                            fileNameCtrl.text = pickedPath;
+                            csvCtrl.text = content;
+                          });
+                          if (ctx.mounted) {
+                            ScaffoldMessenger.of(ctx).showSnackBar(
+                              SnackBar(
+                                content: Text(
+                                  isTagalog
+                                      ? 'Matagumpay na na-load ang file: $pickedPath'
+                                      : 'Successfully loaded file: $pickedPath',
+                                ),
+                                backgroundColor: Colors.green,
+                              ),
+                            );
+                          }
+                        }
+                      }
+                    },
+                    icon: const Icon(Icons.folder_open_rounded, size: 20),
+                    label: Text(
+                      isTagalog ? '📁 Pumili ng File sa File Explorer (Browse)' : '📁 Choose File in File Explorer (Browse)',
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+
+                Row(
+                  children: [
+                    const Expanded(child: Divider()),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                      child: Text(
+                        isTagalog ? 'o manwal na pumili sa folder' : 'or manually select from directory',
+                        style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+                      ),
+                    ),
+                    const Expanded(child: Divider()),
+                  ],
+                ),
+                const SizedBox(height: 12),
+
+                Row(
+                  children: [
+                    Expanded(
+                      flex: 2,
+                      child: DropdownButtonFormField<String>(
+                        initialValue: selectedSourceDir,
+                        decoration: InputDecoration(
+                          labelText: isTagalog ? 'Folder' : 'Folder',
+                          border: const OutlineInputBorder(),
+                          isDense: true,
+                        ),
+                        items: const [
+                          DropdownMenuItem(value: 'Downloads', child: Text('Downloads')),
+                          DropdownMenuItem(value: 'Documents', child: Text('Documents')),
+                          DropdownMenuItem(value: 'Desktop', child: Text('Desktop')),
+                        ],
+                        onChanged: (val) {
+                          if (val != null) {
+                            setDialogState(() => selectedSourceDir = val);
+                          }
+                        },
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      flex: 3,
+                      child: TextField(
+                        controller: fileNameCtrl,
+                        style: const TextStyle(fontSize: 12),
+                        decoration: InputDecoration(
+                          labelText: isTagalog ? 'Pangalan ng File / Path' : 'File Name / Path',
+                          hintText: 'mga_magsasaka.csv',
+                          border: const OutlineInputBorder(),
+                          isDense: true,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(vertical: 10),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    ),
+                    onPressed: () async {
+                      final folder = selectedSourceDir;
+                      final fname = fileNameCtrl.text.trim();
+                      if (fname.isEmpty) {
+                        ScaffoldMessenger.of(ctx).showSnackBar(
+                          SnackBar(
+                            content: Text(
+                              isTagalog
+                                  ? 'Mangyaring pumili ng file sa File Explorer o maglagay ng pangalan ng file.'
+                                  : 'Please choose a file via File Explorer or enter a file name.',
+                            ),
+                            backgroundColor: Colors.orange.shade800,
+                          ),
+                        );
+                        return;
+                      }
+
+                      try {
+                        String fullPath = fname;
+                        if (!fname.contains('\\') && !fname.contains('/')) {
+                          String userProfile = Platform.environment['USERPROFILE'] ?? 'C:\\Users\\Public';
+                          fullPath = '$userProfile\\$folder\\$fname';
+                        }
+                        final file = File(fullPath);
+                        if (await file.exists()) {
+                          final textContent = await file.readAsString();
+                          setDialogState(() {
+                            fileNameCtrl.text = fullPath;
+                            csvCtrl.text = textContent;
+                          });
+                          if (ctx.mounted) {
+                            ScaffoldMessenger.of(ctx).showSnackBar(
+                              SnackBar(
+                                content: Text(
+                                  isTagalog
+                                      ? 'Matagumpay na nabasa ang file mula sa: $fullPath'
+                                      : 'Successfully read file from: $fullPath',
+                                ),
+                                backgroundColor: Colors.green,
+                              ),
+                            );
+                          }
+                        } else {
+                          if (ctx.mounted) {
+                            ScaffoldMessenger.of(ctx).showSnackBar(
+                              SnackBar(
+                                content: Text(
+                                  isTagalog
+                                      ? 'Hindi nahanap ang file sa $fullPath.'
+                                      : 'File not found at $fullPath.',
+                                ),
+                                backgroundColor: Colors.redAccent,
+                              ),
+                            );
+                          }
+                        }
+                      } catch (e) {
+                        if (ctx.mounted) {
+                          ScaffoldMessenger.of(ctx).showSnackBar(
+                            SnackBar(
+                              content: Text(
+                                isTagalog
+                                    ? 'Nagkaroon ng error sa pagbasa ng file: $e'
+                                    : 'Error reading file: $e',
+                              ),
+                              backgroundColor: Colors.redAccent,
+                            ),
+                          );
+                        }
+                      }
+                    },
+                    icon: const Icon(Icons.file_present_rounded, size: 16),
+                    label: Text(isTagalog ? 'Kargahin ang File mula sa Path' : 'Load File from Specified Path'),
+                  ),
+                ),
+                if (fileNameCtrl.text.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFE8F5E9),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: const Color(0xFFA5D6A7)),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.check_circle_rounded, color: Color(0xFF2E7D32), size: 18),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            fileNameCtrl.text,
+                            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF1B5E20)),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: Text(isTagalog ? 'Kanselahin' : 'Cancel'),
+            ),
+            FilledButton.icon(
+              style: FilledButton.styleFrom(backgroundColor: const Color(0xFF16A34A)),
+              onPressed: () {
+                final rawText = csvCtrl.text.trim();
+                if (rawText.isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        isTagalog
+                            ? 'Walang kargang file! Mangyaring mag-upload muna ng file sa File Explorer.'
+                            : 'No file loaded! Please choose a file via File Explorer first.',
+                      ),
+                      backgroundColor: Colors.orange.shade800,
+                    ),
+                  );
+                  return;
+                }
+
+                final lines = rawText.split('\n');
+                int importedCount = 0;
+
+                for (final line in lines) {
+                  final parts = line.split(',');
+                  if (parts.length >= 2) {
+                    final name = parts[0].trim();
+                    final user = parts[1].trim();
+                    final barangay = parts.length > 2 && parts[2].trim().isNotEmpty ? parts[2].trim() : 'Biñan';
+                    final contact = parts.length > 3 && parts[3].trim().isNotEmpty ? parts[3].trim() : '09170000000';
+                    final org = parts.length > 4 && parts[4].trim().isNotEmpty ? parts[4].trim() : 'Pagsanjan Farmers Assoc';
+                    final crop = parts.length > 5 && parts[5].trim().isNotEmpty ? parts[5].trim() : 'Rice';
+                    final land = parts.length > 6 ? (double.tryParse(parts[6].trim()) ?? 2.0) : 2.0;
+
+                    if (name.isNotEmpty && user.isNotEmpty) {
+                      final farmerId = 'F${DateTime.now().millisecondsSinceEpoch}_$importedCount';
+                      service.addFarmer(
+                        username: user,
+                        password: 'password123',
+                        profileName: name,
+                        barangay: barangay,
+                        contactNumber: contact,
+                        organization: org,
+                      );
+                      service.addFarmRecord(
+                        farmerId: farmerId,
+                        farmerName: name,
+                        locationName: 'Sitio $barangay',
+                        latitude: 14.2717,
+                        longitude: 121.4553,
+                        landAreaHectares: land,
+                        tenureStatus: 'Owner',
+                        cropType: crop,
+                        barangay: barangay,
+                      );
+                      importedCount++;
+                    }
+                  }
+                }
+
+                Navigator.pop(ctx);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(
+                      isTagalog
+                          ? 'Matagumpay na na-import ang $importedCount mga bagong magsasaka at sakahan mula sa iyong na-upload na file!'
+                          : 'Successfully imported $importedCount new farmers and farms from your uploaded file!',
+                    ),
+                    backgroundColor: Colors.green,
+                    duration: const Duration(seconds: 4),
+                  ),
+                );
+              },
+              icon: const Icon(Icons.check_circle_rounded, size: 16),
+              label: Text(isTagalog ? 'I-process at I-import' : 'Process & Import'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildExportImportButtons(BuildContext context, String moduleName, AdminLocale locale, AccountService service, {bool showImport = true}) {
+    final isTagalog = locale.isTagalog;
+    return Wrap(
+      spacing: 8,
+      runSpacing: 4,
+      children: [
+        // COMBINED EXPORT BUTTON (PDF & Excel/CSV)
+        PopupMenuButton<String>(
+          tooltip: isTagalog ? 'Mga Pagpipilian sa Pag-export' : 'Export Options',
+          offset: const Offset(0, 40),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          onSelected: (val) {
+            _triggerExport(context, '$moduleName ($val)', isTagalog);
+          },
+          itemBuilder: (context) => [
+            PopupMenuItem(
+              value: 'PDF',
+              child: Row(
+                children: [
+                  const Icon(Icons.picture_as_pdf_rounded, color: Color(0xFFDC2626), size: 18),
+                  const SizedBox(width: 8),
+                  Text(locale.exportPdf, style: const TextStyle(fontWeight: FontWeight.w600)),
+                ],
+              ),
+            ),
+            PopupMenuItem(
+              value: 'Excel/CSV',
+              child: Row(
+                children: [
+                  const Icon(Icons.table_chart_rounded, color: Color(0xFF0284C7), size: 18),
+                  const SizedBox(width: 8),
+                  Text(locale.exportExcel, style: const TextStyle(fontWeight: FontWeight.w600)),
+                ],
+              ),
+            ),
+          ],
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              border: Border.all(color: const Color(0xFF0056B3)),
+              borderRadius: BorderRadius.circular(10),
+              color: Colors.white,
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.download_rounded, size: 16, color: Color(0xFF0056B3)),
+                const SizedBox(width: 6),
+                Text(isTagalog ? 'Export ▾' : 'Export ▾', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Color(0xFF0056B3))),
+              ],
+            ),
+          ),
+        ),
+
+        // SINGLE DIRECT IMPORT BUTTON (Opens File Explorer dialog directly)
+        if (showImport)
+          ElevatedButton.icon(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF16A34A),
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            ),
+            onPressed: () {
+              _showImportDialog(context, moduleName, service, locale);
+            },
+            icon: const Icon(Icons.upload_file_rounded, size: 16),
+            label: Text(
+              isTagalog ? 'I-import ang File' : 'Import File',
+              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+            ),
+          ),
+      ],
     );
   }
 
@@ -225,36 +938,6 @@ class _AdminDashboardState extends State<AdminDashboard> {
     );
   }
 
-  Widget _buildModuleExportButtons(BuildContext context, String moduleName, AdminLocale locale) {
-    return Wrap(
-      spacing: 8,
-      children: [
-        OutlinedButton.icon(
-          onPressed: () => _triggerExport(context, '$moduleName (PDF)', locale.isTagalog),
-          style: OutlinedButton.styleFrom(
-            foregroundColor: const Color(0xFFDC2626),
-            side: const BorderSide(color: Color(0xFFDC2626)),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          ),
-          icon: const Icon(Icons.picture_as_pdf_rounded, size: 15),
-          label: Text(locale.exportPdf, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
-        ),
-        OutlinedButton.icon(
-          onPressed: () => _triggerExport(context, '$moduleName (Excel/CSV)', locale.isTagalog),
-          style: OutlinedButton.styleFrom(
-            foregroundColor: const Color(0xFF0284C7),
-            side: const BorderSide(color: Color(0xFF0284C7)),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          ),
-          icon: const Icon(Icons.table_chart_rounded, size: 15),
-          label: Text(locale.exportExcel, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
-        ),
-      ],
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final service = Provider.of<AccountService>(context);
@@ -267,7 +950,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
 
     // SHADES OF BLUE COLOR PALETTE
     final bgColor = isDark ? const Color(0xFF0A111E) : const Color(0xFFF0F4F9);
-    final sidebarBg = isDark ? const Color(0xFF081427) : const Color(0xFF0A2540);
+    final sidebarBg = isDark ? const Color(0xFF081427) : const Color(0xFFE3F2FD);
     final cardBg = isDark ? const Color(0xFF121E31) : Colors.white;
     final textColor = isDark ? const Color(0xFFE2E8F0) : const Color(0xFF0F172A);
     final subtextColor = isDark ? const Color(0xFF94A3B8) : const Color(0xFF475569);
@@ -278,144 +961,135 @@ class _AdminDashboardState extends State<AdminDashboard> {
     final sidebarContent = Container(
       width: 275,
       color: sidebarBg,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Header Branding Widget (Deep Blue Royal Gradient)
-          Container(
-            margin: const EdgeInsets.all(16),
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: isDark
-                    ? [const Color(0xFF1E3A8A), const Color(0xFF0F172A)]
-                    : [const Color(0xFF0056B3), const Color(0xFF0A2540)],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: Colors.white.withValues(alpha: 0.15)),
-              boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 8)],
-            ),
-            child: Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.2),
-                    shape: BoxShape.circle,
+      child: Scrollbar(
+        controller: _sidebarScrollController,
+        thumbVisibility: true,
+        child: SingleChildScrollView(
+          controller: _sidebarScrollController,
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Header Branding Widget
+              Container(
+                margin: const EdgeInsets.all(16),
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: isDark
+                        ? [const Color(0xFF1E3A8A), const Color(0xFF0F172A)]
+                        : [const Color(0xFF0056B3), const Color(0xFF0A2540)],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
                   ),
-                  child: const Icon(Icons.admin_panel_settings_rounded, color: Color(0xFF93C5FD), size: 26),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: Colors.white.withValues(alpha: 0.15)),
+                  boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 8)],
                 ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.2),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(Icons.admin_panel_settings_rounded, color: Color(0xFF93C5FD), size: 26),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            locale.adminTitle,
+                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            locale.location,
+                            style: const TextStyle(color: Color(0xFFBFDBFE), fontSize: 11, fontWeight: FontWeight.w500),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              // ACTIVE STAFF OPERATOR CARD
+              InkWell(
+                onTap: () => _showSwitchStaffDialog(context, service, locale),
+                child: Container(
+                  margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: isDark ? Colors.white.withValues(alpha: 0.08) : Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: isDark ? Colors.white24 : const Color(0xFF90CAF9)),
+                  ),
+                  child: Row(
                     children: [
-                      Text(
-                        locale.adminTitle,
-                        style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
-                        overflow: TextOverflow.ellipsis,
+                      CircleAvatar(
+                        radius: 15,
+                        backgroundColor: const Color(0xFF60A5FA),
+                        foregroundColor: Colors.white,
+                        child: Text(
+                          service.activeStaff.name.isNotEmpty ? service.activeStaff.name[0] : 'S',
+                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                        ),
                       ),
-                      const SizedBox(height: 2),
-                      Text(
-                        locale.location,
-                        style: const TextStyle(color: Color(0xFFBFDBFE), fontSize: 11, fontWeight: FontWeight.w500),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              service.activeStaff.name,
+                              style: TextStyle(color: isDark ? Colors.white : const Color(0xFF0F172A), fontWeight: FontWeight.bold, fontSize: 12),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            Text(
+                              service.activeStaff.role,
+                              style: TextStyle(color: isDark ? const Color(0xFF93C5FD) : const Color(0xFF0056B3), fontSize: 10),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ],
+                        ),
                       ),
+                      Icon(Icons.swap_vert_rounded, color: isDark ? const Color(0xFF93C5FD) : const Color(0xFF0056B3), size: 18),
                     ],
                   ),
                 ),
-              ],
-            ),
-          ),
-
-          // ACTIVE STAFF OPERATOR CARD (SWITCH ACCOUNT)
-          InkWell(
-            onTap: () => _showSwitchStaffDialog(context, service, locale),
-            child: Container(
-              margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-              decoration: BoxDecoration(
-                color: Colors.white.withValues(alpha: 0.08),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.white24),
               ),
-              child: Row(
-                children: [
-                  CircleAvatar(
-                    radius: 15,
-                    backgroundColor: const Color(0xFF60A5FA),
-                    foregroundColor: Colors.white,
-                    child: Text(
-                      service.activeStaff.name.isNotEmpty ? service.activeStaff.name[0] : 'S',
-                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          service.activeStaff.name,
-                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        Text(
-                          service.activeStaff.role,
-                          style: const TextStyle(color: Color(0xFF93C5FD), fontSize: 10),
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ],
-                    ),
-                  ),
-                  const Icon(Icons.swap_vert_rounded, color: Color(0xFF93C5FD), size: 18),
-                ],
+              const SizedBox(height: 8),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Divider(color: isDark ? Colors.white12 : const Color(0xFF90CAF9), height: 1),
               ),
-            ),
-          ),
-          const SizedBox(height: 8),
-          const Divider(color: Colors.white12, height: 1),
+              const SizedBox(height: 8),
 
-          // Nav Items List (WITHOUT NUMBERS, BLUE ACCENTS)
-          Expanded(
-            child: ListView(
-              padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
-              children: [
-                _buildNavItem(icon: Icons.dashboard_rounded, label: locale.navDashboard, index: 0, isDark: isDark),
-                _buildNavItem(icon: Icons.badge_rounded, label: locale.navFarmers, index: 1, isDark: isDark),
-                _buildNavItem(icon: Icons.landscape_rounded, label: locale.navFarms, index: 2, isDark: isDark),
-                _buildNavItem(icon: Icons.history_edu_rounded, label: locale.navHistorical, index: 3, isDark: isDark),
-                _buildNavItem(icon: Icons.map_rounded, label: locale.navMap, index: 4, isDark: isDark),
-                _buildNavItem(icon: Icons.manage_accounts_rounded, label: locale.navAccounts, index: 5, isDark: isDark),
-                _buildNavItem(icon: Icons.eco_rounded, label: locale.navCrops, index: 6, isDark: isDark),
-                _buildNavItem(icon: Icons.psychology_rounded, label: locale.navModel, index: 7, isDark: isDark),
-                _buildNavItem(icon: Icons.supervisor_account_rounded, label: locale.navAdminStaff, index: 8, isDark: isDark),
-                _buildNavItem(icon: Icons.receipt_long_rounded, label: locale.navActivityLog, index: 9, isDark: isDark),
-              ],
-            ),
-          ),
-
-          // PROMINENT LOGOUT BUTTON AT SIDEBAR BOTTOM
-          Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: SizedBox(
-              width: double.infinity,
-              child: ElevatedButton.icon(
-                onPressed: () => _confirmLogout(context, locale),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFFDC2626),
-                  foregroundColor: Colors.white,
-                  elevation: 2,
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              // Nav Items List (0 to 6 unified)
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                child: Column(
+                  children: [
+                    _buildNavItem(icon: Icons.dashboard_rounded, label: locale.navDashboard, index: 0, isDark: isDark),
+                    _buildNavItem(icon: Icons.badge_rounded, label: locale.navFarmers, index: 1, isDark: isDark),
+                    _buildNavItem(icon: Icons.history_edu_rounded, label: locale.navHistorical, index: 2, isDark: isDark),
+                    _buildNavItem(icon: Icons.map_rounded, label: locale.navMap, index: 3, isDark: isDark),
+                    _buildNavItem(icon: Icons.manage_accounts_rounded, label: locale.navAccounts, index: 4, isDark: isDark),
+                    _buildNavItem(icon: Icons.supervisor_account_rounded, label: locale.navAdminStaff, index: 5, isDark: isDark),
+                    _buildNavItem(icon: Icons.receipt_long_rounded, label: locale.navActivityLog, index: 6, isDark: isDark),
+                  ],
                 ),
-                icon: const Icon(Icons.logout_rounded, size: 18),
-                label: Text(locale.navLogout, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
               ),
-            ),
+              const SizedBox(height: 24),
+            ],
           ),
-        ],
+        ),
       ),
     );
 
@@ -428,27 +1102,18 @@ class _AdminDashboardState extends State<AdminDashboard> {
         mainContentArea = _buildFarmerRecordsView(service, locale, isDark, cardBg, textColor, subtextColor, cardBorder, primaryAccent);
         break;
       case 2:
-        mainContentArea = _buildFarmRecordsView(service, locale, isDark, cardBg, textColor, subtextColor, cardBorder, primaryAccent);
-        break;
-      case 3:
         mainContentArea = _buildHistoricalDataView(service, locale, isDark, cardBg, textColor, subtextColor, cardBorder, primaryAccent);
         break;
-      case 4:
+      case 3:
         mainContentArea = _buildInteractiveMapView(service, locale, isDark, cardBg, textColor, subtextColor, cardBorder, primaryAccent);
         break;
-      case 5:
+      case 4:
         mainContentArea = _buildFarmerAccountsView(service, locale, isDark, cardBg, textColor, subtextColor, cardBorder, primaryAccent);
         break;
-      case 6:
-        mainContentArea = _buildCropRequirementsView(service, locale, isDark, cardBg, textColor, subtextColor, cardBorder, primaryAccent);
-        break;
-      case 7:
-        mainContentArea = _buildModelManagementView(service, locale, isDark, cardBg, textColor, subtextColor, cardBorder, primaryAccent);
-        break;
-      case 8:
+      case 5:
         mainContentArea = _buildAdminAccountsView(service, locale, isDark, cardBg, textColor, subtextColor, cardBorder, primaryAccent);
         break;
-      case 9:
+      case 6:
         mainContentArea = _buildActivityLogView(service, locale, isDark, cardBg, textColor, subtextColor, cardBorder, primaryAccent);
         break;
       default:
@@ -511,7 +1176,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
           ),
           const SizedBox(width: 12),
 
-          // LANGUAGE TOGGLE BUTTON (English / Tagalog)
+          // LANGUAGE TOGGLE BUTTON
           InkWell(
             onTap: () => service.toggleLanguage(),
             borderRadius: BorderRadius.circular(20),
@@ -572,6 +1237,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
       return Scaffold(
         backgroundColor: bgColor,
         body: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             sidebarContent,
             Expanded(child: fullBody),
@@ -592,7 +1258,10 @@ class _AdminDashboardState extends State<AdminDashboard> {
             ),
           ],
         ),
-        drawer: Drawer(child: sidebarContent),
+        drawer: Drawer(
+          backgroundColor: sidebarBg,
+          child: sidebarContent,
+        ),
         body: fullBody,
       );
     }
@@ -600,8 +1269,10 @@ class _AdminDashboardState extends State<AdminDashboard> {
 
   Widget _buildNavItem({required IconData icon, required String label, required int index, required bool isDark}) {
     final isSelected = _selectedIndex == index;
-    final activeBg = isDark ? const Color(0xFF2563EB).withValues(alpha: 0.25) : Colors.white.withValues(alpha: 0.22);
-    final activeText = isDark ? const Color(0xFF60A5FA) : Colors.white;
+    final activeBg = isDark ? const Color(0xFF2563EB).withValues(alpha: 0.25) : const Color(0xFF0056B3).withValues(alpha: 0.15);
+    final activeText = isDark ? const Color(0xFF60A5FA) : const Color(0xFF0056B3);
+    final inactiveText = isDark ? Colors.white70 : const Color(0xFF0F172A);
+    final inactiveIcon = isDark ? Colors.white60 : const Color(0xFF0056B3);
 
     return Container(
       margin: const EdgeInsets.symmetric(vertical: 3),
@@ -611,11 +1282,11 @@ class _AdminDashboardState extends State<AdminDashboard> {
         border: isSelected ? Border.all(color: activeText.withValues(alpha: 0.3)) : null,
       ),
       child: ListTile(
-        leading: Icon(icon, color: isSelected ? activeText : Colors.white60, size: 20),
+        leading: Icon(icon, color: isSelected ? activeText : inactiveIcon, size: 20),
         title: Text(
           label,
           style: TextStyle(
-            color: isSelected ? activeText : Colors.white70,
+            color: isSelected ? activeText : inactiveText,
             fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
             fontSize: 13,
           ),
@@ -635,7 +1306,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
   }
 
   // ==========================================
-  // MODULE 1: DASHBOARD SUMMARY (FULL EXPORT)
+  // MODULE 1: DASHBOARD SUMMARY
   // ==========================================
   Widget _buildDashboardSummaryView(
     AccountService service,
@@ -652,24 +1323,44 @@ class _AdminDashboardState extends State<AdminDashboard> {
     final farms = service.farms;
     final historical = service.historicalRecords;
 
-    // Apply Filters
     final filteredFarms = farms.where((f) {
       final matchesBarangay = _selectedBarangayFilter == 'All' || f.barangay == _selectedBarangayFilter;
       final matchesCrop = _selectedCropFilter == 'All' || f.cropType == _selectedCropFilter;
       return matchesBarangay && matchesCrop;
     }).toList();
 
-    // Calculate Metrics
-    final totalFarmersCount = farmers.length;
+    final filteredFarmers = farmers.where((f) {
+      final matchesBarangay = _selectedBarangayFilter == 'All' || f.barangay == _selectedBarangayFilter;
+      if (!matchesBarangay) return false;
+      if (_selectedCropFilter == 'All') return true;
+      final farmerFarms = farms.where((farm) => farm.farmerId == f.id || farm.farmerName == f.profileName);
+      return farmerFarms.any((farm) => farm.cropType == _selectedCropFilter);
+    }).toList();
+
+    final filteredHistorical = historical.where((h) {
+      final matchesCrop = _selectedCropFilter == 'All' || h.crop == _selectedCropFilter;
+      if (!matchesCrop) return false;
+      if (_selectedTimePeriodFilter == 'All') return true;
+      if (_selectedTimePeriodFilter == '2026') return h.year == 2026;
+      if (_selectedTimePeriodFilter == '2025') return h.year == 2025;
+      final m = h.month.toLowerCase();
+      if (_selectedTimePeriodFilter == 'Wet Season') {
+        return m.contains('may') || m.contains('jun') || m.contains('jul') || m.contains('aug') || m.contains('sep') || m.contains('oct');
+      }
+      if (_selectedTimePeriodFilter == 'Dry Season') {
+        return m.contains('nov') || m.contains('dec') || m.contains('jan') || m.contains('feb') || m.contains('mar') || m.contains('apr');
+      }
+      return true;
+    }).toList();
+
+    final totalFarmersCount = filteredFarmers.length;
     final totalFarmArea = filteredFarms.fold(0.0, (sum, item) => sum + item.landAreaHectares);
 
-    // Farmers per Barangay Map
     final Map<String, int> farmersPerBarangay = {};
-    for (final f in farmers) {
+    for (final f in filteredFarmers) {
       farmersPerBarangay[f.barangay] = (farmersPerBarangay[f.barangay] ?? 0) + 1;
     }
 
-    // Farm Area per Crop Map
     final Map<String, double> areaPerCrop = {};
     for (final farm in filteredFarms) {
       areaPerCrop[farm.cropType] = (areaPerCrop[farm.cropType] ?? 0.0) + farm.landAreaHectares;
@@ -680,7 +1371,6 @@ class _AdminDashboardState extends State<AdminDashboard> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Page Header & Full System Export Buttons
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -692,12 +1382,12 @@ class _AdminDashboardState extends State<AdminDashboard> {
                   Text(locale.agriOverview, style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: textColor)),
                 ],
               ),
-              _buildModuleExportButtons(context, 'Full Executive Summary', locale),
+              _buildExportImportButtons(context, 'Full Executive Summary', locale, service, showImport: false),
             ],
           ),
           const SizedBox(height: 18),
 
-          // Filter Controls Card (Shades of Blue)
+          // Filter Controls Card
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
@@ -721,11 +1411,10 @@ class _AdminDashboardState extends State<AdminDashboard> {
                   spacing: 16,
                   runSpacing: 12,
                   children: [
-                    // Barangay Filter
                     SizedBox(
                       width: 200,
                       child: DropdownButtonFormField<String>(
-                        value: _selectedBarangayFilter,
+                        initialValue: _selectedBarangayFilter,
                         dropdownColor: cardBg,
                         style: TextStyle(color: textColor, fontSize: 13),
                         decoration: InputDecoration(
@@ -738,11 +1427,10 @@ class _AdminDashboardState extends State<AdminDashboard> {
                         onChanged: (val) => setState(() => _selectedBarangayFilter = val ?? 'All'),
                       ),
                     ),
-                    // Crop Filter
                     SizedBox(
                       width: 180,
                       child: DropdownButtonFormField<String>(
-                        value: _selectedCropFilter,
+                        initialValue: _selectedCropFilter,
                         dropdownColor: cardBg,
                         style: TextStyle(color: textColor, fontSize: 13),
                         decoration: InputDecoration(
@@ -755,11 +1443,10 @@ class _AdminDashboardState extends State<AdminDashboard> {
                         onChanged: (val) => setState(() => _selectedCropFilter = val ?? 'All'),
                       ),
                     ),
-                    // Time Period Filter
                     SizedBox(
                       width: 180,
                       child: DropdownButtonFormField<String>(
-                        value: _selectedTimePeriodFilter,
+                        initialValue: _selectedTimePeriodFilter,
                         dropdownColor: cardBg,
                         style: TextStyle(color: textColor, fontSize: 13),
                         decoration: InputDecoration(
@@ -779,60 +1466,65 @@ class _AdminDashboardState extends State<AdminDashboard> {
           ),
           const SizedBox(height: 20),
 
-          // KPI Cards (Shades of Blue Accent)
-          Row(
-            children: [
-              Expanded(
-                child: _buildKpiCard(
-                  title: locale.kpiFarmers,
-                  value: '$totalFarmersCount',
-                  subtitle: locale.location,
-                  icon: Icons.people_alt_rounded,
-                  color: const Color(0xFF0056B3),
-                  cardBg: cardBg,
-                  textColor: textColor,
-                  cardBorder: cardBorder,
+          // KPI Cards Summary Row with 2 Wider KPI Cards (Registered Farmers & Total Farm Area) & Scrollbar
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: isDark ? const Color(0xFF121E31) : const Color(0xFFE3F2FD),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: isDark ? const Color(0xFF1E2E4A) : const Color(0xFF90CAF9)),
+            ),
+            child: Scrollbar(
+              controller: _kpiScrollController,
+              thumbVisibility: true,
+              child: SingleChildScrollView(
+                controller: _kpiScrollController,
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Row(
+                  children: [
+                    SizedBox(
+                      width: 380,
+                      child: _buildKpiCard(
+                        title: locale.kpiFarmers,
+                        value: '$totalFarmersCount',
+                        subtitle: locale.location,
+                        icon: Icons.people_alt_rounded,
+                        color: const Color(0xFF0056B3),
+                        cardBg: cardBg,
+                        textColor: textColor,
+                        cardBorder: cardBorder,
+                      ),
+                    ),
+                    const SizedBox(width: 16),
+                    SizedBox(
+                      width: 380,
+                      child: _buildKpiCard(
+                        title: locale.kpiFarmArea,
+                        value: '${totalFarmArea.toStringAsFixed(1)} ha',
+                        subtitle: 'Active Land',
+                        icon: Icons.landscape_rounded,
+                        color: const Color(0xFF0284C7),
+                        cardBg: cardBg,
+                        textColor: textColor,
+                        cardBorder: cardBorder,
+                      ),
+                    ),
+                  ],
                 ),
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: _buildKpiCard(
-                  title: locale.kpiFarmArea,
-                  value: '${totalFarmArea.toStringAsFixed(1)} ha',
-                  subtitle: 'Active Land',
-                  icon: Icons.landscape_rounded,
-                  color: const Color(0xFF0284C7),
-                  cardBg: cardBg,
-                  textColor: textColor,
-                  cardBorder: cardBorder,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: _buildKpiCard(
-                  title: locale.kpiMlAccuracy,
-                  value: '${(100 - service.modelStatus.mape).toStringAsFixed(1)}%',
-                  subtitle: 'MAPE: ${service.modelStatus.mape}%',
-                  icon: Icons.psychology_rounded,
-                  color: const Color(0xFF4F46E5),
-                  cardBg: cardBg,
-                  textColor: textColor,
-                  cardBorder: cardBorder,
-                ),
-              ),
-            ],
+            ),
           ),
           const SizedBox(height: 20),
 
-          // Weather Card (Deep Sapphire Sky Blue Gradient)
+          // Weather Card
           _buildWeatherCard(locale, isDark, cardBg, textColor, primaryAccent),
           const SizedBox(height: 20),
 
-          // Data Breakdown Section (Shades of Blue)
+          // Data Breakdown Section
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Farmers per Barangay
               Expanded(
                 child: Container(
                   padding: const EdgeInsets.all(18),
@@ -867,8 +1559,6 @@ class _AdminDashboardState extends State<AdminDashboard> {
                 ),
               ),
               const SizedBox(width: 16),
-
-              // Total Farm Area per Crop Type
               Expanded(
                 child: Container(
                   padding: const EdgeInsets.all(18),
@@ -919,27 +1609,33 @@ class _AdminDashboardState extends State<AdminDashboard> {
               children: [
                 Text(locale.historicalTrends, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: textColor)),
                 const SizedBox(height: 12),
-                SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: DataTable(
-                    columns: [
-                      DataColumn(label: Text('Crop', style: TextStyle(color: subtextColor))),
-                      DataColumn(label: Text('Period', style: TextStyle(color: subtextColor))),
-                      DataColumn(label: Text('Production (MT)', style: TextStyle(color: subtextColor))),
-                      DataColumn(label: Text('Avg Price (PHP/kg)', style: TextStyle(color: subtextColor))),
-                      DataColumn(label: Text('Uploaded By', style: TextStyle(color: subtextColor))),
-                    ],
-                    rows: historical.map((h) => DataRow(
-                      cells: [
-                        DataCell(Text(h.crop, style: TextStyle(fontWeight: FontWeight.bold, color: textColor))),
-                        DataCell(Text('${h.month} ${h.year}', style: TextStyle(color: textColor))),
-                        DataCell(Text('${h.productionMT} MT', style: TextStyle(color: textColor))),
-                        DataCell(Text('₱${h.pricePerKg.toStringAsFixed(2)}', style: TextStyle(color: textColor))),
-                        DataCell(Text(h.uploadedBy, style: TextStyle(color: textColor))),
+                if (filteredHistorical.isEmpty)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 12.0),
+                    child: Text('No historical records match the selected filters.', style: TextStyle(color: subtextColor, fontSize: 13)),
+                  )
+                else
+                  SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: DataTable(
+                      columns: [
+                        DataColumn(label: Text('Crop', style: TextStyle(color: subtextColor))),
+                        DataColumn(label: Text('Period', style: TextStyle(color: subtextColor))),
+                        DataColumn(label: Text('Production (MT)', style: TextStyle(color: subtextColor))),
+                        DataColumn(label: Text('Avg Price (PHP/kg)', style: TextStyle(color: subtextColor))),
+                        DataColumn(label: Text('Uploaded By', style: TextStyle(color: subtextColor))),
                       ],
-                    )).toList(),
+                      rows: filteredHistorical.map((h) => DataRow(
+                        cells: [
+                          DataCell(Text(h.crop, style: TextStyle(fontWeight: FontWeight.bold, color: textColor))),
+                          DataCell(Text('${h.month} ${h.year}', style: TextStyle(color: textColor))),
+                          DataCell(Text('${h.productionMT} MT', style: TextStyle(color: textColor))),
+                          DataCell(Text('₱${h.pricePerKg.toStringAsFixed(2)}', style: TextStyle(color: textColor))),
+                          DataCell(Text(h.uploadedBy, style: TextStyle(color: textColor))),
+                        ],
+                      )).toList(),
+                    ),
                   ),
-                ),
               ],
             ),
           ),
@@ -1117,7 +1813,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
   }
 
   // ==========================================
-  // MODULE 2: FARMER RECORDS (WITH MODULE EXPORT)
+  // MODULE 2: UNIFIED FARMER & FARM RECORDS
   // ==========================================
   Widget _buildFarmerRecordsView(
     AccountService service,
@@ -1149,7 +1845,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('DIRECTORY', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: primaryAccent)),
+                  Text('DIRECTORY & LANDS', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: primaryAccent)),
                   const SizedBox(height: 2),
                   Text(locale.farmerDirTitle, style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: textColor)),
                 ],
@@ -1157,25 +1853,13 @@ class _AdminDashboardState extends State<AdminDashboard> {
               Wrap(
                 spacing: 8,
                 children: [
-                  _buildModuleExportButtons(context, 'Farmer Records', locale),
-                  ElevatedButton.icon(
-                    onPressed: () => _showAddFarmerDialog(context, service),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: primaryAccent,
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                    ),
-                    icon: const Icon(Icons.person_add_rounded),
-                    label: Text(locale.addFarmer, style: const TextStyle(fontWeight: FontWeight.bold)),
-                  ),
+                  _buildExportImportButtons(context, 'Farmer and Farm Records', locale, service),
                 ],
               ),
             ],
           ),
           const SizedBox(height: 16),
 
-          // Search & Barangay Filter Row
           Row(
             children: [
               Expanded(
@@ -1217,45 +1901,178 @@ class _AdminDashboardState extends State<AdminDashboard> {
           ),
           const SizedBox(height: 16),
 
-          // Farmers Table
           Expanded(
-            child: Container(
-              decoration: BoxDecoration(
-                color: cardBg,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: cardBorder),
-              ),
-              child: ListView.separated(
-                padding: const EdgeInsets.all(8),
-                itemCount: farmers.length,
-                separatorBuilder: (_, __) => Divider(height: 1, color: cardBorder),
-                itemBuilder: (context, index) {
-                  final farmer = farmers[index];
-                  return ListTile(
-                    leading: CircleAvatar(
-                      backgroundColor: primaryAccent.withValues(alpha: 0.15),
-                      foregroundColor: primaryAccent,
-                      child: Text(farmer.profileName.isNotEmpty ? farmer.profileName[0] : 'F'),
-                    ),
-                    title: Text(farmer.profileName, style: TextStyle(fontWeight: FontWeight.bold, color: textColor)),
-                    subtitle: Text('Barangay: ${farmer.barangay} • Contact: ${farmer.contactNumber}\nAssoc: ${farmer.organization}', style: TextStyle(color: subtextColor)),
-                    isThreeLine: true,
-                    trailing: Row(
-                      mainAxisSize: MainAxisSize.min,
+            child: ListView.builder(
+              itemCount: farmers.length,
+              itemBuilder: (context, index) {
+                final farmer = farmers[index];
+                final farmerFarms = service.farms.where((f) => f.farmerId == farmer.id || f.farmerName == farmer.profileName).toList();
+
+                return Card(
+                  color: cardBg,
+                  margin: const EdgeInsets.only(bottom: 16),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                    side: BorderSide(color: cardBorder),
+                  ),
+                  elevation: isDark ? 2 : 1,
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        IconButton(
-                          icon: const Icon(Icons.edit_rounded, color: Colors.blueAccent),
-                          onPressed: () => _showEditFarmerDialog(context, service, farmer),
+                        // Farmer Personal Details Header
+                        Row(
+                          children: [
+                            CircleAvatar(
+                              backgroundColor: primaryAccent.withValues(alpha: 0.15),
+                              foregroundColor: primaryAccent,
+                              radius: 22,
+                              child: Text(farmer.profileName.isNotEmpty ? farmer.profileName[0] : 'F', style: const TextStyle(fontWeight: FontWeight.bold)),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: [
+                                      Text(farmer.profileName, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: textColor)),
+                                      const SizedBox(width: 8),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                        decoration: BoxDecoration(
+                                          color: farmer.status == 'Active' ? Colors.green.withValues(alpha: 0.15) : Colors.orange.withValues(alpha: 0.15),
+                                          borderRadius: BorderRadius.circular(8),
+                                        ),
+                                        child: Text(farmer.status, style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: farmer.status == 'Active' ? Colors.green : Colors.orange)),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text('Username: @${farmer.username} • Barangay: ${farmer.barangay} • Contact: ${farmer.contactNumber}', style: TextStyle(fontSize: 12, color: subtextColor)),
+                                  Text('Organization: ${farmer.organization}', style: TextStyle(fontSize: 12, color: subtextColor)),
+                                ],
+                              ),
+                            ),
+                            Wrap(
+                              spacing: 4,
+                              children: [
+                                IconButton(
+                                  icon: const Icon(Icons.edit_rounded, color: Colors.blueAccent, size: 20),
+                                  tooltip: 'Edit Farmer',
+                                  onPressed: () => _showEditFarmerDialog(context, service, farmer),
+                                ),
+                                IconButton(
+                                  icon: const Icon(Icons.add_location_alt_rounded, color: Color(0xFF0284C7), size: 20),
+                                  tooltip: 'Add Farm Record for Farmer',
+                                  onPressed: () => _showAddFarmForFarmerDialog(context, service, farmer),
+                                ),
+                                IconButton(
+                                  icon: const Icon(Icons.delete_rounded, color: Colors.redAccent, size: 20),
+                                  tooltip: 'Delete Farmer',
+                                  onPressed: () => service.deleteFarmer(farmer.id),
+                                ),
+                              ],
+                            ),
+                          ],
                         ),
-                        IconButton(
-                          icon: const Icon(Icons.delete_rounded, color: Colors.redAccent),
-                          onPressed: () => service.deleteFarmer(farmer.id),
+                        const Divider(height: 24),
+
+                        // Associated Farm Records Section (Directly Inside Farmer Card)
+                        Row(
+                          children: [
+                            Icon(Icons.landscape_rounded, size: 16, color: primaryAccent),
+                            const SizedBox(width: 6),
+                            Text(
+                              locale.isTagalog ? 'Mga Rekord ng Sakahan (${farmerFarms.length})' : 'Associated Farm Records (${farmerFarms.length})',
+                              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: textColor),
+                            ),
+                          ],
                         ),
+                        const SizedBox(height: 8),
+                        if (farmerFarms.isEmpty)
+                          Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 6.0),
+                            child: Row(
+                              children: [
+                                Text(
+                                  locale.isTagalog ? 'Walang nakatalagang sakahan.' : 'No associated farm records yet.',
+                                  style: TextStyle(fontSize: 12, fontStyle: FontStyle.italic, color: subtextColor),
+                                ),
+                                const Spacer(),
+                                TextButton.icon(
+                                  onPressed: () => _showAddFarmForFarmerDialog(context, service, farmer),
+                                  icon: const Icon(Icons.add, size: 14),
+                                  label: Text(locale.isTagalog ? 'Magdagdag ng Sakahan' : 'Add Farm', style: const TextStyle(fontSize: 12)),
+                                ),
+                              ],
+                            ),
+                          )
+                        else
+                          ...farmerFarms.map((farm) => Container(
+                            margin: const EdgeInsets.only(top: 6),
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: isDark ? const Color(0xFF0A111E) : Colors.blue.shade50.withValues(alpha: 0.5),
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(color: isDark ? const Color(0xFF1E2E4A) : Colors.blue.shade200),
+                            ),
+                            child: Row(
+                              children: [
+                                const Icon(Icons.eco_rounded, color: Color(0xFF16A34A), size: 20),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Row(
+                                        children: [
+                                          Text(
+                                            'Crop: ${farm.cropType}',
+                                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: textColor),
+                                          ),
+                                          const SizedBox(width: 8),
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                            decoration: BoxDecoration(
+                                              color: const Color(0xFF0284C7).withValues(alpha: 0.15),
+                                              borderRadius: BorderRadius.circular(6),
+                                            ),
+                                            child: Text('${farm.landAreaHectares} ha', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF0284C7))),
+                                          ),
+                                          const SizedBox(width: 8),
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                            decoration: BoxDecoration(
+                                              color: Colors.purple.withValues(alpha: 0.15),
+                                              borderRadius: BorderRadius.circular(6),
+                                            ),
+                                            child: Text(farm.tenureStatus, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.purple)),
+                                          ),
+                                        ],
+                                      ),
+                                      const SizedBox(height: 2),
+                                      Text(
+                                        'Location: ${farm.locationName}, Barangay ${farm.barangay} • GPS: [${farm.latitude.toStringAsFixed(4)}, ${farm.longitude.toStringAsFixed(4)}]',
+                                        style: TextStyle(fontSize: 11, color: subtextColor),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                IconButton(
+                                  icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent, size: 18),
+                                  tooltip: 'Delete Farm Record',
+                                  onPressed: () => service.deleteFarmRecord(farm.id),
+                                ),
+                              ],
+                            ),
+                          )),
                       ],
                     ),
-                  );
-                },
-              ),
+                  ),
+                );
+              },
             ),
           ),
         ],
@@ -1269,35 +2086,89 @@ class _AdminDashboardState extends State<AdminDashboard> {
     final passCtrl = TextEditingController();
     final contactCtrl = TextEditingController();
     final orgCtrl = TextEditingController();
+    final locationCtrl = TextEditingController();
+    final landAreaCtrl = TextEditingController(text: '2.5');
     String selectedBrgy = 'Biñan';
+    String selectedCrop = 'Rice';
+    String selectedTenure = 'Owner';
 
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Add New Farmer Record'),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Row(
+          children: [
+            Icon(Icons.person_add_rounded, color: Color(0xFF0056B3)),
+            SizedBox(width: 8),
+            Text('Add New Farmer & Farm Record', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+          ],
+        ),
         content: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              TextField(controller: nameCtrl, decoration: const InputDecoration(labelText: 'Full Personal Name')),
-              TextField(controller: userCtrl, decoration: const InputDecoration(labelText: 'Username')),
-              TextField(controller: passCtrl, decoration: const InputDecoration(labelText: 'Password'), obscureText: true),
+              const Text('FARMER ACCOUNT INFORMATION', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF0056B3))),
+              const SizedBox(height: 8),
+              TextField(controller: nameCtrl, decoration: const InputDecoration(labelText: 'Full Personal Name', border: OutlineInputBorder())),
+              const SizedBox(height: 10),
+              TextField(controller: userCtrl, decoration: const InputDecoration(labelText: 'Username', border: OutlineInputBorder())),
+              const SizedBox(height: 10),
+              TextField(controller: passCtrl, decoration: const InputDecoration(labelText: 'Password', border: OutlineInputBorder()), obscureText: true),
+              const SizedBox(height: 10),
               DropdownButtonFormField<String>(
                 value: selectedBrgy,
-                decoration: const InputDecoration(labelText: 'Barangay'),
+                decoration: const InputDecoration(labelText: 'Barangay', border: OutlineInputBorder()),
                 items: AccountService.pagsanjanBarangays.map((b) => DropdownMenuItem(value: b, child: Text(b))).toList(),
                 onChanged: (val) => selectedBrgy = val ?? 'Biñan',
               ),
-              TextField(controller: contactCtrl, decoration: const InputDecoration(labelText: 'Contact Details')),
-              TextField(controller: orgCtrl, decoration: const InputDecoration(labelText: 'Association / Org Membership')),
+              const SizedBox(height: 10),
+              TextField(controller: contactCtrl, decoration: const InputDecoration(labelText: 'Contact Details', border: OutlineInputBorder())),
+              const SizedBox(height: 10),
+              TextField(controller: orgCtrl, decoration: const InputDecoration(labelText: 'Association / Org Membership', border: OutlineInputBorder())),
+
+              const Divider(height: 24),
+              const Text('FARM INFORMATION (AUTO-SYNCS TO RECORDS)', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF16A34A))),
+              const SizedBox(height: 8),
+              DropdownButtonFormField<String>(
+                value: selectedCrop,
+                decoration: const InputDecoration(labelText: 'Primary Crop Type', border: OutlineInputBorder()),
+                items: ['Rice', 'Prutas', 'Gulay', 'Corn', 'Coconut'].map((c) => DropdownMenuItem(value: c, child: Text(c))).toList(),
+                onChanged: (val) => selectedCrop = val ?? 'Rice',
+              ),
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: landAreaCtrl,
+                      keyboardType: TextInputType.number,
+                      decoration: const InputDecoration(labelText: 'Land Area (ha)', border: OutlineInputBorder()),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: DropdownButtonFormField<String>(
+                      value: selectedTenure,
+                      decoration: const InputDecoration(labelText: 'Tenure Status', border: OutlineInputBorder()),
+                      items: ['Owner', 'Tenant', 'Lease', 'CLT'].map((t) => DropdownMenuItem(value: t, child: Text(t))).toList(),
+                      onChanged: (val) => selectedTenure = val ?? 'Owner',
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              TextField(controller: locationCtrl, decoration: const InputDecoration(labelText: 'Farm Sitio / Location Name', border: OutlineInputBorder())),
             ],
           ),
         ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
-          ElevatedButton(
+          FilledButton.icon(
+            style: FilledButton.styleFrom(backgroundColor: const Color(0xFF0056B3)),
             onPressed: () {
               if (nameCtrl.text.isNotEmpty && userCtrl.text.isNotEmpty) {
+                final farmerId = 'F${DateTime.now().millisecondsSinceEpoch}';
                 service.addFarmer(
                   username: userCtrl.text,
                   password: passCtrl.text.isEmpty ? 'password123' : passCtrl.text,
@@ -1306,10 +2177,31 @@ class _AdminDashboardState extends State<AdminDashboard> {
                   contactNumber: contactCtrl.text.isEmpty ? 'N/A' : contactCtrl.text,
                   organization: orgCtrl.text.isEmpty ? 'Independent' : orgCtrl.text,
                 );
+
+                // Add associated Farm Record so it syncs automatically to Farmer & Farm Records!
+                service.addFarmRecord(
+                  farmerId: farmerId,
+                  farmerName: nameCtrl.text,
+                  locationName: locationCtrl.text.isEmpty ? 'Sitio $selectedBrgy' : locationCtrl.text,
+                  latitude: 14.2717,
+                  longitude: 121.4553,
+                  landAreaHectares: double.tryParse(landAreaCtrl.text) ?? 2.0,
+                  tenureStatus: selectedTenure,
+                  cropType: selectedCrop,
+                  barangay: selectedBrgy,
+                );
+
                 Navigator.pop(context);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Matagumpay na naidagdag ang magsasaka at ang kaniyang sakahan!'),
+                    backgroundColor: Colors.green,
+                  ),
+                );
               }
             },
-            child: const Text('Save'),
+            icon: const Icon(Icons.check_circle_rounded, size: 16),
+            label: const Text('Save Farmer & Farm'),
           ),
         ],
       ),
@@ -1370,124 +2262,29 @@ class _AdminDashboardState extends State<AdminDashboard> {
     );
   }
 
-  // ==========================================
-  // MODULE 3: FARM RECORDS (WITH MODULE EXPORT)
-  // ==========================================
-  Widget _buildFarmRecordsView(
-    AccountService service,
-    AdminLocale locale,
-    bool isDark,
-    Color cardBg,
-    Color textColor,
-    Color subtextColor,
-    Color cardBorder,
-    Color primaryAccent,
-  ) {
-    final farms = service.farms;
-
-    return Padding(
-      padding: const EdgeInsets.all(22),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('LAND & CROPS', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: primaryAccent)),
-                  const SizedBox(height: 2),
-                  Text(locale.farmRecordsTitle, style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: textColor)),
-                ],
-              ),
-              Wrap(
-                spacing: 8,
-                children: [
-                  _buildModuleExportButtons(context, 'Farm Records', locale),
-                  ElevatedButton.icon(
-                    onPressed: () => _showAddFarmDialog(context, service),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: primaryAccent,
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                    ),
-                    icon: const Icon(Icons.add_location_alt_rounded),
-                    label: Text(locale.addFarmRecord, style: const TextStyle(fontWeight: FontWeight.bold)),
-                  ),
-                ],
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-
-          Expanded(
-            child: Container(
-              decoration: BoxDecoration(
-                color: cardBg,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: cardBorder),
-              ),
-              child: ListView.separated(
-                padding: const EdgeInsets.all(8),
-                itemCount: farms.length,
-                separatorBuilder: (_, __) => Divider(height: 1, color: cardBorder),
-                itemBuilder: (context, index) {
-                  final farm = farms[index];
-                  return ListTile(
-                    leading: CircleAvatar(
-                      backgroundColor: primaryAccent.withValues(alpha: 0.15),
-                      foregroundColor: primaryAccent,
-                      child: const Icon(Icons.eco_rounded),
-                    ),
-                    title: Text('${farm.farmerName} (${farm.cropType})', style: TextStyle(fontWeight: FontWeight.bold, color: textColor)),
-                    subtitle: Text('Location: ${farm.locationName}, ${farm.barangay}\nArea: ${farm.landAreaHectares} ha • Tenure: ${farm.tenureStatus} • Pin: [${farm.latitude}, ${farm.longitude}]', style: TextStyle(color: subtextColor)),
-                    isThreeLine: true,
-                    trailing: IconButton(
-                      icon: const Icon(Icons.delete_rounded, color: Colors.redAccent),
-                      onPressed: () => service.deleteFarmRecord(farm.id),
-                    ),
-                  );
-                },
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _showAddFarmDialog(BuildContext context, AccountService service) {
-    String selectedFarmerId = service.farmers.isNotEmpty ? service.farmers.first.id : '';
+  void _showAddFarmForFarmerDialog(BuildContext context, AccountService service, Farmer farmer) {
     final locationCtrl = TextEditingController();
     final areaCtrl = TextEditingController();
     final latCtrl = TextEditingController(text: '14.2717');
     final lonCtrl = TextEditingController(text: '121.4553');
     String selectedTenure = 'Owner';
     String selectedCrop = 'Rice';
-    String selectedBrgy = 'Biñan';
+    String selectedBrgy = farmer.barangay;
 
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Add Farm Record'),
+        title: Text('Add Farm Record for ${farmer.profileName}'),
         content: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              DropdownButtonFormField<String>(
-                value: selectedFarmerId,
-                decoration: const InputDecoration(labelText: 'Select Farmer'),
-                items: service.farmers.map((f) => DropdownMenuItem(value: f.id, child: Text(f.profileName))).toList(),
-                onChanged: (val) => selectedFarmerId = val ?? '',
-              ),
               TextField(controller: locationCtrl, decoration: const InputDecoration(labelText: 'Farm Location / Sitio')),
               DropdownButtonFormField<String>(
                 value: selectedBrgy,
                 decoration: const InputDecoration(labelText: 'Barangay'),
                 items: AccountService.pagsanjanBarangays.map((b) => DropdownMenuItem(value: b, child: Text(b))).toList(),
-                onChanged: (val) => selectedBrgy = val ?? 'Biñan',
+                onChanged: (val) => selectedBrgy = val ?? farmer.barangay,
               ),
               TextField(controller: areaCtrl, decoration: const InputDecoration(labelText: 'Land Area (Hectares)'), keyboardType: TextInputType.number),
               DropdownButtonFormField<String>(
@@ -1516,7 +2313,6 @@ class _AdminDashboardState extends State<AdminDashboard> {
           TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
           ElevatedButton(
             onPressed: () {
-              final farmer = service.farmers.firstWhere((f) => f.id == selectedFarmerId, orElse: () => service.farmers.first);
               service.addFarmRecord(
                 farmerId: farmer.id,
                 farmerName: farmer.profileName,
@@ -1538,7 +2334,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
   }
 
   // ==========================================
-  // MODULE 4: HISTORICAL DATA (WITH MODULE EXPORT)
+  // MODULE 3: HISTORICAL DATA
   // ==========================================
   Widget _buildHistoricalDataView(
     AccountService service,
@@ -1571,7 +2367,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
               Wrap(
                 spacing: 8,
                 children: [
-                  _buildModuleExportButtons(context, 'Historical Data', locale),
+                  _buildExportImportButtons(context, 'Historical Data', locale, service),
                   ElevatedButton.icon(
                     onPressed: () => _showUploadCsvDialog(context, service),
                     style: ElevatedButton.styleFrom(
@@ -1586,6 +2382,42 @@ class _AdminDashboardState extends State<AdminDashboard> {
                 ],
               ),
             ],
+          ),
+          const SizedBox(height: 16),
+
+          // PREDICTED PRICE & MARKET TRENDS CARD
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: isDark ? const Color(0xFF132338) : const Color(0xFFE0F2FE),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: isDark ? const Color(0xFF1E3A8A) : const Color(0xFFBAE6FD)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const Icon(Icons.trending_up_rounded, color: Color(0xFF0284C7), size: 20),
+                    const SizedBox(width: 8),
+                    Text(
+                      locale.isTagalog ? '💡 Prediksyon ng Presyo at Market Trends (Price Forecasting)' : '💡 Price Prediction & Market Trend Analytics',
+                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: textColor),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Wrap(
+                  spacing: 12,
+                  runSpacing: 10,
+                  children: [
+                    _buildPredictionChip('Rice', service, isDark, textColor, subtextColor),
+                    _buildPredictionChip('Gulay', service, isDark, textColor, subtextColor),
+                    _buildPredictionChip('Prutas', service, isDark, textColor, subtextColor),
+                  ],
+                ),
+              ],
+            ),
           ),
           const SizedBox(height: 16),
 
@@ -1686,7 +2518,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
   }
 
   // ==========================================
-  // MODULE 5: INTERACTIVE MAP (WITH MODULE EXPORT)
+  // MODULE 4: INTERACTIVE MAP
   // ==========================================
   Widget _buildInteractiveMapView(
     AccountService service,
@@ -1698,7 +2530,15 @@ class _AdminDashboardState extends State<AdminDashboard> {
     Color cardBorder,
     Color primaryAccent,
   ) {
-    final farms = service.farms;
+    final farms = service.farms.where((farm) {
+      final query = _searchQuery.toLowerCase();
+      final matchesQuery = query.isEmpty ||
+                           farm.farmerName.toLowerCase().contains(query) ||
+                           farm.locationName.toLowerCase().contains(query) ||
+                           farm.cropType.toLowerCase().contains(query);
+      final matchesBarangay = _selectedBarangayFilter == 'All' || farm.barangay == _selectedBarangayFilter;
+      return matchesQuery && matchesBarangay;
+    }).toList();
 
     return Padding(
       padding: const EdgeInsets.all(22),
@@ -1716,7 +2556,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                   Text(locale.mapTitle, style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: textColor)),
                 ],
               ),
-              _buildModuleExportButtons(context, 'Farms Map List', locale),
+              _buildExportImportButtons(context, 'Farms Map List', locale, service),
             ],
           ),
           const SizedBox(height: 16),
@@ -1731,7 +2571,6 @@ class _AdminDashboardState extends State<AdminDashboard> {
               ),
               child: Stack(
                 children: [
-                  // Simulated Visual Map Representation of Pagsanjan
                   Center(
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
@@ -1746,8 +2585,6 @@ class _AdminDashboardState extends State<AdminDashboard> {
                       ],
                     ),
                   ),
-
-                  // Interactive Farm Pins List overlay
                   Positioned(
                     left: 20,
                     top: 20,
@@ -1765,6 +2602,39 @@ class _AdminDashboardState extends State<AdminDashboard> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(locale.registeredPins, style: TextStyle(fontWeight: FontWeight.bold, color: primaryAccent)),
+                          const SizedBox(height: 8),
+                          TextField(
+                            controller: _searchController,
+                            onChanged: (val) => setState(() => _searchQuery = val),
+                            style: TextStyle(color: textColor, fontSize: 12),
+                            decoration: InputDecoration(
+                              hintText: locale.isTagalog ? 'Maghanap ng sakahan...' : 'Search farm or farmer...',
+                              hintStyle: TextStyle(color: subtextColor, fontSize: 11),
+                              prefixIcon: Icon(Icons.search_rounded, color: subtextColor, size: 18),
+                              isDense: true,
+                              filled: true,
+                              fillColor: cardBg,
+                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: cardBorder)),
+                              contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          DropdownButtonFormField<String>(
+                            value: _selectedBarangayFilter,
+                            dropdownColor: cardBg,
+                            style: TextStyle(color: textColor, fontSize: 12),
+                            decoration: InputDecoration(
+                              labelText: locale.isTagalog ? 'Barangay' : 'Barangay',
+                              labelStyle: TextStyle(color: subtextColor, fontSize: 11),
+                              isDense: true,
+                              filled: true,
+                              fillColor: cardBg,
+                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: cardBorder)),
+                              contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                            ),
+                            items: ['All', ...AccountService.pagsanjanBarangays].map((b) => DropdownMenuItem(value: b, child: Text(b, style: TextStyle(fontSize: 12)))).toList(),
+                            onChanged: (val) => setState(() => _selectedBarangayFilter = val ?? 'All'),
+                          ),
                           const SizedBox(height: 8),
                           Expanded(
                             child: ListView.builder(
@@ -1827,7 +2697,6 @@ class _AdminDashboardState extends State<AdminDashboard> {
             Text('Land Area: ${farm.landAreaHectares} Hectares', style: TextStyle(color: textColor)),
             Text('Tenure Status: ${farm.tenureStatus}', style: TextStyle(color: textColor)),
             const SizedBox(height: 16),
-
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(color: Colors.blue.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(12)),
@@ -1852,7 +2721,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
   }
 
   // ==========================================
-  // MODULE 6: FARMER ACCOUNTS (WITH MODULE EXPORT)
+  // MODULE 5: FARMER ACCOUNTS
   // ==========================================
   Widget _buildFarmerAccountsView(
     AccountService service,
@@ -1864,7 +2733,15 @@ class _AdminDashboardState extends State<AdminDashboard> {
     Color cardBorder,
     Color primaryAccent,
   ) {
-    final farmers = service.farmers;
+    final farmers = service.farmers.where((f) {
+      final query = _searchQuery.toLowerCase();
+      final matchesQuery = query.isEmpty ||
+                           f.profileName.toLowerCase().contains(query) ||
+                           f.username.toLowerCase().contains(query) ||
+                           f.organization.toLowerCase().contains(query);
+      final matchesBarangay = _selectedBarangayFilter == 'All' || f.barangay == _selectedBarangayFilter;
+      return matchesQuery && matchesBarangay;
+    }).toList();
 
     return Padding(
       padding: const EdgeInsets.all(22),
@@ -1882,7 +2759,64 @@ class _AdminDashboardState extends State<AdminDashboard> {
                   Text(locale.accountsTitle, style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: textColor)),
                 ],
               ),
-              _buildModuleExportButtons(context, 'Farmer Accounts', locale),
+              Wrap(
+                spacing: 8,
+                children: [
+                  _buildExportImportButtons(context, 'Farmer Accounts', locale, service, showImport: false),
+                  ElevatedButton.icon(
+                    onPressed: () => _showAddFarmerDialog(context, service),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: primaryAccent,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    ),
+                    icon: const Icon(Icons.person_add_rounded),
+                    label: Text(locale.addFarmer, style: const TextStyle(fontWeight: FontWeight.bold)),
+                  ),
+                ],
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+
+          Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _searchController,
+                  onChanged: (val) => setState(() => _searchQuery = val),
+                  style: TextStyle(color: textColor, fontSize: 13),
+                  decoration: InputDecoration(
+                    hintText: locale.searchFarmerPlaceholder,
+                    hintStyle: TextStyle(color: subtextColor, fontSize: 13),
+                    prefixIcon: Icon(Icons.search_rounded, color: subtextColor),
+                    filled: true,
+                    fillColor: cardBg,
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: cardBorder)),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              SizedBox(
+                width: 200,
+                child: DropdownButtonFormField<String>(
+                  value: _selectedBarangayFilter,
+                  dropdownColor: cardBg,
+                  style: TextStyle(color: textColor, fontSize: 13),
+                  decoration: InputDecoration(
+                    labelText: 'Filter Barangay',
+                    labelStyle: TextStyle(color: subtextColor),
+                    filled: true,
+                    fillColor: cardBg,
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: cardBorder)),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  ),
+                  items: ['All', ...AccountService.pagsanjanBarangays].map((b) => DropdownMenuItem(value: b, child: Text(b))).toList(),
+                  onChanged: (val) => setState(() => _selectedBarangayFilter = val ?? 'All'),
+                ),
+              ),
             ],
           ),
           const SizedBox(height: 16),
@@ -1919,6 +2853,11 @@ class _AdminDashboardState extends State<AdminDashboard> {
                             style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0284C7), foregroundColor: Colors.white),
                             child: const Text('Approve'),
                           ),
+                        IconButton(
+                          icon: const Icon(Icons.edit_rounded, color: Colors.blueAccent),
+                          tooltip: 'Edit Farmer',
+                          onPressed: () => _showEditFarmerDialog(context, service, farmer),
+                        ),
                         OutlinedButton(
                           onPressed: () => _showResetPasswordDialog(context, service, farmer),
                           child: const Text('Reset Pass'),
@@ -1965,271 +2904,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
   }
 
   // ==========================================
-  // MODULE 7: CROP PLANTING REQUIREMENTS (WITH MODULE EXPORT)
-  // ==========================================
-  Widget _buildCropRequirementsView(
-    AccountService service,
-    AdminLocale locale,
-    bool isDark,
-    Color cardBg,
-    Color textColor,
-    Color subtextColor,
-    Color cardBorder,
-    Color primaryAccent,
-  ) {
-    final reqs = service.cropRequirements;
-
-    return Padding(
-      padding: const EdgeInsets.all(22),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('AGRONOMY SPECS', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: primaryAccent)),
-                  const SizedBox(height: 2),
-                  Text(locale.cropReqTitle, style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: textColor)),
-                ],
-              ),
-              Wrap(
-                spacing: 8,
-                children: [
-                  _buildModuleExportButtons(context, 'Crop Requirements', locale),
-                  ElevatedButton.icon(
-                    onPressed: () => _showAddCropReqDialog(context, service),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: primaryAccent,
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                    ),
-                    icon: const Icon(Icons.add_rounded),
-                    label: Text(locale.addCropSpecs, style: const TextStyle(fontWeight: FontWeight.bold)),
-                  ),
-                ],
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-
-          Expanded(
-            child: Container(
-              decoration: BoxDecoration(
-                color: cardBg,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: cardBorder),
-              ),
-              child: ListView.separated(
-                padding: const EdgeInsets.all(8),
-                itemCount: reqs.length,
-                separatorBuilder: (_, __) => Divider(height: 1, color: cardBorder),
-                itemBuilder: (context, index) {
-                  final c = reqs[index];
-                  return ListTile(
-                    leading: CircleAvatar(
-                      backgroundColor: Colors.amber.withValues(alpha: 0.2),
-                      foregroundColor: Colors.amber.shade800,
-                      child: const Icon(Icons.eco_rounded),
-                    ),
-                    title: Text('${c.cropName} [${c.cropCategory}]', style: TextStyle(fontWeight: FontWeight.bold, color: textColor)),
-                    subtitle: Text('Temp: ${c.minTemp}°C - ${c.maxTemp}°C • Rainfall: ${c.minRainfallMm}-${c.maxRainfallMm} mm\nSuitable Months: ${c.suitableMonths}', style: TextStyle(color: subtextColor)),
-                    isThreeLine: true,
-                    trailing: IconButton(
-                      icon: const Icon(Icons.delete_rounded, color: Colors.redAccent),
-                      onPressed: () => service.deleteCropRequirement(c.id),
-                    ),
-                  );
-                },
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _showAddCropReqDialog(BuildContext context, AccountService service) {
-    final nameCtrl = TextEditingController();
-    final minTempCtrl = TextEditingController(text: '20.0');
-    final maxTempCtrl = TextEditingController(text: '32.0');
-    final minRainCtrl = TextEditingController(text: '100.0');
-    final maxRainCtrl = TextEditingController(text: '250.0');
-    final monthsCtrl = TextEditingController(text: 'June - November');
-    String selectedCategory = 'Rice';
-
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Add Crop Planting Requirement'),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(controller: nameCtrl, decoration: const InputDecoration(labelText: 'Crop Name (e.g., Palay, Talong)')),
-              DropdownButtonFormField<String>(
-                value: selectedCategory,
-                decoration: const InputDecoration(labelText: 'Category'),
-                items: ['Rice', 'Prutas', 'Gulay'].map((cat) => DropdownMenuItem(value: cat, child: Text(cat))).toList(),
-                onChanged: (val) => selectedCategory = val ?? 'Rice',
-              ),
-              Row(
-                children: [
-                  Expanded(child: TextField(controller: minTempCtrl, decoration: const InputDecoration(labelText: 'Min Temp (°C)'))),
-                  const SizedBox(width: 8),
-                  Expanded(child: TextField(controller: maxTempCtrl, decoration: const InputDecoration(labelText: 'Max Temp (°C)'))),
-                ],
-              ),
-              Row(
-                children: [
-                  Expanded(child: TextField(controller: minRainCtrl, decoration: const InputDecoration(labelText: 'Min Rain (mm)'))),
-                  const SizedBox(width: 8),
-                  Expanded(child: TextField(controller: maxRainCtrl, decoration: const InputDecoration(labelText: 'Max Rain (mm)'))),
-                ],
-              ),
-              TextField(controller: monthsCtrl, decoration: const InputDecoration(labelText: 'Suitable Planting Months')),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
-          ElevatedButton(
-            onPressed: () {
-              service.addCropRequirement(
-                cropName: nameCtrl.text,
-                cropCategory: selectedCategory,
-                minTemp: double.tryParse(minTempCtrl.text) ?? 20.0,
-                maxTemp: double.tryParse(maxTempCtrl.text) ?? 30.0,
-                minRainfallMm: double.tryParse(minRainCtrl.text) ?? 100.0,
-                maxRainfallMm: double.tryParse(maxRainCtrl.text) ?? 200.0,
-                suitableMonths: monthsCtrl.text,
-              );
-              Navigator.pop(context);
-            },
-            child: const Text('Save'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  // ==========================================
-  // MODULE 8: MODEL MANAGEMENT (WITH MODULE EXPORT)
-  // ==========================================
-  Widget _buildModelManagementView(
-    AccountService service,
-    AdminLocale locale,
-    bool isDark,
-    Color cardBg,
-    Color textColor,
-    Color subtextColor,
-    Color cardBorder,
-    Color primaryAccent,
-  ) {
-    final status = service.modelStatus;
-
-    return Padding(
-      padding: const EdgeInsets.all(22),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('MACHINE LEARNING', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: primaryAccent)),
-                  const SizedBox(height: 2),
-                  Text(locale.modelTitle, style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: textColor)),
-                ],
-              ),
-              _buildModuleExportButtons(context, 'ML Model Status', locale),
-            ],
-          ),
-          const SizedBox(height: 16),
-
-          Container(
-            padding: const EdgeInsets.all(22),
-            decoration: BoxDecoration(
-              color: cardBg,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: cardBorder),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('Yield Prediction ML Model v2.4', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: textColor)),
-                        Text('Trained on historical MAO records', style: TextStyle(color: subtextColor, fontSize: 12)),
-                      ],
-                    ),
-                    ElevatedButton.icon(
-                      onPressed: status.isTraining ? null : () => service.triggerModelRetraining(),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: primaryAccent,
-                        foregroundColor: Colors.white,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                      ),
-                      icon: status.isTraining
-                          ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                          : const Icon(Icons.sync_rounded),
-                      label: Text(status.isTraining ? locale.retrainingModel : locale.retrainModel, style: const TextStyle(fontWeight: FontWeight.bold)),
-                    ),
-                  ],
-                ),
-                const Divider(height: 30),
-
-                Text('Model Accuracy Metrics:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: textColor)),
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    Expanded(child: _buildMetricBadge('MAE (Mean Abs Error)', '${status.mae} MT', const Color(0xFF0056B3), isDark)),
-                    const SizedBox(width: 12),
-                    Expanded(child: _buildMetricBadge('RMSE (Root Mean Sq)', '${status.rmse} MT', const Color(0xFF4F46E5), isDark)),
-                    const SizedBox(width: 12),
-                    Expanded(child: _buildMetricBadge('MAPE (Mean Abs %)', '${status.mape}%', const Color(0xFF0284C7), isDark)),
-                  ],
-                ),
-                const SizedBox(height: 20),
-
-                Text('Last Updated: ${DateFormat('yyyy-MM-dd HH:mm:ss').format(status.lastUpdated)}', style: TextStyle(color: textColor)),
-                const SizedBox(height: 4),
-                Text('Training Dataset Size: ${status.trainedRecordsCount} historical entries', style: TextStyle(color: subtextColor)),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildMetricBadge(String title, String value, Color color, bool isDark) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(color: color.withValues(alpha: isDark ? 0.2 : 0.1), borderRadius: BorderRadius.circular(12)),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(title, style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: color)),
-          const SizedBox(height: 4),
-          Text(value, style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: color)),
-        ],
-      ),
-    );
-  }
-
-  // ==========================================
-  // MODULE 9: ADMIN ACCOUNTS
+  // MODULE 6: ADMIN ACCOUNTS
   // ==========================================
   Widget _buildAdminAccountsView(
     AccountService service,
@@ -2259,16 +2934,22 @@ class _AdminDashboardState extends State<AdminDashboard> {
                   Text(locale.adminStaffTitle, style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: textColor)),
                 ],
               ),
-              ElevatedButton.icon(
-                onPressed: () => _showAddStaffDialog(context, service),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: primaryAccent,
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                ),
-                icon: const Icon(Icons.person_add_rounded),
-                label: Text(locale.addStaff, style: const TextStyle(fontWeight: FontWeight.bold)),
+              Wrap(
+                spacing: 8,
+                children: [
+                  _buildExportImportButtons(context, 'Admin Accounts', locale, service),
+                  ElevatedButton.icon(
+                    onPressed: () => _showAddStaffDialog(context, service),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: primaryAccent,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    ),
+                    icon: const Icon(Icons.person_add_rounded),
+                    label: Text(locale.addStaff, style: const TextStyle(fontWeight: FontWeight.bold)),
+                  ),
+                ],
               ),
             ],
           ),
@@ -2357,7 +3038,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
   }
 
   // ==========================================
-  // MODULE 10: ACTIVITY LOG (WITH MODULE EXPORT)
+  // MODULE 7: ACTIVITY LOG
   // ==========================================
   Widget _buildActivityLogView(
     AccountService service,
@@ -2387,7 +3068,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                   Text(locale.activityLogTitle, style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: textColor)),
                 ],
               ),
-              _buildModuleExportButtons(context, 'Activity Log Audit', locale),
+              _buildExportImportButtons(context, 'Activity Log Audit', locale, service),
             ],
           ),
           const SizedBox(height: 16),
