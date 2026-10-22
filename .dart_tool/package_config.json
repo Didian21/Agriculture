@@ -56,6 +56,12 @@
       "languageVersion": "3.9"
     },
     {
+      "name": "dart_earcut",
+      "rootUri": "file:///C:/Users/Nhiel%20R.%20Radores/AppData/Local/Pub/Cache/hosted/pub.dev/dart_earcut-1.2.0",
+      "packageUri": "lib/",
+      "languageVersion": "3.0"
+    },
+    {
       "name": "fake_async",
       "rootUri": "file:///C:/Users/Nhiel%20R.%20Radores/AppData/Local/Pub/Cache/hosted/pub.dev/fake_async-1.3.3",
       "packageUri": "lib/",
@@ -66,6 +72,12 @@
       "rootUri": "file:///C:/Users/Nhiel%20R.%20Radores/AppData/Local/Pub/Cache/hosted/pub.dev/ffi-2.2.0",
       "packageUri": "lib/",
       "languageVersion": "3.7"
+    },
+    {
+      "name": "file",
+      "rootUri": "file:///C:/Users/Nhiel%20R.%20Radores/AppData/Local/Pub/Cache/hosted/pub.dev/file-7.0.1",
+      "packageUri": "lib/",
+      "languageVersion": "3.0"
     },
     {
       "name": "flutter",
@@ -80,8 +92,26 @@
       "languageVersion": "3.8"
     },
     {
+      "name": "flutter_localizations",
+      "rootUri": "file:///C:/flutter/packages/flutter_localizations",
+      "packageUri": "lib/",
+      "languageVersion": "3.11"
+    },
+    {
+      "name": "flutter_map",
+      "rootUri": "file:///C:/Users/Nhiel%20R.%20Radores/AppData/Local/Pub/Cache/hosted/pub.dev/flutter_map-7.0.2",
+      "packageUri": "lib/",
+      "languageVersion": "3.0"
+    },
+    {
       "name": "flutter_test",
       "rootUri": "file:///C:/flutter/packages/flutter_test",
+      "packageUri": "lib/",
+      "languageVersion": "3.11"
+    },
+    {
+      "name": "flutter_web_plugins",
+      "rootUri": "file:///C:/flutter/packages/flutter_web_plugins",
       "packageUri": "lib/",
       "languageVersion": "3.11"
     },
@@ -111,9 +141,9 @@
     },
     {
       "name": "intl",
-      "rootUri": "file:///C:/Users/Nhiel%20R.%20Radores/AppData/Local/Pub/Cache/hosted/pub.dev/intl-0.19.0",
+      "rootUri": "file:///C:/Users/Nhiel%20R.%20Radores/AppData/Local/Pub/Cache/hosted/pub.dev/intl-0.20.3",
       "packageUri": "lib/",
-      "languageVersion": "3.0"
+      "languageVersion": "3.9"
     },
     {
       "name": "jni",
@@ -132,6 +162,12 @@
       "rootUri": "file:///C:/Users/Nhiel%20R.%20Radores/AppData/Local/Pub/Cache/hosted/pub.dev/jni_util-1.0.0",
       "packageUri": "lib/",
       "languageVersion": "3.3"
+    },
+    {
+      "name": "latlong2",
+      "rootUri": "file:///C:/Users/Nhiel%20R.%20Radores/AppData/Local/Pub/Cache/hosted/pub.dev/latlong2-0.9.1",
+      "packageUri": "lib/",
+      "languageVersion": "3.0"
     },
     {
       "name": "leak_tracker",
@@ -158,6 +194,18 @@
       "languageVersion": "3.8"
     },
     {
+      "name": "lists",
+      "rootUri": "file:///C:/Users/Nhiel%20R.%20Radores/AppData/Local/Pub/Cache/hosted/pub.dev/lists-1.0.1",
+      "packageUri": "lib/",
+      "languageVersion": "2.12"
+    },
+    {
+      "name": "logger",
+      "rootUri": "file:///C:/Users/Nhiel%20R.%20Radores/AppData/Local/Pub/Cache/hosted/pub.dev/logger-2.8.0",
+      "packageUri": "lib/",
+      "languageVersion": "2.17"
+    },
+    {
       "name": "logging",
       "rootUri": "file:///C:/Users/Nhiel%20R.%20Radores/AppData/Local/Pub/Cache/hosted/pub.dev/logging-1.3.0",
       "packageUri": "lib/",
@@ -180,6 +228,12 @@
       "rootUri": "file:///C:/Users/Nhiel%20R.%20Radores/AppData/Local/Pub/Cache/hosted/pub.dev/meta-1.18.3",
       "packageUri": "lib/",
       "languageVersion": "3.5"
+    },
+    {
+      "name": "mgrs_dart",
+      "rootUri": "file:///C:/Users/Nhiel%20R.%20Radores/AppData/Local/Pub/Cache/hosted/pub.dev/mgrs_dart-2.0.0",
+      "packageUri": "lib/",
+      "languageVersion": "2.12"
     },
     {
       "name": "nested",
@@ -254,6 +308,18 @@
       "languageVersion": "3.0"
     },
     {
+      "name": "polylabel",
+      "rootUri": "file:///C:/Users/Nhiel%20R.%20Radores/AppData/Local/Pub/Cache/hosted/pub.dev/polylabel-1.0.1",
+      "packageUri": "lib/",
+      "languageVersion": "2.13"
+    },
+    {
+      "name": "proj4dart",
+      "rootUri": "file:///C:/Users/Nhiel%20R.%20Radores/AppData/Local/Pub/Cache/hosted/pub.dev/proj4dart-2.1.0",
+      "packageUri": "lib/",
+      "languageVersion": "2.12"
+    },
+    {
       "name": "provider",
       "rootUri": "file:///C:/Users/Nhiel%20R.%20Radores/AppData/Local/Pub/Cache/hosted/pub.dev/provider-6.1.5+1",
       "packageUri": "lib/",
@@ -270,6 +336,48 @@
       "rootUri": "file:///C:/Users/Nhiel%20R.%20Radores/AppData/Local/Pub/Cache/hosted/pub.dev/record_use-0.6.0",
       "packageUri": "lib/",
       "languageVersion": "3.10"
+    },
+    {
+      "name": "shared_preferences",
+      "rootUri": "file:///C:/Users/Nhiel%20R.%20Radores/AppData/Local/Pub/Cache/hosted/pub.dev/shared_preferences-2.5.6",
+      "packageUri": "lib/",
+      "languageVersion": "3.11"
+    },
+    {
+      "name": "shared_preferences_android",
+      "rootUri": "file:///C:/Users/Nhiel%20R.%20Radores/AppData/Local/Pub/Cache/hosted/pub.dev/shared_preferences_android-2.5.2",
+      "packageUri": "lib/",
+      "languageVersion": "3.12"
+    },
+    {
+      "name": "shared_preferences_foundation",
+      "rootUri": "file:///C:/Users/Nhiel%20R.%20Radores/AppData/Local/Pub/Cache/hosted/pub.dev/shared_preferences_foundation-2.5.7",
+      "packageUri": "lib/",
+      "languageVersion": "3.10"
+    },
+    {
+      "name": "shared_preferences_linux",
+      "rootUri": "file:///C:/Users/Nhiel%20R.%20Radores/AppData/Local/Pub/Cache/hosted/pub.dev/shared_preferences_linux-2.4.1",
+      "packageUri": "lib/",
+      "languageVersion": "3.3"
+    },
+    {
+      "name": "shared_preferences_platform_interface",
+      "rootUri": "file:///C:/Users/Nhiel%20R.%20Radores/AppData/Local/Pub/Cache/hosted/pub.dev/shared_preferences_platform_interface-2.4.2",
+      "packageUri": "lib/",
+      "languageVersion": "3.9"
+    },
+    {
+      "name": "shared_preferences_web",
+      "rootUri": "file:///C:/Users/Nhiel%20R.%20Radores/AppData/Local/Pub/Cache/hosted/pub.dev/shared_preferences_web-2.4.3",
+      "packageUri": "lib/",
+      "languageVersion": "3.4"
+    },
+    {
+      "name": "shared_preferences_windows",
+      "rootUri": "file:///C:/Users/Nhiel%20R.%20Radores/AppData/Local/Pub/Cache/hosted/pub.dev/shared_preferences_windows-2.4.1",
+      "packageUri": "lib/",
+      "languageVersion": "3.3"
     },
     {
       "name": "sky_engine",
@@ -320,6 +428,12 @@
       "languageVersion": "3.5"
     },
     {
+      "name": "unicode",
+      "rootUri": "file:///C:/Users/Nhiel%20R.%20Radores/AppData/Local/Pub/Cache/hosted/pub.dev/unicode-0.3.1",
+      "packageUri": "lib/",
+      "languageVersion": "2.12"
+    },
+    {
       "name": "vector_math",
       "rootUri": "file:///C:/Users/Nhiel%20R.%20Radores/AppData/Local/Pub/Cache/hosted/pub.dev/vector_math-2.4.0",
       "packageUri": "lib/",
@@ -336,6 +450,12 @@
       "rootUri": "file:///C:/Users/Nhiel%20R.%20Radores/AppData/Local/Pub/Cache/hosted/pub.dev/web-1.1.1",
       "packageUri": "lib/",
       "languageVersion": "3.4"
+    },
+    {
+      "name": "wkt_parser",
+      "rootUri": "file:///C:/Users/Nhiel%20R.%20Radores/AppData/Local/Pub/Cache/hosted/pub.dev/wkt_parser-2.0.0",
+      "packageUri": "lib/",
+      "languageVersion": "2.12"
     },
     {
       "name": "xdg_directories",

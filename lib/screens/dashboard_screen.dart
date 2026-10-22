@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 
 import '../app_config.dart';
 import '../dashboard_data.dart';
+import 'dashboard/crop_detail_screen.dart';
 
 // ==========================================
 // SHELL: app bar + language selector + 4 tabs
@@ -735,7 +736,7 @@ class _PlantNowCard extends StatelessWidget {
                 children: guides
                     .map((g) => Chip(
                           avatar: Icon(g.icon, size: 18, color: AppColors.forCrop(g.cropEn)),
-                          label: Text(g.crop(isTagalog), style: const TextStyle(fontWeight: FontWeight.w800)),
+                          label: Text(g.cropName(isTagalog), style: const TextStyle(fontWeight: FontWeight.w800)),
                           backgroundColor: Colors.white,
                           side: BorderSide.none,
                         ))
@@ -1070,7 +1071,13 @@ class _PlantingTabState extends State<PlantingTab> {
       const SizedBox(height: 12),
       ...guides.map((g) => Padding(
             padding: const EdgeInsets.only(bottom: 12),
-            child: _GuideCard(guide: g, month: _month, isMine: mine.contains(g.cropEn), isTagalog: isTagalog),
+            child: _GuideCard(
+              guide: g,
+              month: _month,
+              isMine: mine.contains(g.cropEn),
+              isTagalog: isTagalog,
+              p: widget.p,
+            ),
           )),
       Padding(
         padding: const EdgeInsets.symmetric(vertical: 8),
@@ -1111,12 +1118,14 @@ class _GuideCard extends StatelessWidget {
   final int month;
   final bool isMine;
   final bool isTagalog;
+  final DashboardProvider p;
 
   const _GuideCard({
     required this.guide,
     required this.month,
     required this.isMine,
     required this.isTagalog,
+    required this.p,
   });
 
   @override
@@ -1145,78 +1154,89 @@ class _GuideCard extends StatelessWidget {
     const letters = ['J', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O', 'N', 'D'];
 
     return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Row(children: [
-            Container(
-              padding: const EdgeInsets.all(9),
-              decoration: BoxDecoration(color: AppColors.forCrop(guide.cropEn).withValues(alpha: 0.15), shape: BoxShape.circle),
-              child: Icon(guide.icon, color: AppColors.forCrop(guide.cropEn)),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => CropDetailScreen(guide: guide, p: p),
             ),
-            const SizedBox(width: 10),
-            Expanded(child: Text(guide.crop(isTagalog), style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 17))),
-            if (isMine) _Pill(isTagalog ? 'Aking tanim' : 'My crop', AppColors.soil, icon: Icons.star_rounded),
-          ]),
-          const SizedBox(height: 12),
-          AnimatedSwitcher(
-            duration: const Duration(milliseconds: 250),
-            child: Row(key: ValueKey('$status-$isTagalog'), children: [
-              _Pill(label, sc, icon: si),
-              if (status == PlantStatus.avoid) ...[
-                const SizedBox(width: 8),
-                Flexible(
-                  child: Text(
-                    isTagalog
-                        ? 'Pinakamaganda: ${guide.nextBestMonthName(month, true)}'
-                        : 'Best: ${guide.nextBestMonthName(month, false)}',
-                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
-                  ),
-                ),
-              ],
-            ]),
-          ),
-          const SizedBox(height: 12),
-          Row(children: [
-            for (var m = 1; m <= 12; m++)
-              Expanded(
-                child: AnimatedContainer(
-                  duration: const Duration(milliseconds: 250),
-                  margin: const EdgeInsets.symmetric(horizontal: 1.5),
-                  height: 34,
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    color: guide.bestMonths.contains(m)
-                        ? AppColors.leaf
-                        : guide.possibleMonths.contains(m)
-                            ? const Color(0xFFA5D6A7)
-                            : const Color(0xFFEEEEEE),
-                    borderRadius: BorderRadius.circular(8),
-                    border: m == month ? Border.all(color: AppColors.ink, width: 2) : null,
-                  ),
-                  child: Text(letters[m - 1],
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w800,
-                        color: guide.bestMonths.contains(m) ? Colors.white : Colors.black54,
-                      )),
-                ),
+          );
+        },
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Row(children: [
+              Container(
+                padding: const EdgeInsets.all(9),
+                decoration: BoxDecoration(color: AppColors.forCrop(guide.cropEn).withValues(alpha: 0.15), shape: BoxShape.circle),
+                child: Icon(guide.icon, color: AppColors.forCrop(guide.cropEn)),
               ),
-          ]),
-          const SizedBox(height: 12),
-          Row(children: [
-            const Icon(Icons.timer_outlined, size: 16, color: AppColors.soil),
-            const SizedBox(width: 5),
-            Text(
-              isTagalog
-                  ? 'Maaani pagkaraan ng ${guide.harvestTime(true)}'
-                  : 'Ready to harvest in ${guide.harvestTime(false)}',
-              style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
+              const SizedBox(width: 10),
+              Expanded(child: Text(guide.cropName(isTagalog), style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 17))),
+              if (isMine) _Pill(isTagalog ? 'Aking tanim' : 'My crop', AppColors.soil, icon: Icons.star_rounded),
+            ]),
+            const SizedBox(height: 12),
+            AnimatedSwitcher(
+              duration: const Duration(milliseconds: 250),
+              child: Row(key: ValueKey('$status-$isTagalog'), children: [
+                _Pill(label, sc, icon: si),
+                if (status == PlantStatus.avoid) ...[
+                  const SizedBox(width: 8),
+                  Flexible(
+                    child: Text(
+                      isTagalog
+                          ? 'Pinakamaganda: ${guide.nextBestMonthName(month, true)}'
+                          : 'Best: ${guide.nextBestMonthName(month, false)}',
+                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+                    ),
+                  ),
+                ],
+              ]),
             ),
+            const SizedBox(height: 12),
+            Row(children: [
+              for (var m = 1; m <= 12; m++)
+                Expanded(
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 250),
+                    margin: const EdgeInsets.symmetric(horizontal: 1.5),
+                    height: 34,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: guide.bestMonths.contains(m)
+                          ? AppColors.leaf
+                          : guide.possibleMonths.contains(m)
+                              ? const Color(0xFFA5D6A7)
+                              : const Color(0xFFEEEEEE),
+                      borderRadius: BorderRadius.circular(8),
+                      border: m == month ? Border.all(color: AppColors.ink, width: 2) : null,
+                    ),
+                    child: Text(letters[m - 1],
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w800,
+                          color: guide.bestMonths.contains(m) ? Colors.white : Colors.black54,
+                        )),
+                  ),
+                ),
+            ]),
+            const SizedBox(height: 12),
+            Row(children: [
+              const Icon(Icons.timer_outlined, size: 16, color: AppColors.soil),
+              const SizedBox(width: 5),
+              Text(
+                isTagalog
+                    ? 'Maaani pagkaraan ng ${guide.harvestTime(true)}'
+                    : 'Ready to harvest in ${guide.harvestTime(false)}',
+                style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
+              ),
+            ]),
+            const SizedBox(height: 6),
+            Text(guide.tip(isTagalog), style: const TextStyle(height: 1.35, color: Colors.black87)),
           ]),
-          const SizedBox(height: 6),
-          Text(guide.tip(isTagalog), style: const TextStyle(height: 1.35, color: Colors.black87)),
-        ]),
+        ),
       ),
     );
   }
