@@ -6,8 +6,32 @@ class AccountService extends ChangeNotifier {
     Farmer(
       username: 'farmer1',
       password: 'password123',
-      profileName: 'John Doe',
-      records: ['Harvest Jan: 500kg', 'Harvest Feb: 450kg'],
+      profileName: 'Juan Dela Cruz',
+      landSize: '2.5 ha',
+      cropPlanted: 'Rice',
+      location: 'Biñan',
+      contactNumber: '09123456789',
+      records: ['Harvest Q1: 1,200kg', 'Fertilizer Subsidy Received'],
+    ),
+    Farmer(
+      username: 'farmer2',
+      password: 'password123',
+      profileName: 'Maria Santos',
+      landSize: '1.8 ha',
+      cropPlanted: 'Coconut',
+      location: 'Lambac',
+      contactNumber: '09198765432',
+      records: ['Harvest Q1: 950kg'],
+    ),
+    Farmer(
+      username: 'farmer3',
+      password: 'password123',
+      profileName: 'Pedro Reyes',
+      landSize: '3.0 ha',
+      cropPlanted: 'Banana',
+      location: 'Buboy',
+      contactNumber: '09181112233',
+      records: ['Seed distribution registered'],
     ),
   ];
 
@@ -27,11 +51,23 @@ class AccountService extends ChangeNotifier {
   List<Farmer> get farmers => List.unmodifiable(_farmers);
   List<Map<String, String>> get posts => List.unmodifiable(_posts);
 
-  void addFarmer(String username, String password, String profileName) {
+  void addFarmer({
+    required String username,
+    required String password,
+    required String profileName,
+    String landSize = '1.0 ha',
+    String cropPlanted = 'Rice',
+    String location = 'Pagsanjan',
+    String contactNumber = '09123456789',
+  }) {
     _farmers.add(Farmer(
       username: username,
       password: password,
       profileName: profileName,
+      landSize: landSize,
+      cropPlanted: cropPlanted,
+      location: location,
+      contactNumber: contactNumber,
     ));
     notifyListeners();
   }

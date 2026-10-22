@@ -51,4 +51,7 @@ dependencies {
     androidTestImplementation(libs.androidx.junit)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
     debugImplementation(libs.androidx.compose.ui.tooling)
+
+    // OSMDroid Android Map Library
+    implementation("org.osmdroid:osmdroid-android:6.1.20")
 }

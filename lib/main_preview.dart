@@ -19,8 +19,8 @@ class PreviewApp extends StatelessWidget {
       providers: [
         ChangeNotifierProvider(create: (_) {
           final service = AccountService();
-          service.addFarmer('farmer1', 'pass', 'Juan dela Cruz');
-          service.addFarmer('farmer2', 'pass', 'Maria Santos');
+          service.addFarmer(username: 'farmer1', password: 'pass', profileName: 'Juan dela Cruz');
+          service.addFarmer(username: 'farmer2', password: 'pass', profileName: 'Maria Santos');
           return service;
         }),
       ],
