@@ -106,7 +106,7 @@ class PagriLogo extends StatelessWidget {
       AppConstants.logoAsset,
       height: height,
       fit: BoxFit.contain,
-      errorBuilder: (_, __, ___) => CircleAvatar(
+      errorBuilder: (_, _, _) => CircleAvatar(
         radius: height / 2,
         backgroundColor: AppColors.fern,
         child: Icon(Icons.eco, color: Colors.white, size: height * 0.6),

@@ -83,7 +83,7 @@ class _PlantingGraphState extends State<PlantingGraph> {
               tween: Tween(begin: 0, end: 1),
               duration: const Duration(milliseconds: 900),
               curve: Curves.easeOutCubic,
-              builder: (_, progress, __) => CustomPaint(
+              builder: (_, progress, _) => CustomPaint(
                 size: Size(box.maxWidth, 130),
                 painter: _PlantingPainter(
                   fits: fits,

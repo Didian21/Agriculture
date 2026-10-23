@@ -181,7 +181,7 @@ class CountUp extends StatelessWidget {
       tween: Tween(begin: 0, end: value),
       duration: const Duration(milliseconds: 900),
       curve: Curves.easeOutCubic,
-      builder: (_, v, __) => Text('$prefix${v.toStringAsFixed(decimals)}$suffix', style: style),
+      builder: (_, v, _) => Text('$prefix${v.toStringAsFixed(decimals)}$suffix', style: style),
     );
   }
 }

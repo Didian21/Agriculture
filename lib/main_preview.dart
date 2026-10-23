@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+
+import 'dashboard_data.dart';
+import 'models/farmer.dart';
 import 'screens/admin_dashboard.dart';
 import 'screens/farmer_dashboard.dart';
 import 'screens/login_screen.dart';
-import 'models/farmer.dart';
 import 'services/account_service.dart';
 
 void main() {
@@ -19,10 +21,25 @@ class PreviewApp extends StatelessWidget {
       providers: [
         ChangeNotifierProvider(create: (_) {
           final service = AccountService();
-          service.addFarmer('farmer1', 'pass', 'Juan dela Cruz');
-          service.addFarmer('farmer2', 'pass', 'Maria Santos');
+          service.addFarmer(
+            username: 'farmer1',
+            password: 'pass',
+            profileName: 'Juan dela Cruz',
+            barangay: 'Biñan',
+            contactNumber: '09171234567',
+            organization: 'Pagsanjan Farmers',
+          );
+          service.addFarmer(
+            username: 'farmer2',
+            password: 'pass',
+            profileName: 'Maria Santos',
+            barangay: 'Buboy',
+            contactNumber: '09181234567',
+            organization: 'Anibong Farmers',
+          );
           return service;
         }),
+        ChangeNotifierProvider(create: (_) => DashboardProvider()..start()),
       ],
       child: MaterialApp(
         title: 'Agriculture Design Preview',
@@ -58,9 +75,10 @@ class PreviewScreen extends StatelessWidget {
               icon: const Icon(Icons.login),
               label: const Text('Preview Login Screen'),
               onPressed: () {
+                final p = Provider.of<DashboardProvider>(context, listen: false);
                 Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (_) => const LoginScreen()),
+                  MaterialPageRoute(builder: (_) => LoginScreen(p: p)),
                 );
               },
             ),
@@ -83,9 +101,13 @@ class PreviewScreen extends StatelessWidget {
               label: const Text('Preview Farmer Dashboard'),
               onPressed: () {
                 final sampleFarmer = Farmer(
+                  id: 'F001',
                   username: 'farmer1',
                   password: 'pass',
                   profileName: 'Juan dela Cruz',
+                  barangay: 'Biñan',
+                  contactNumber: '09171234567',
+                  organization: 'Pagsanjan Farmers',
                   records: ['Harvest Jan: 500kg', 'Harvest Feb: 450kg'],
                 );
                 Navigator.push(

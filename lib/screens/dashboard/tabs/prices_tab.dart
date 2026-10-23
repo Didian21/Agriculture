@@ -175,7 +175,7 @@ class _PriceCard extends StatelessWidget {
                 tween: Tween(begin: i.currentPrice, end: i.predictedPrice),
                 duration: const Duration(milliseconds: 900),
                 curve: Curves.easeOutCubic,
-                builder: (_, v, __) => Text('₱${v.toStringAsFixed(2)}',
+                builder: (_, v, _) => Text('₱${v.toStringAsFixed(2)}',
                     style: TextStyle(fontSize: 26, fontWeight: FontWeight.w900, color: color)),
               ),
             ]),

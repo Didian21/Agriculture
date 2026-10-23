@@ -421,7 +421,7 @@ class _MonthStrip extends StatelessWidget {
                     tween: Tween(begin: 0, end: heightOf?.call(m) ?? 1),
                     duration: Duration(milliseconds: 350 + m * 40),
                     curve: Curves.easeOutCubic,
-                    builder: (_, v, __) => Container(
+                    builder: (_, v, _) => Container(
                       height: 54 * v.clamp(0.12, 1.0),
                       decoration: BoxDecoration(
                         color: builder(m),
@@ -567,7 +567,7 @@ class _RangeBar extends StatelessWidget {
                   tween: Tween(begin: 0, end: pos),
                   duration: const Duration(milliseconds: 700),
                   curve: Curves.easeOutCubic,
-                  builder: (_, v, __) => Positioned(
+                  builder: (_, v, _) => Positioned(
                     left: (c.maxWidth - 18) * v,
                     child: Container(
                       width: 18,

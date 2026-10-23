@@ -226,7 +226,7 @@ class _LandCard extends StatelessWidget {
                 tween: Tween(begin: 0, end: sqm ? total * 10000 : total),
                 duration: const Duration(milliseconds: 1000),
                 curve: Curves.easeOutCubic,
-                builder: (_, v, __) => FittedBox(
+                builder: (_, v, _) => FittedBox(
                   fit: BoxFit.scaleDown,
                   alignment: Alignment.centerLeft,
                   child: Text(sqm ? DssFmt.group(v.round()) : v.toStringAsFixed(2),

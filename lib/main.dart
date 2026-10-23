@@ -7,7 +7,9 @@ import 'l10n/app_localizations.dart';
 import 'providers/farm_input_provider.dart';
 import 'screens/dashboard/dashboard_screen.dart';
 import 'screens/login_screen.dart';
+import 'screens/thank_you_screen.dart';
 import 'services/account_service.dart';
+import 'services/supabase_service.dart';
 
 class AppConstants {
   // Pagsanjan, Laguna (default farm coordinates)
@@ -244,7 +246,13 @@ class PagriLogo extends StatelessWidget {
   }
 }
 
-void main() => runApp(const AgricultureApp());
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  try {
+    await SupabaseService.initialize();
+  } catch (_) {}
+  runApp(const AgricultureApp());
+}
 
 class AgricultureApp extends StatelessWidget {
   const AgricultureApp({super.key});
@@ -273,6 +281,7 @@ class AgricultureApp extends StatelessWidget {
           routes: {
             '/': (context) => LoginScreen(p: p),
             '/dashboard': (context) => const DashboardScreen(),
+            '/thank_you': (context) => const ThankYouScreen(),
           },
         ),
       ),

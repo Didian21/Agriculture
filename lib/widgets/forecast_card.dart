@@ -274,7 +274,7 @@ class _ForecastCardState extends State<ForecastCard> {
                   child: ListView.separated(
                     scrollDirection: Axis.horizontal,
                     itemCount: f.hours.length,
-                    separatorBuilder: (_, __) => const SizedBox(width: 8),
+                    separatorBuilder: (_, _) => const SizedBox(width: 8),
                     itemBuilder: (context, i) => _hourTile(context, f.hours[i], i == 0),
                   ),
                 ),

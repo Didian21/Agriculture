@@ -74,7 +74,7 @@ class _NotificationsSheet extends StatelessWidget {
                   shrinkWrap: true,
                   padding: const EdgeInsets.symmetric(vertical: 6),
                   itemCount: items.length,
-                  separatorBuilder: (_, __) => const Divider(height: 1, indent: 72),
+                  separatorBuilder: (_, _) => const Divider(height: 1, indent: 72),
                   itemBuilder: (_, i) {
                     final n = items[i];
                     return ListTile(

@@ -8,6 +8,7 @@ import '../../../providers/farm_input_provider.dart';
 import '../../../services/farm_weather_service.dart';
 import '../../../widgets/common_widgets.dart';
 import '../../../widgets/weather_icon.dart';
+import '../../map_screen.dart';
 
 /// Mapa ng sariling bukid + panahon sa mismong lokasyon (tap sa mapa para ilipat ang pin).
 class FarmMapCard extends StatefulWidget {
@@ -19,7 +20,6 @@ class FarmMapCard extends StatefulWidget {
 }
 
 class _FarmMapCardState extends State<FarmMapCard> {
-  final _map = MapController();
   final _service = FarmWeatherService();
   FarmWeather? _w;
   bool _loading = true;
@@ -36,15 +36,8 @@ class _FarmMapCardState extends State<FarmMapCard> {
   void didUpdateWidget(covariant FarmMapCard old) {
     super.didUpdateWidget(old);
     if (_loadedLat != widget.input.lat || _loadedLon != widget.input.lon) {
-      _map.move(LatLng(widget.input.lat, widget.input.lon), _map.camera.zoom);
       _load();
     }
-  }
-
-  @override
-  void dispose() {
-    _map.dispose();
-    super.dispose();
   }
 
   Future<void> _load() async {
@@ -87,34 +80,22 @@ class _FarmMapCardState extends State<FarmMapCard> {
               height: 230,
               child: Stack(
                 children: [
-                  FlutterMap(
-                    mapController: _map,
-                    options: MapOptions(
-                      initialCenter: point,
-                      initialZoom: 15,
-                      interactionOptions: const InteractionOptions(
-                        flags: InteractiveFlag.drag | InteractiveFlag.pinchZoom | InteractiveFlag.doubleTapZoom,
+                  PagsanjanMapWidget(
+                    initialCenter: point,
+                    initialZoom: 15,
+                    markers: [
+                      Marker(
+                        point: point,
+                        width: 48,
+                        height: 54,
+                        alignment: Alignment.topCenter,
+                        child: const Icon(Icons.location_on_rounded, size: 48, color: AppColors.down),
                       ),
-                      onTap: (_, p) => widget.input.setLocation(
-                        double.parse(p.latitude.toStringAsFixed(5)),
-                        double.parse(p.longitude.toStringAsFixed(5)),
-                      ),
-                    ),
-                    children: [
-                      TileLayer(
-                        urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                        userAgentPackageName: 'com.example.wency',
-                      ),
-                      MarkerLayer(markers: [
-                        Marker(
-                          point: point,
-                          width: 48,
-                          height: 54,
-                          alignment: Alignment.topCenter,
-                          child: const Icon(Icons.location_on_rounded, size: 48, color: AppColors.down),
-                        ),
-                      ]),
                     ],
+                    onTap: (p) => widget.input.setLocation(
+                      double.parse(p.latitude.toStringAsFixed(5)),
+                      double.parse(p.longitude.toStringAsFixed(5)),
+                    ),
                   ),
                   Positioned(
                     right: 0,
@@ -122,7 +103,7 @@ class _FarmMapCardState extends State<FarmMapCard> {
                     child: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                       color: Colors.white70,
-                      child: const Text('© OpenStreetMap contributors', style: TextStyle(fontSize: 10)),
+                      child: const Text('© OpenStreetMap & Pagsanjan GIS', style: TextStyle(fontSize: 10)),
                     ),
                   ),
                 ],
@@ -142,13 +123,23 @@ class _FarmMapCardState extends State<FarmMapCard> {
             '${widget.input.lat.toStringAsFixed(4)}, ${widget.input.lon.toStringAsFixed(4)}',
             style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: AppColors.ink),
           ),
-          Align(
-            alignment: Alignment.centerLeft,
-            child: TextButton.icon(
-              onPressed: widget.input.resetLocation,
-              icon: const Icon(Icons.restart_alt_rounded, size: 18),
-              label: Text(t.dssResetLocation),
-            ),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              TextButton.icon(
+                onPressed: widget.input.resetLocation,
+                icon: const Icon(Icons.restart_alt_rounded, size: 18),
+                label: Text(t.dssResetLocation),
+              ),
+              OutlinedButton.icon(
+                onPressed: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const PagsanjanMapScreen()),
+                ),
+                icon: const Icon(Icons.map_rounded, size: 18, color: AppColors.leaf),
+                label: const Text('Full Pagsanjan Map'),
+              ),
+            ],
           ),
           const Divider(height: 18),
           Text(t.dssWeatherHere, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 15, color: AppColors.ink)),

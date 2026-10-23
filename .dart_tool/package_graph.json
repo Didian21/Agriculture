@@ -16,7 +16,8 @@
         "intl",
         "latlong2",
         "provider",
-        "shared_preferences"
+        "shared_preferences",
+        "supabase_flutter"
       ],
       "devDependencies": [
         "flutter_lints",
@@ -70,6 +71,19 @@
         "polylabel",
         "proj4dart",
         "vector_math"
+      ]
+    },
+    {
+      "name": "shared_preferences",
+      "version": "2.5.6",
+      "dependencies": [
+        "flutter",
+        "shared_preferences_android",
+        "shared_preferences_foundation",
+        "shared_preferences_linux",
+        "shared_preferences_platform_interface",
+        "shared_preferences_web",
+        "shared_preferences_windows"
       ]
     },
     {
@@ -242,11 +256,85 @@
       ]
     },
     {
+      "name": "logger",
+      "version": "2.8.0",
+      "dependencies": [
+        "clock",
+        "meta"
+      ]
+    },
+    {
+      "name": "dart_earcut",
+      "version": "1.2.0",
+      "dependencies": []
+    },
+    {
       "name": "async",
       "version": "2.13.1",
       "dependencies": [
         "collection",
         "meta"
+      ]
+    },
+    {
+      "name": "shared_preferences_windows",
+      "version": "2.4.1",
+      "dependencies": [
+        "file",
+        "flutter",
+        "path",
+        "path_provider_platform_interface",
+        "path_provider_windows",
+        "shared_preferences_platform_interface"
+      ]
+    },
+    {
+      "name": "shared_preferences_web",
+      "version": "2.4.3",
+      "dependencies": [
+        "flutter",
+        "flutter_web_plugins",
+        "shared_preferences_platform_interface",
+        "web"
+      ]
+    },
+    {
+      "name": "shared_preferences_platform_interface",
+      "version": "2.4.2",
+      "dependencies": [
+        "flutter",
+        "plugin_platform_interface"
+      ]
+    },
+    {
+      "name": "shared_preferences_linux",
+      "version": "2.4.1",
+      "dependencies": [
+        "file",
+        "flutter",
+        "path",
+        "path_provider_linux",
+        "path_provider_platform_interface",
+        "shared_preferences_platform_interface"
+      ]
+    },
+    {
+      "name": "shared_preferences_foundation",
+      "version": "2.5.7",
+      "dependencies": [
+        "flutter",
+        "meta",
+        "shared_preferences_platform_interface"
+      ]
+    },
+    {
+      "name": "shared_preferences_android",
+      "version": "2.5.2",
+      "dependencies": [
+        "flutter",
+        "jni",
+        "meta",
+        "shared_preferences_platform_interface"
       ]
     },
     {
@@ -388,6 +476,28 @@
       ]
     },
     {
+      "name": "file",
+      "version": "7.0.1",
+      "dependencies": [
+        "meta",
+        "path"
+      ]
+    },
+    {
+      "name": "flutter_web_plugins",
+      "version": "0.0.0",
+      "dependencies": [
+        "flutter"
+      ]
+    },
+    {
+      "name": "plugin_platform_interface",
+      "version": "2.1.8",
+      "dependencies": [
+        "meta"
+      ]
+    },
+    {
       "name": "path_provider_linux",
       "version": "2.2.2",
       "dependencies": [
@@ -396,6 +506,20 @@
         "path",
         "path_provider_platform_interface",
         "xdg_directories"
+      ]
+    },
+    {
+      "name": "jni",
+      "version": "1.1.0",
+      "dependencies": [
+        "args",
+        "collection",
+        "ffi",
+        "jni_util",
+        "meta",
+        "package_config",
+        "path",
+        "plugin_platform_interface"
       ]
     },
     {
@@ -431,16 +555,16 @@
       "dependencies": []
     },
     {
+      "name": "unicode",
+      "version": "0.3.1",
+      "dependencies": [
+        "lists"
+      ]
+    },
+    {
       "name": "ffi",
       "version": "2.2.0",
       "dependencies": []
-    },
-    {
-      "name": "plugin_platform_interface",
-      "version": "2.1.8",
-      "dependencies": [
-        "meta"
-      ]
     },
     {
       "name": "platform",
@@ -456,6 +580,25 @@
         "meta",
         "path"
       ]
+    },
+    {
+      "name": "package_config",
+      "version": "3.0.0",
+      "dependencies": [
+        "meta"
+      ]
+    },
+    {
+      "name": "jni_util",
+      "version": "1.0.0",
+      "dependencies": [
+        "path"
+      ]
+    },
+    {
+      "name": "args",
+      "version": "2.7.0",
+      "dependencies": []
     },
     {
       "name": "objective_c",
@@ -479,17 +622,10 @@
       ]
     },
     {
-      "name": "jni",
-      "version": "1.1.0",
+      "name": "lists",
+      "version": "1.0.1",
       "dependencies": [
-        "args",
-        "collection",
-        "ffi",
-        "jni_util",
-        "meta",
-        "package_config",
-        "path",
-        "plugin_platform_interface"
+        "meta"
       ]
     },
     {
@@ -526,25 +662,6 @@
       ]
     },
     {
-      "name": "package_config",
-      "version": "3.0.0",
-      "dependencies": [
-        "meta"
-      ]
-    },
-    {
-      "name": "jni_util",
-      "version": "1.0.0",
-      "dependencies": [
-        "path"
-      ]
-    },
-    {
-      "name": "args",
-      "version": "2.7.0",
-      "dependencies": []
-    },
-    {
       "name": "yaml",
       "version": "3.1.4",
       "dependencies": [
@@ -563,119 +680,286 @@
       ]
     },
     {
-      "name": "dart_earcut",
-      "version": "1.2.0",
-      "dependencies": []
-    },
-    {
-      "name": "unicode",
-      "version": "0.3.1",
+      "name": "supabase_flutter",
+      "version": "2.18.3",
       "dependencies": [
-        "lists"
+        "app_links",
+        "async",
+        "flutter",
+        "http",
+        "logging",
+        "meta",
+        "passkeys_platform_interface",
+        "shared_preferences",
+        "supabase",
+        "supabase_common",
+        "url_launcher",
+        "web"
       ]
     },
     {
-      "name": "lists",
-      "version": "1.0.1",
+      "name": "supabase_common",
+      "version": "0.1.2",
       "dependencies": [
+        "crypto",
         "meta"
       ]
     },
     {
-      "name": "shared_preferences",
-      "version": "2.5.6",
+      "name": "supabase",
+      "version": "2.16.5",
       "dependencies": [
-        "flutter",
-        "shared_preferences_android",
-        "shared_preferences_foundation",
-        "shared_preferences_linux",
-        "shared_preferences_platform_interface",
-        "shared_preferences_web",
-        "shared_preferences_windows"
+        "functions_client",
+        "gotrue",
+        "http",
+        "logging",
+        "meta",
+        "postgrest",
+        "realtime_client",
+        "storage_client",
+        "supabase_common",
+        "yet_another_json_isolate"
       ]
     },
     {
-      "name": "shared_preferences_windows",
-      "version": "2.4.1",
+      "name": "yet_another_json_isolate",
+      "version": "2.1.1",
       "dependencies": [
-        "file",
-        "flutter",
-        "path",
-        "path_provider_platform_interface",
-        "path_provider_windows",
-        "shared_preferences_platform_interface"
+        "async"
       ]
     },
     {
-      "name": "shared_preferences_linux",
-      "version": "2.4.1",
+      "name": "storage_client",
+      "version": "2.8.1",
       "dependencies": [
-        "file",
-        "flutter",
-        "path",
-        "path_provider_linux",
-        "path_provider_platform_interface",
-        "shared_preferences_platform_interface"
+        "http",
+        "logging",
+        "meta",
+        "mime",
+        "supabase_common"
       ]
     },
     {
-      "name": "shared_preferences_platform_interface",
-      "version": "2.4.2",
+      "name": "realtime_client",
+      "version": "2.13.2",
+      "dependencies": [
+        "collection",
+        "http",
+        "logging",
+        "meta",
+        "supabase_common",
+        "web_socket_channel"
+      ]
+    },
+    {
+      "name": "postgrest",
+      "version": "2.9.1",
+      "dependencies": [
+        "http",
+        "logging",
+        "meta",
+        "supabase_common",
+        "yet_another_json_isolate"
+      ]
+    },
+    {
+      "name": "gotrue",
+      "version": "2.27.3",
+      "dependencies": [
+        "collection",
+        "crypto",
+        "dart_jsonwebtoken",
+        "http",
+        "logging",
+        "meta",
+        "supabase_common",
+        "web"
+      ]
+    },
+    {
+      "name": "functions_client",
+      "version": "2.7.1",
+      "dependencies": [
+        "http",
+        "logging",
+        "supabase_common",
+        "yet_another_json_isolate"
+      ]
+    },
+    {
+      "name": "web_socket_channel",
+      "version": "3.0.3",
+      "dependencies": [
+        "async",
+        "crypto",
+        "stream_channel",
+        "web",
+        "web_socket"
+      ]
+    },
+    {
+      "name": "url_launcher",
+      "version": "6.3.3",
+      "dependencies": [
+        "flutter",
+        "url_launcher_android",
+        "url_launcher_ios",
+        "url_launcher_linux",
+        "url_launcher_macos",
+        "url_launcher_platform_interface",
+        "url_launcher_web",
+        "url_launcher_windows"
+      ]
+    },
+    {
+      "name": "mime",
+      "version": "2.1.0",
+      "dependencies": []
+    },
+    {
+      "name": "passkeys_platform_interface",
+      "version": "2.10.0",
+      "dependencies": [
+        "flutter",
+        "json_annotation",
+        "plugin_platform_interface"
+      ]
+    },
+    {
+      "name": "url_launcher_platform_interface",
+      "version": "2.3.2",
       "dependencies": [
         "flutter",
         "plugin_platform_interface"
       ]
     },
     {
-      "name": "shared_preferences_web",
-      "version": "2.4.3",
+      "name": "web_socket",
+      "version": "1.0.1",
       "dependencies": [
-        "flutter",
-        "flutter_web_plugins",
-        "shared_preferences_platform_interface",
         "web"
       ]
     },
     {
-      "name": "flutter_web_plugins",
-      "version": "0.0.0",
+      "name": "json_annotation",
+      "version": "4.12.0",
       "dependencies": [
-        "flutter"
-      ]
-    },
-    {
-      "name": "shared_preferences_foundation",
-      "version": "2.5.7",
-      "dependencies": [
-        "flutter",
-        "meta",
-        "shared_preferences_platform_interface"
-      ]
-    },
-    {
-      "name": "file",
-      "version": "7.0.1",
-      "dependencies": [
-        "meta",
-        "path"
-      ]
-    },
-    {
-      "name": "logger",
-      "version": "2.8.0",
-      "dependencies": [
-        "clock",
         "meta"
       ]
     },
     {
-      "name": "shared_preferences_android",
-      "version": "2.5.2",
+      "name": "url_launcher_linux",
+      "version": "3.2.3",
       "dependencies": [
         "flutter",
-        "jni",
         "meta",
-        "shared_preferences_platform_interface"
+        "url_launcher_platform_interface"
+      ]
+    },
+    {
+      "name": "app_links",
+      "version": "7.2.2",
+      "dependencies": [
+        "app_links_linux",
+        "app_links_platform_interface",
+        "app_links_web",
+        "flutter"
+      ]
+    },
+    {
+      "name": "app_links_web",
+      "version": "1.0.5",
+      "dependencies": [
+        "app_links_platform_interface",
+        "flutter",
+        "flutter_web_plugins",
+        "web"
+      ]
+    },
+    {
+      "name": "app_links_platform_interface",
+      "version": "2.0.4",
+      "dependencies": [
+        "flutter",
+        "plugin_platform_interface"
+      ]
+    },
+    {
+      "name": "app_links_linux",
+      "version": "1.0.4",
+      "dependencies": [
+        "app_links_platform_interface",
+        "flutter"
+      ]
+    },
+    {
+      "name": "url_launcher_windows",
+      "version": "3.1.6",
+      "dependencies": [
+        "flutter",
+        "meta",
+        "url_launcher_platform_interface"
+      ]
+    },
+    {
+      "name": "dart_jsonwebtoken",
+      "version": "3.4.1",
+      "dependencies": [
+        "clock",
+        "convert",
+        "pointycastle"
+      ]
+    },
+    {
+      "name": "pointycastle",
+      "version": "4.0.0",
+      "dependencies": [
+        "collection",
+        "convert"
+      ]
+    },
+    {
+      "name": "convert",
+      "version": "3.1.2",
+      "dependencies": [
+        "typed_data"
+      ]
+    },
+    {
+      "name": "url_launcher_macos",
+      "version": "3.2.6",
+      "dependencies": [
+        "flutter",
+        "meta",
+        "url_launcher_platform_interface"
+      ]
+    },
+    {
+      "name": "url_launcher_web",
+      "version": "2.4.3",
+      "dependencies": [
+        "flutter",
+        "flutter_web_plugins",
+        "url_launcher_platform_interface",
+        "web"
+      ]
+    },
+    {
+      "name": "url_launcher_ios",
+      "version": "6.4.2",
+      "dependencies": [
+        "flutter",
+        "meta",
+        "url_launcher_platform_interface"
+      ]
+    },
+    {
+      "name": "url_launcher_android",
+      "version": "6.3.33",
+      "dependencies": [
+        "flutter",
+        "meta",
+        "url_launcher_platform_interface"
       ]
     }
   ],

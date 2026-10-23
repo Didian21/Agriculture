@@ -102,7 +102,7 @@ class _WeatherIconState extends State<WeatherIcon> with SingleTickerProviderStat
             ? CustomPaint(painter: _GlyphPainter(widget.glyph, 0))
             : AnimatedBuilder(
           animation: c,
-          builder: (_, __) => CustomPaint(painter: _GlyphPainter(widget.glyph, c.value)),
+          builder: (_, _) => CustomPaint(painter: _GlyphPainter(widget.glyph, c.value)),
         ),
       ),
     );
