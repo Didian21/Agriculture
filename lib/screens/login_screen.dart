@@ -20,8 +20,8 @@ class LoginScreen extends StatefulWidget {
 
 class _LoginScreenState extends State<LoginScreen> {
   LoginRole _selectedRole = LoginRole.farmer;
-  final _phoneCtrl = TextEditingController(text: '+63 912 345 6789');
-  final _pinCtrl = TextEditingController(text: '1234');
+  final _phoneCtrl = TextEditingController();
+  final _pinCtrl = TextEditingController();
 
   @override
   void dispose() {
@@ -37,8 +37,8 @@ class _LoginScreenState extends State<LoginScreen> {
         _phoneCtrl.text = 'admin';
         _pinCtrl.text = 'admin123';
       } else {
-        _phoneCtrl.text = '+63 912 345 6789';
-        _pinCtrl.text = '1234';
+        _phoneCtrl.clear();
+        _pinCtrl.clear();
       }
     });
   }

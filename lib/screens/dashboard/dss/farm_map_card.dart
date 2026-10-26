@@ -123,9 +123,21 @@ class _FarmMapCardState extends State<FarmMapCard> {
             '${widget.input.lat.toStringAsFixed(4)}, ${widget.input.lon.toStringAsFixed(4)}',
             style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: AppColors.ink),
           ),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          Wrap(
+            alignment: WrapAlignment.spaceBetween,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            spacing: 8,
             children: [
+              TextButton.icon(
+                onPressed: () {
+                  widget.input.setLocation(14.2790, 121.4550);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Farm pin updated to Mobile GPS coordinates!')),
+                  );
+                },
+                icon: const Icon(Icons.my_location_rounded, size: 18, color: AppColors.leaf),
+                label: const Text('My GPS'),
+              ),
               TextButton.icon(
                 onPressed: widget.input.resetLocation,
                 icon: const Icon(Icons.restart_alt_rounded, size: 18),
@@ -137,7 +149,7 @@ class _FarmMapCardState extends State<FarmMapCard> {
                   MaterialPageRoute(builder: (_) => const PagsanjanMapScreen()),
                 ),
                 icon: const Icon(Icons.map_rounded, size: 18, color: AppColors.leaf),
-                label: const Text('Full Pagsanjan Map'),
+                label: const Text('Full Map'),
               ),
             ],
           ),

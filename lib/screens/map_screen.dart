@@ -4,6 +4,112 @@ import 'package:flutter/services.dart' show rootBundle;
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 
+class BarangayFeature {
+  final String name;
+  final List<List<LatLng>> polygons;
+
+  BarangayFeature({required this.name, required this.polygons});
+}
+
+class BarangayResolver {
+  static final List<BarangayFeature> _barangays = [];
+
+  static Future<void> load() async {
+    if (_barangays.isNotEmpty) return;
+    try {
+      String jsonString;
+      try {
+        jsonString = await rootBundle.loadString('assets/pagsanjanmapcipped.geojson');
+      } catch (_) {
+        jsonString = await rootBundle.loadString('assets/Map/pagsanjanmapcipped.geojson');
+      }
+      final data = jsonDecode(jsonString) as Map<String, dynamic>;
+      final features = data['features'] as List? ?? [];
+
+      for (var f in features) {
+        final rawName = f['properties']?['NAME_3'] as String? ?? '';
+        final cleanName = _normalizeName(rawName);
+        if (cleanName.isEmpty) continue;
+
+        final geom = f['geometry'];
+        final type = geom['type'];
+        final coords = geom['coordinates'];
+        List<List<LatLng>> polyList = [];
+
+        if (type == 'Polygon') {
+          for (var ring in coords) {
+            polyList.add((ring as List).map<LatLng>((c) => LatLng((c[1] as num).toDouble(), (c[0] as num).toDouble())).toList());
+          }
+        } else if (type == 'MultiPolygon') {
+          for (var poly in coords) {
+            for (var ring in poly) {
+              polyList.add((ring as List).map<LatLng>((c) => LatLng((c[1] as num).toDouble(), (c[0] as num).toDouble())).toList());
+            }
+          }
+        }
+        _barangays.add(BarangayFeature(name: cleanName, polygons: polyList));
+      }
+    } catch (_) {}
+  }
+
+  static String _normalizeName(String raw) {
+    switch (raw) {
+      case 'BarangayI':
+        return 'Poblacion Uno';
+      case 'BarangayII':
+        return 'Poblacion Dos';
+      case 'SanIsidro':
+        return 'San Isidro';
+      case 'Layugan':
+        return 'Layug';
+      case 'Pinagsanjan':
+        return 'Magdapio';
+      default:
+        return raw;
+    }
+  }
+
+  static String resolveBarangay(LatLng point) {
+    for (var brgy in _barangays) {
+      for (var poly in brgy.polygons) {
+        if (_pointInPolygon(point, poly)) {
+          return brgy.name;
+        }
+      }
+    }
+    // Fallback distance check if tapped on exact border
+    double minDistance = double.infinity;
+    String closestName = 'Biñan';
+    const distance = Distance();
+    for (var brgy in _barangays) {
+      for (var poly in brgy.polygons) {
+        if (poly.isNotEmpty) {
+          final center = poly.first;
+          final dist = distance.as(LengthUnit.Meter, point, center);
+          if (dist < minDistance) {
+            minDistance = dist;
+            closestName = brgy.name;
+          }
+        }
+      }
+    }
+    return closestName;
+  }
+
+  static bool _pointInPolygon(LatLng point, List<LatLng> polygon) {
+    bool inside = false;
+    int j = polygon.length - 1;
+    for (int i = 0; i < polygon.length; i++) {
+      if ((polygon[i].longitude > point.longitude) != (polygon[j].longitude > point.longitude) &&
+          (point.latitude < (polygon[j].latitude - polygon[i].latitude) * (point.longitude - polygon[i].longitude) / (polygon[j].longitude - polygon[i].longitude) + polygon[i].latitude)) {
+        inside = !inside;
+      }
+      j = i;
+    }
+    return inside;
+  }
+}
+
 class PagsanjanMapWidget extends StatefulWidget {
   final LatLng? initialCenter;
   final double initialZoom;
@@ -37,6 +143,7 @@ class _PagsanjanMapWidgetState extends State<PagsanjanMapWidget> {
 
   Future<void> _loadPagsanjanBoundary() async {
     try {
+      await BarangayResolver.load();
       List<Polygon> tempPolygons = [];
       List<Polyline> tempPolylines = [];
 
@@ -139,7 +246,8 @@ class _PagsanjanMapWidgetState extends State<PagsanjanMapWidget> {
 }
 
 class PagsanjanMapScreen extends StatelessWidget {
-  const PagsanjanMapScreen({super.key});
+  final List<Marker> markers;
+  const PagsanjanMapScreen({super.key, this.markers = const []});
 
   @override
   Widget build(BuildContext context) {
@@ -149,7 +257,7 @@ class PagsanjanMapScreen extends StatelessWidget {
         backgroundColor: const Color(0xFF1B5E20),
         foregroundColor: Colors.white,
       ),
-      body: const PagsanjanMapWidget(),
+      body: PagsanjanMapWidget(markers: markers),
     );
   }
 }

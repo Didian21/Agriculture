@@ -2,14 +2,53 @@ import 'package:flutter/material.dart';
 
 import '../models/farm_models.dart';
 import '../models/planting_guide.dart';
+import 'supabase_service.dart';
 
 class FarmerRepository {
-  Future<FarmerProfile> getProfile() async => const FarmerProfile(
-    name: 'Wency Babaan',
-    barangay: 'Barangay Sampaloc',
-    landSizeHectares: 2.5,
-    cropTypes: ['Rice', 'Eggplant', 'Tomato'],
-  );
+  Future<FarmerProfile> getProfile({String? username}) async {
+    try {
+      final res = username != null && username.isNotEmpty
+          ? await SupabaseService.client.from('farmers').select().eq('username', username).maybeSingle()
+          : await SupabaseService.client.from('farmers').select().limit(1).maybeSingle();
+
+      if (res != null) {
+        final profileName = res['profile_name'] as String? ?? 'Magsasaka ng Pagsanjan';
+        final barangay = res['barangay'] as String? ?? 'Biñan';
+        final farmerId = res['id'] as String? ?? '';
+
+        double landSize = 2.5;
+        List<String> cropTypes = ['Rice', 'Eggplant', 'Tomato'];
+
+        final farmRes = await SupabaseService.client.from('farms').select().eq('farmer_id', farmerId);
+        if (farmRes.isNotEmpty) {
+          landSize = 0;
+          cropTypes = [];
+          for (var farm in farmRes) {
+            landSize += (farm['land_area_hectares'] as num?)?.toDouble() ?? 0.0;
+            final crop = farm['crop_type'] as String?;
+            if (crop != null && !cropTypes.contains(crop)) {
+              cropTypes.add(crop);
+            }
+          }
+          if (landSize == 0) landSize = 2.5;
+        }
+
+        return FarmerProfile(
+          name: profileName,
+          barangay: barangay,
+          landSizeHectares: landSize,
+          cropTypes: cropTypes.isEmpty ? ['Rice', 'Eggplant', 'Tomato'] : cropTypes,
+        );
+      }
+    } catch (_) {}
+
+    return const FarmerProfile(
+      name: 'Magsasaka ng Pagsanjan',
+      barangay: 'Barangay Biñan',
+      landSizeHectares: 2.5,
+      cropTypes: ['Rice', 'Eggplant', 'Tomato'],
+    );
+  }
 
   Future<List<FarmPlot>> getPlots() async => const [
     FarmPlot(crop: 'Rice', hectares: 1.2, status: PlotStatus.harvested),
@@ -42,7 +81,6 @@ class FarmerRepository {
       bestMonths: {6, 7, 11, 12},
       possibleMonths: {5, 8, 1},
     ),
-    // TANTIYA - ipakumpirma sa Agri Office
     PlantingGuide(
       crop: 'Coconut',
       icon: Icons.park,
@@ -59,7 +97,6 @@ class FarmerRepository {
       bestMonths: {10, 11, 12, 1},
       possibleMonths: {2, 9},
     ),
-    // TANTIYA - ipakumpirma sa Agri Office
     PlantingGuide(
       crop: 'Ampalaya',
       icon: Icons.eco,
@@ -76,7 +113,6 @@ class FarmerRepository {
       bestMonths: {10, 11, 12, 1},
       possibleMonths: {2, 4, 5, 9},
     ),
-    // TANTIYA - ipakumpirma sa Agri Office
     PlantingGuide(
       crop: 'Squash',
       icon: Icons.spa,
@@ -93,7 +129,6 @@ class FarmerRepository {
       bestMonths: {10, 11, 12},
       possibleMonths: {1, 2, 9},
     ),
-    // TANTIYA - ipakumpirma sa Agri Office
     PlantingGuide(
       crop: 'Sweet potato',
       icon: Icons.grass,
@@ -102,7 +137,6 @@ class FarmerRepository {
       bestMonths: {5, 6, 10, 11},
       possibleMonths: {7, 9, 12, 1},
     ),
-    // TANTIYA - ipakumpirma sa Agri Office
     PlantingGuide(
       crop: 'Taro',
       icon: Icons.eco,
@@ -111,7 +145,6 @@ class FarmerRepository {
       bestMonths: {5, 6, 7},
       possibleMonths: {4, 8, 9, 10},
     ),
-    // TANTIYA - ipakumpirma sa Agri Office
     PlantingGuide(
       crop: 'Calamansi',
       icon: Icons.spa,

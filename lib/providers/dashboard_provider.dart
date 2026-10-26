@@ -49,22 +49,47 @@ class DashboardProvider extends ChangeNotifier {
     }
   }
 
-  // Auth & Session State
   bool isLoggedIn = true;
+  String currentUsername = '';
 
   void logout() {
     isLoggedIn = false;
     notifyListeners();
   }
 
-  void login() {
+  void login({String? username, String? phone}) {
     isLoggedIn = true;
+    if (username != null && username.isNotEmpty) {
+      currentUsername = username;
+    }
+    if (phone != null && phone.isNotEmpty) {
+      phoneNumber = phone;
+    }
+    load();
     notifyListeners();
   }
 
   // Account Metadata (view only - galing sa admin)
   String phoneNumber = '+63 912 345 6789';
   String birthday = '08/11/2001';
+
+  void updateProfileDetails({
+    required String name,
+    required String barangay,
+    required String phone,
+    required String birthday,
+    required double landSize,
+  }) {
+    profile = FarmerProfile(
+      name: name,
+      barangay: barangay,
+      landSizeHectares: landSize,
+      cropTypes: profile?.cropTypes ?? ['Rice', 'Eggplant', 'Tomato'],
+    );
+    phoneNumber = phone;
+    this.birthday = birthday;
+    notifyListeners();
+  }
 
   // Notifications List State
   List<AppNotification> notifications = [];
@@ -152,7 +177,7 @@ class DashboardProvider extends ChangeNotifier {
     }
     hasError = false;
     try {
-      profile ??= await _repo.getProfile();
+      profile ??= await _repo.getProfile(username: currentUsername);
       guides = _repo.getPlantingGuides();
       // Isang kalendaryo para sa buong app (DSS, My Farm, abiso, presyo).
       for (final g in guides) {
