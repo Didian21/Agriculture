@@ -13,6 +13,7 @@ import '../../../services/dss_service.dart';
 import '../../../widgets/common_widgets.dart';
 import '../../../widgets/crop_image.dart';
 import '../../../widgets/dss_common.dart';
+import '../dss/farm_map_card.dart';
 
 /// "My Farm": lahat ng makikita rito ay galing sa mga tanim na inilagay ng magsasaka sa DSS tab.
 class FarmTab extends StatelessWidget {
@@ -45,6 +46,10 @@ class FarmTab extends StatelessWidget {
       _ProfileCard(profile: profile, crops: farm.cropIds),
       const SizedBox(height: 16),
       _LandCard(total: totalLand, plantings: plantings, sqm: farm.useSqm, onSetUnit: farm.setUseSqm, onOpenDss: onOpenDss),
+      const SizedBox(height: 16),
+      SectionTitle(icon: Icons.map_rounded, text: t.dssFarmMap, subtitle: t.dssFarmMapSub),
+      const SizedBox(height: 10),
+      FarmMapCard(input: farm),
       const SizedBox(height: 16),
       if (plantings.isNotEmpty) ...[
         Row(children: [
@@ -200,91 +205,205 @@ class _LandCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final t = AppLocalizations.of(context)!;
     final used = plantings.fold<double>(0, (s, e) => s + e.hectares);
-    final free = total - used;
+    final effectiveTotal = total <= 0 ? (used <= 0 ? 1.0 : used) : total;
+    final free = (effectiveTotal - used) < 0.0001 ? 0.0 : (effectiveTotal - used);
 
     return GlassCard(
       child: Padding(
-        padding: const EdgeInsets.all(18),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Row(children: [
-            Expanded(child: Text(t.totalLandSize, style: const TextStyle(color: AppColors.muted, fontWeight: FontWeight.w700))),
-            SegmentedButton<bool>(
-              showSelectedIcon: false,
-              style: const ButtonStyle(visualDensity: VisualDensity.compact),
-              segments: [
-                ButtonSegment(value: false, label: Text(t.dssUnitHa)),
-                ButtonSegment(value: true, label: Text(t.dssUnitSqm)),
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const IconBubble(icon: Icons.landscape_rounded, color: AppColors.leaf, size: 36),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    t.totalLandSize,
+                    style: const TextStyle(color: AppColors.ink, fontWeight: FontWeight.w800, fontSize: 14),
+                  ),
+                ),
+                Container(
+                  height: 32,
+                  decoration: BoxDecoration(
+                    color: AppColors.mint,
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      GestureDetector(
+                        onTap: () => onSetUnit(false),
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 200),
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: !sqm ? AppColors.leaf : Colors.transparent,
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          child: Text(
+                            t.dssUnitHa,
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                              color: !sqm ? Colors.white : AppColors.muted,
+                            ),
+                          ),
+                        ),
+                      ),
+                      GestureDetector(
+                        onTap: () => onSetUnit(true),
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 200),
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: sqm ? AppColors.leaf : Colors.transparent,
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          child: Text(
+                            t.dssUnitSqm,
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                              color: sqm ? Colors.white : AppColors.muted,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ],
-              selected: {sqm},
-              onSelectionChanged: (s) => onSetUnit(s.first),
-            ),
-          ]),
-          const SizedBox(height: 4),
-          Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
-            Flexible(
-              child: TweenAnimationBuilder<double>(
-                tween: Tween(begin: 0, end: sqm ? total * 10000 : total),
-                duration: const Duration(milliseconds: 1000),
-                curve: Curves.easeOutCubic,
-                builder: (_, v, _) => FittedBox(
-                  fit: BoxFit.scaleDown,
-                  alignment: Alignment.centerLeft,
-                  child: Text(sqm ? DssFmt.group(v.round()) : v.toStringAsFixed(2),
-                      style: const TextStyle(fontSize: 46, fontWeight: FontWeight.w900, color: AppColors.leaf, height: 1.1)),
-                ),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.only(left: 6, bottom: 8),
-              child: Text(sqm ? 'm²' : t.hectares, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800)),
-            ),
-          ]),
-          if (total > 0)
-            Text(DssFmt.area(total, sqm: !sqm), style: const TextStyle(color: AppColors.muted, fontSize: 12.5)),
-          if (total <= 0) ...[
-            const SizedBox(height: 6),
-            Text(t.dssLandNotSet, style: const TextStyle(color: AppColors.muted, height: 1.35)),
-            TextButton.icon(onPressed: onOpenDss, icon: const Icon(Icons.add_rounded, size: 18), label: Text(t.dssLandSet)),
-          ],
-          if (plantings.isNotEmpty && total > 0) ...[
-            const SizedBox(height: 14),
-            Container(
-              height: 18,
-              decoration: BoxDecoration(color: AppColors.mint, borderRadius: BorderRadius.circular(9)),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(9),
-                child: TweenAnimationBuilder<double>(
-                  tween: Tween(begin: 0, end: 1),
-                  duration: const Duration(milliseconds: 1100),
-                  curve: Curves.easeOutCubic,
-                  builder: (_, v, child) => Align(alignment: Alignment.centerLeft, widthFactor: v, child: child),
-                  child: Row(children: [
-                    for (final pl in plantings)
-                      Expanded(flex: (pl.hectares * 100000).round().clamp(1, 100000000), child: Container(color: AppColors.forCrop(pl.crop))),
-                    if (free > 0.00001) Expanded(flex: (free * 100000).round().clamp(1, 100000000), child: const SizedBox()),
-                  ]),
-                ),
-              ),
             ),
             const SizedBox(height: 12),
-            Wrap(spacing: 14, runSpacing: 6, children: [
-              for (final pl in plantings)
-                Row(mainAxisSize: MainAxisSize.min, children: [
-                  Container(width: 12, height: 12, decoration: BoxDecoration(color: AppColors.forCrop(pl.crop), shape: BoxShape.circle)),
-                  const SizedBox(width: 5),
-                  Text('${t.cropLabel(pl.crop)} ${DssFmt.percent(pl.hectares / total * 100)}% · ${DssFmt.area(pl.hectares, sqm: sqm)}',
-                      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
-                ]),
-              if (free > 0.00001)
-                Row(mainAxisSize: MainAxisSize.min, children: [
-                  Container(width: 12, height: 12, decoration: BoxDecoration(color: AppColors.mint, shape: BoxShape.circle, border: Border.all(color: AppColors.border))),
-                  const SizedBox(width: 5),
-                  Text('${t.farmUnallocated} ${DssFmt.percent(free / total * 100)}% · ${DssFmt.area(free, sqm: sqm)}',
-                      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.muted)),
-                ]),
-            ]),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.baseline,
+              textBaseline: TextBaseline.alphabetic,
+              children: [
+                Flexible(
+                  child: TweenAnimationBuilder<double>(
+                    tween: Tween(begin: 0, end: sqm ? effectiveTotal * 10000 : effectiveTotal),
+                    duration: const Duration(milliseconds: 900),
+                    curve: Curves.easeOutCubic,
+                    builder: (_, v, _) => FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        sqm ? DssFmt.group(v.round()) : v.toStringAsFixed(2),
+                        style: const TextStyle(fontSize: 36, fontWeight: FontWeight.w900, color: AppColors.leaf, height: 1.0),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  sqm ? 'm²' : t.hectares,
+                  style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: AppColors.ink),
+                ),
+              ],
+            ),
+            if (total <= 0) ...[
+              const SizedBox(height: 6),
+              Text(t.dssLandNotSet, style: const TextStyle(color: AppColors.muted, height: 1.3, fontSize: 12.5)),
+              TextButton.icon(onPressed: onOpenDss, icon: const Icon(Icons.add_rounded, size: 18), label: Text(t.dssLandSet)),
+            ],
+            if (plantings.isNotEmpty) ...[
+              const SizedBox(height: 14),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Flexible(
+                    child: Text(
+                      'Ginamit: ${DssFmt.area(used, sqm: sqm)} (${DssFmt.percent(used / effectiveTotal * 100)}%)',
+                      style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold, color: AppColors.leaf),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Natitira: ${DssFmt.area(free, sqm: sqm)}',
+                    style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold, color: AppColors.muted),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 6),
+              // Adjustable / Adaptive Land Usage Bar
+              Container(
+                height: 18,
+                decoration: BoxDecoration(
+                  color: AppColors.mint,
+                  borderRadius: BorderRadius.circular(9),
+                  border: Border.all(color: AppColors.border, width: 1.2),
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: Row(
+                    children: [
+                      for (final pl in plantings)
+                        Expanded(
+                          flex: (pl.hectares * 100000).round().clamp(1, 100000000),
+                          child: Container(color: AppColors.forCrop(pl.crop)),
+                        ),
+                      if (free > 0.00001)
+                        Expanded(
+                          flex: (free * 100000).round().clamp(1, 100000000),
+                          child: Container(color: AppColors.mint),
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 10),
+              Wrap(
+                spacing: 8,
+                runSpacing: 6,
+                children: [
+                  for (final pl in plantings)
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                      decoration: BoxDecoration(
+                        color: AppColors.forCrop(pl.crop).withValues(alpha: 0.14),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: AppColors.forCrop(pl.crop).withValues(alpha: 0.3)),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Container(width: 8, height: 8, decoration: BoxDecoration(color: AppColors.forCrop(pl.crop), shape: BoxShape.circle)),
+                          const SizedBox(width: 6),
+                          Text(
+                            '${t.cropLabel(pl.crop)}: ${DssFmt.area(pl.hectares, sqm: sqm)} (${DssFmt.percent(pl.hectares / effectiveTotal * 100)}%)',
+                            style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold, color: AppColors.forCrop(pl.crop)),
+                          ),
+                        ],
+                      ),
+                    ),
+                  if (free > 0.00001)
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                      decoration: BoxDecoration(
+                        color: AppColors.mint,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: AppColors.border),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Container(width: 8, height: 8, decoration: BoxDecoration(color: AppColors.muted, shape: BoxShape.circle)),
+                          const SizedBox(width: 6),
+                          Text(
+                            '${t.farmUnallocated}: ${DssFmt.area(free, sqm: sqm)} (${DssFmt.percent(free / effectiveTotal * 100)}%)',
+                            style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold, color: AppColors.muted),
+                          ),
+                        ],
+                      ),
+                    ),
+                ],
+              ),
+            ],
           ],
-        ]),
+        ),
       ),
     );
   }

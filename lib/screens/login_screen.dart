@@ -192,13 +192,13 @@ class _LoginScreenState extends State<LoginScreen> {
 
                         TextField(
                           controller: _phoneCtrl,
-                          keyboardType: isFarmer ? TextInputType.phone : TextInputType.text,
+                          keyboardType: TextInputType.text,
                           decoration: InputDecoration(
                             prefixIcon: Icon(
-                              isFarmer ? Icons.phone_rounded : Icons.badge_rounded,
+                              isFarmer ? Icons.person_rounded : Icons.badge_rounded,
                               color: isFarmer ? AppColors.leaf : const Color(0xFF0056B3),
                             ),
-                            labelText: isFarmer ? t.phoneNumber : 'Admin Username',
+                            labelText: isFarmer ? 'Username or Phone Number' : 'Admin Username',
                             border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
                           ),
                         ),
@@ -206,13 +206,13 @@ class _LoginScreenState extends State<LoginScreen> {
                         TextField(
                           controller: _pinCtrl,
                           obscureText: true,
-                          keyboardType: isFarmer ? TextInputType.number : TextInputType.text,
+                          keyboardType: TextInputType.text,
                           decoration: InputDecoration(
                             prefixIcon: Icon(
                               Icons.lock_rounded,
                               color: isFarmer ? AppColors.leaf : const Color(0xFF0056B3),
                             ),
-                            labelText: isFarmer ? t.pinLabel : 'Password',
+                            labelText: 'Password',
                             border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
                           ),
                         ),

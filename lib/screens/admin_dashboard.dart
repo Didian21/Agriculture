@@ -462,6 +462,82 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
                 ),
                 const SizedBox(height: 14),
 
+                // BLANK EXCEL/CSV TEMPLATE DOWNLOAD BUTTON
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: const Color(0xFF0056B3),
+                      side: const BorderSide(color: Color(0xFF0056B3)),
+                      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                    onPressed: () async {
+                      final isHistorical = moduleName.toLowerCase().contains('historical');
+                      final templateCsv = isHistorical
+                          ? 'Crop,Year,Month,Production (MT),Price Per KG (PHP)\n'
+                            'Rice,2026,January,480.0,24.00\n'
+                            'Prutas (Banana),2025,November,120.0,45.00\n'
+                            'Gulay (Talong),2025,December,85.2,55.00\n'
+                          : 'Full Personal Name,Username,Barangay,Contact Number,Organization Membership,Primary Crop Type,Land Area (Hectares)\n'
+                            'Juan Dela Cruz,juan_dela_cruz,Biñan,09171234567,Pagsanjan Farmers Coop,Rice,2.5\n'
+                            'Maria Santos,maria_santos,Buboy,09189876543,Anibong Planters,Gulay,1.2\n';
+
+                      final targetFileName = isHistorical ? 'pagsanjan_historical_data_template.csv' : 'pagsanjan_farmers_blank_template.csv';
+
+                      try {
+                        String userProfile = Platform.environment['USERPROFILE'] ?? 'C:\\Users\\Public';
+                        String downloadsPath = '$userProfile\\Downloads\\$targetFileName';
+                        final file = File(downloadsPath);
+                        await file.writeAsString(templateCsv);
+
+                        setDialogState(() {
+                          fileNameCtrl.text = downloadsPath;
+                          csvCtrl.text = templateCsv;
+                        });
+
+                        if (ctx.mounted) {
+                          ScaffoldMessenger.of(ctx).showSnackBar(
+                            SnackBar(
+                              content: Text(
+                                isTagalog
+                                    ? 'Matagumpay na na-save ang blank template sa Downloads folder: $targetFileName'
+                                    : 'Saved blank template to Downloads folder: $targetFileName',
+                              ),
+                              backgroundColor: const Color(0xFF0056B3),
+                              duration: const Duration(seconds: 4),
+                            ),
+                          );
+                        }
+                      } catch (e) {
+                        setDialogState(() {
+                          csvCtrl.text = templateCsv;
+                        });
+                        if (ctx.mounted) {
+                          ScaffoldMessenger.of(ctx).showSnackBar(
+                            SnackBar(
+                              content: Text(
+                                isTagalog
+                                    ? 'Na-load ang blank template sa preview! Maari mo itong kopyahin.'
+                                    : 'Loaded blank template in preview!',
+                              ),
+                              backgroundColor: Colors.blueAccent,
+                            ),
+                          );
+                        }
+                      }
+                    },
+                    icon: const Icon(Icons.download_rounded, size: 20),
+                    label: Text(
+                      moduleName.toLowerCase().contains('historical')
+                          ? (isTagalog ? '📄 Kumuha ng Blank Excel/CSV Template para sa Historical Data' : '📄 Get Blank Historical Data Template')
+                          : (isTagalog ? '📄 Kumuha ng Blank Excel/CSV Template para sa Farmer Details' : '📄 Get Blank Excel/CSV Farmer Template'),
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12.5),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+
                 // NATIVE FILE EXPLORER BROWSE BUTTON
                 SizedBox(
                   width: double.infinity,
@@ -697,42 +773,73 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
                   return;
                 }
 
+                final isHistorical = moduleName.toLowerCase().contains('historical');
                 final lines = rawText.split('\n');
                 int importedCount = 0;
 
                 for (final line in lines) {
-                  final parts = line.split(',');
-                  if (parts.length >= 2) {
-                    final name = parts[0].trim();
-                    final user = parts[1].trim();
-                    final barangay = parts.length > 2 && parts[2].trim().isNotEmpty ? parts[2].trim() : 'Biñan';
-                    final contact = parts.length > 3 && parts[3].trim().isNotEmpty ? parts[3].trim() : '09170000000';
-                    final org = parts.length > 4 && parts[4].trim().isNotEmpty ? parts[4].trim() : 'Pagsanjan Farmers Assoc';
-                    final crop = parts.length > 5 && parts[5].trim().isNotEmpty ? parts[5].trim() : 'Rice';
-                    final land = parts.length > 6 ? (double.tryParse(parts[6].trim()) ?? 2.0) : 2.0;
+                  final trimmedLine = line.trim();
+                  if (trimmedLine.isEmpty) continue;
+                  // Skip header line if present
+                  if (trimmedLine.toLowerCase().startsWith('crop') ||
+                      trimmedLine.toLowerCase().startsWith('full personal name')) {
+                    continue;
+                  }
 
-                    if (name.isNotEmpty && user.isNotEmpty) {
-                      final farmerId = 'F${DateTime.now().millisecondsSinceEpoch}_$importedCount';
-                      service.addFarmer(
-                        username: user,
-                        password: 'password123',
-                        profileName: name,
-                        barangay: barangay,
-                        contactNumber: contact,
-                        organization: org,
-                      );
-                      service.addFarmRecord(
-                        farmerId: farmerId,
-                        farmerName: name,
-                        locationName: 'Sitio $barangay',
-                        latitude: 14.2717,
-                        longitude: 121.4553,
-                        landAreaHectares: land,
-                        tenureStatus: 'Owner',
-                        cropType: crop,
-                        barangay: barangay,
-                      );
-                      importedCount++;
+                  final parts = trimmedLine.split(',');
+                  if (isHistorical) {
+                    if (parts.length >= 4) {
+                      final crop = parts[0].trim();
+                      final year = int.tryParse(parts[1].trim()) ?? DateTime.now().year;
+                      final month = parts[2].trim();
+                      final prod = double.tryParse(parts[3].trim()) ?? 0.0;
+                      final price = parts.length > 4 ? (double.tryParse(parts[4].trim()) ?? 0.0) : 0.0;
+
+                      if (crop.isNotEmpty) {
+                        service.addHistoricalRecord(
+                          crop: crop,
+                          year: year,
+                          month: month,
+                          productionMT: prod,
+                          pricePerKg: price,
+                          uploadedBy: service.activeUserName,
+                        );
+                        importedCount++;
+                      }
+                    }
+                  } else {
+                    if (parts.length >= 2) {
+                      final name = parts[0].trim();
+                      final user = parts[1].trim();
+                      final barangay = parts.length > 2 && parts[2].trim().isNotEmpty ? parts[2].trim() : 'Biñan';
+                      final contact = parts.length > 3 && parts[3].trim().isNotEmpty ? parts[3].trim() : '09170000000';
+                      final org = parts.length > 4 && parts[4].trim().isNotEmpty ? parts[4].trim() : 'Pagsanjan Farmers Assoc';
+                      final crop = parts.length > 5 && parts[5].trim().isNotEmpty ? parts[5].trim() : 'Rice';
+                      final land = parts.length > 6 ? (double.tryParse(parts[6].trim()) ?? 2.0) : 2.0;
+
+                      if (name.isNotEmpty && user.isNotEmpty) {
+                        final farmerId = 'F${DateTime.now().millisecondsSinceEpoch}_$importedCount';
+                        service.addFarmer(
+                          username: user,
+                          password: 'password123',
+                          profileName: name,
+                          barangay: barangay,
+                          contactNumber: contact,
+                          organization: org,
+                        );
+                        service.addFarmRecord(
+                          farmerId: farmerId,
+                          farmerName: name,
+                          locationName: 'Sitio $barangay',
+                          latitude: 14.2717,
+                          longitude: 121.4553,
+                          landAreaHectares: land,
+                          tenureStatus: 'Owner',
+                          cropType: crop,
+                          barangay: barangay,
+                        );
+                        importedCount++;
+                      }
                     }
                   }
                 }
@@ -836,7 +943,6 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
   }
 
   void _confirmLogout(BuildContext context, AdminLocale locale) {
-    final service = Provider.of<AccountService>(context, listen: false);
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -857,14 +963,6 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
             onPressed: () => Navigator.pop(context),
             child: Text(locale.isTagalog ? 'Kanselahin' : 'Cancel'),
           ),
-          TextButton(
-            style: TextButton.styleFrom(foregroundColor: Colors.red.shade800),
-            onPressed: () {
-              Navigator.pop(context);
-              _confirmDeleteAdminAccount(context, service, locale);
-            },
-            child: Text(locale.isTagalog ? 'Burahin ang Admin Account' : 'Delete Admin Account'),
-          ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent, foregroundColor: Colors.white),
             onPressed: () {
@@ -872,86 +970,6 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
               Navigator.pushReplacementNamed(context, '/thank_you');
             },
             child: Text(locale.isTagalog ? 'Mag-logout' : 'Logout'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _confirmDeleteAdminAccount(BuildContext context, AccountService service, AdminLocale locale) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-        title: Row(
-          children: [
-            const Icon(Icons.delete_forever_rounded, color: Colors.redAccent, size: 28),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                locale.isTagalog ? 'Kumpirmahin ang Pagbura ng Admin' : 'Confirm Admin Deletion',
-                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 17),
-              ),
-            ),
-          ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              locale.isTagalog
-                  ? 'Sigurado ka bang gusto mong burahin nang tuluyan ang iyong admin account (${service.activeUserName})?'
-                  : 'Are you sure you want to permanently delete your admin account (${service.activeUserName})?',
-              style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
-            ),
-            const SizedBox(height: 12),
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.red.shade50,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.red.shade200),
-              ),
-              child: Row(
-                children: [
-                  const Icon(Icons.warning_amber_rounded, color: Colors.red, size: 20),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      locale.isTagalog
-                          ? 'Babala: Mawawalan ka ng access sa MAO Admin Portal at matatanggal ang iyong credentials sa Supabase.'
-                          : 'Warning: This action cannot be undone. You will immediately lose administrative access.',
-                      style: const TextStyle(fontSize: 12, color: Colors.red, height: 1.3),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text(locale.isTagalog ? 'Kanselahin' : 'Cancel'),
-          ),
-          ElevatedButton.icon(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red.shade800,
-              foregroundColor: Colors.white,
-            ),
-            onPressed: () {
-              Navigator.pop(context);
-              Navigator.pushReplacementNamed(context, '/thank_you');
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Admin account permanently deleted.'),
-                  backgroundColor: Colors.red,
-                ),
-              );
-            },
-            icon: const Icon(Icons.delete_forever_rounded, size: 18),
-            label: Text(locale.isTagalog ? 'Oo, Burahin Na' : 'Permanently Delete Admin'),
           ),
         ],
       ),
@@ -1389,7 +1407,7 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
           setState(() {
             _selectedIndex = index;
           });
-          if (Navigator.canPop(context)) {
+          if (Scaffold.maybeOf(context)?.isDrawerOpen ?? false) {
             Navigator.pop(context);
           }
         },
@@ -2352,10 +2370,9 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
             TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
             FilledButton.icon(
               style: FilledButton.styleFrom(backgroundColor: const Color(0xFF0056B3)),
-              onPressed: () {
+              onPressed: () async {
                 if (nameCtrl.text.isNotEmpty && userCtrl.text.isNotEmpty) {
-                  final farmerId = 'F${DateTime.now().millisecondsSinceEpoch}';
-                  service.addFarmer(
+                  final farmerId = await service.addFarmer(
                     username: userCtrl.text,
                     password: passCtrl.text.isEmpty ? 'password123' : passCtrl.text,
                     profileName: nameCtrl.text,
@@ -2365,7 +2382,7 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
                   );
 
                   // Add associated Farm Record so it syncs automatically to Farmer & Farm Records & Supabase!
-                  service.addFarmRecord(
+                  await service.addFarmRecord(
                     farmerId: farmerId,
                     farmerName: nameCtrl.text,
                     locationName: locationCtrl.text.isEmpty ? 'Sitio $selectedBrgy' : locationCtrl.text,
@@ -2377,6 +2394,7 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
                     barangay: selectedBrgy,
                   );
 
+                  if (!context.mounted) return;
                   Navigator.pop(context);
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(
@@ -2967,32 +2985,71 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: Row(
           children: [
-            const Icon(Icons.agriculture_rounded, color: Color(0xFF16A34A)),
-            const SizedBox(width: 8),
-            Expanded(child: Text(farm.farmerName, style: const TextStyle(fontWeight: FontWeight.bold))),
+            const CircleAvatar(
+              backgroundColor: Color(0xFF16A34A),
+              foregroundColor: Colors.white,
+              radius: 18,
+              child: Icon(Icons.agriculture_rounded, size: 20),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(farm.farmerName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                  Text('Barangay ${farm.barangay}, Pagsanjan', style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
+                ],
+              ),
+            ),
           ],
         ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Location: ${farm.locationName}, ${farm.barangay}'),
-            const SizedBox(height: 6),
-            Text('Crop Type: ${farm.cropType}'),
-            const SizedBox(height: 6),
-            Text('Land Area: ${farm.landAreaHectares} Hectares'),
-            const SizedBox(height: 6),
-            Text('Tenure Status: ${farm.tenureStatus}'),
-            const SizedBox(height: 6),
-            Text('Coordinates: ${farm.latitude.toStringAsFixed(4)}° N, ${farm.longitude.toStringAsFixed(4)}° E'),
+            const Divider(height: 12),
+            _infoRow(Icons.location_on_rounded, 'Farm Sitio / Location', farm.locationName),
+            const SizedBox(height: 8),
+            _infoRow(Icons.eco_rounded, 'Primary Crop Type', farm.cropType),
+            const SizedBox(height: 8),
+            _infoRow(Icons.square_foot_rounded, 'Land Size', '${farm.landAreaHectares} Hectares (${(farm.landAreaHectares * 10000).round()} m²)'),
+            const SizedBox(height: 8),
+            _infoRow(Icons.badge_rounded, 'Tenure Status', farm.tenureStatus),
+            const SizedBox(height: 8),
+            _infoRow(Icons.my_location_rounded, 'GPS Coordinates', '${farm.latitude.toStringAsFixed(5)}° N, ${farm.longitude.toStringAsFixed(5)}° E'),
           ],
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Close')),
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Close'),
+          ),
         ],
       ),
+    );
+  }
+
+  Widget _infoRow(IconData icon, String label, String value) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(icon, size: 18, color: const Color(0xFF16A34A)),
+        const SizedBox(width: 8),
+        Expanded(
+          child: RichText(
+            text: TextSpan(
+              style: const TextStyle(fontSize: 13, color: Colors.black87),
+              children: [
+                TextSpan(text: '$label: ', style: const TextStyle(fontWeight: FontWeight.bold)),
+                TextSpan(text: value),
+              ],
+            ),
+          ),
+        ),
+      ],
     );
   }
 
@@ -3035,7 +3092,6 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
                   Text(locale.mapTitle, style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: textColor)),
                 ],
               ),
-              _buildExportImportButtons(context, 'Farms Map List', locale, service),
             ],
           ),
           const SizedBox(height: 16),
@@ -3272,7 +3328,7 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
               Wrap(
                 spacing: 8,
                 children: [
-                  _buildExportImportButtons(context, 'Farmer Accounts', locale, service, showImport: false),
+                  _buildExportImportButtons(context, 'Farmer Accounts', locale, service, showImport: true),
                   ElevatedButton.icon(
                     onPressed: () => _showAddFarmerDialog(context, service),
                     style: ElevatedButton.styleFrom(
@@ -3450,22 +3506,16 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
                   Text(locale.adminStaffTitle, style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: textColor)),
                 ],
               ),
-              Wrap(
-                spacing: 8,
-                children: [
-                  _buildExportImportButtons(context, 'Admin Accounts', locale, service),
-                  ElevatedButton.icon(
-                    onPressed: () => _showAddStaffDialog(context, service),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: primaryAccent,
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                    ),
-                    icon: const Icon(Icons.person_add_rounded),
-                    label: Text(locale.addStaff, style: const TextStyle(fontWeight: FontWeight.bold)),
-                  ),
-                ],
+              ElevatedButton.icon(
+                onPressed: () => _showAddStaffDialog(context, service),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: primaryAccent,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                ),
+                icon: const Icon(Icons.person_add_rounded),
+                label: Text(locale.addStaff, style: const TextStyle(fontWeight: FontWeight.bold)),
               ),
             ],
           ),

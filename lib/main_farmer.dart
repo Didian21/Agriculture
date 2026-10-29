@@ -7,6 +7,7 @@ import 'main.dart';
 import 'providers/farm_input_provider.dart';
 import 'screens/dashboard/dashboard_screen.dart';
 import 'screens/farmer_login_screen.dart';
+import 'screens/splash_screen.dart';
 import 'services/account_service.dart';
 import 'services/supabase_service.dart';
 
@@ -31,14 +32,15 @@ class FarmerApp extends StatelessWidget {
       ],
       child: Consumer<DashboardProvider>(
         builder: (context, p, child) => MaterialApp(
-          title: 'PAGRI Farmer',
+          title: 'Pagri',
           debugShowCheckedModeBanner: false,
           theme: AppTheme.light,
           locale: Locale(p.isTagalog ? 'tl' : 'en'),
           localizationsDelegates: AppLocalizations.localizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
-          initialRoute: '/',
+          initialRoute: '/splash',
           routes: {
+            '/splash': (context) => SplashScreen(nextScreen: FarmerLoginScreen(p: p)),
             '/': (context) => FarmerLoginScreen(p: p),
             '/dashboard': (context) => const DashboardScreen(),
           },

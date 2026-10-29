@@ -93,10 +93,10 @@ class _FarmerLoginScreenState extends State<FarmerLoginScreen> {
                         const SizedBox(height: 20),
                         TextField(
                           controller: _phoneCtrl,
-                          keyboardType: TextInputType.phone,
+                          keyboardType: TextInputType.text,
                           decoration: InputDecoration(
-                            prefixIcon: const Icon(Icons.phone_rounded, color: AppColors.leaf),
-                            labelText: t.phoneNumber,
+                            prefixIcon: const Icon(Icons.person_rounded, color: AppColors.leaf),
+                            labelText: 'Username or Phone Number',
                             border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
                           ),
                         ),
@@ -104,10 +104,10 @@ class _FarmerLoginScreenState extends State<FarmerLoginScreen> {
                         TextField(
                           controller: _pinCtrl,
                           obscureText: true,
-                          keyboardType: TextInputType.number,
+                          keyboardType: TextInputType.text,
                           decoration: InputDecoration(
                             prefixIcon: const Icon(Icons.lock_rounded, color: AppColors.leaf),
-                            labelText: t.pinLabel,
+                            labelText: 'Password',
                             border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
                           ),
                         ),

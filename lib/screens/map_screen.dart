@@ -129,6 +129,7 @@ class PagsanjanMapWidget extends StatefulWidget {
 }
 
 class _PagsanjanMapWidgetState extends State<PagsanjanMapWidget> {
+  final MapController _mapController = MapController();
   final LatLng pagsanjanCenter = const LatLng(14.2790, 121.4550);
   bool isLoading = true;
 
@@ -139,6 +140,14 @@ class _PagsanjanMapWidgetState extends State<PagsanjanMapWidget> {
   void initState() {
     super.initState();
     _loadPagsanjanBoundary();
+  }
+
+  @override
+  void didUpdateWidget(covariant PagsanjanMapWidget oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.initialCenter != null && widget.initialCenter != oldWidget.initialCenter) {
+      _mapController.move(widget.initialCenter!, widget.initialZoom);
+    }
   }
 
   Future<void> _loadPagsanjanBoundary() async {
@@ -227,10 +236,16 @@ class _PagsanjanMapWidgetState extends State<PagsanjanMapWidget> {
     }
 
     return FlutterMap(
+      mapController: _mapController,
       options: MapOptions(
         initialCenter: widget.initialCenter ?? pagsanjanCenter,
         initialZoom: widget.initialZoom,
-        onTap: widget.onTap != null ? (_, point) => widget.onTap!(point) : null,
+        onTap: widget.onTap != null
+            ? (_, point) {
+                _mapController.move(point, _mapController.camera.zoom);
+                widget.onTap!(point);
+              }
+            : null,
       ),
       children: [
         TileLayer(

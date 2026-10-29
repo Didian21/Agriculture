@@ -7,6 +7,7 @@ import 'main.dart';
 import 'providers/farm_input_provider.dart';
 import 'screens/admin_dashboard.dart';
 import 'screens/admin_login_screen.dart';
+import 'screens/splash_screen.dart';
 import 'screens/thank_you_screen.dart';
 import 'services/account_service.dart';
 import 'services/supabase_service.dart';
@@ -38,8 +39,9 @@ class AdminApp extends StatelessWidget {
           locale: Locale(p.isTagalog ? 'tl' : 'en'),
           localizationsDelegates: AppLocalizations.localizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
-          initialRoute: '/',
+          initialRoute: '/splash',
           routes: {
+            '/splash': (context) => const SplashScreen(nextScreen: AdminLoginScreen()),
             '/': (context) => const AdminLoginScreen(),
             '/admin_dashboard': (context) => const AdminDashboard(),
             '/thank_you': (context) => const ThankYouScreen(),

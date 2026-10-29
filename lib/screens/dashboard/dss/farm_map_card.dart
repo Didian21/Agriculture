@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:provider/provider.dart';
 
 import '../../../l10n/app_localizations.dart';
 import '../../../main.dart';
+import '../../../models/farmer.dart';
 import '../../../providers/farm_input_provider.dart';
+import '../../../services/account_service.dart';
 import '../../../services/farm_weather_service.dart';
 import '../../../widgets/common_widgets.dart';
 import '../../../widgets/weather_icon.dart';
@@ -64,10 +67,96 @@ class _FarmMapCardState extends State<FarmMapCard> {
     }
   }
 
+  void _showFarmDetailsDialog(BuildContext context, FarmRecord farm) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Row(
+          children: [
+            const Icon(Icons.agriculture_rounded, color: AppColors.leaf, size: 28),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                farm.farmerName,
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+              ),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _detailRow(Icons.location_on_rounded, 'Lokasyon', '${farm.locationName}, Barangay ${farm.barangay}'),
+            const SizedBox(height: 8),
+            _detailRow(Icons.eco_rounded, 'Uri ng Tanim', farm.cropType),
+            const SizedBox(height: 8),
+            _detailRow(Icons.square_foot_rounded, 'Sukat ng Lupa', '${farm.landAreaHectares} Hektarya'),
+            const SizedBox(height: 8),
+            _detailRow(Icons.badge_rounded, 'Status ng Lupa', farm.tenureStatus),
+            const SizedBox(height: 8),
+            _detailRow(Icons.my_location_rounded, 'GPS Coordinates', '${farm.latitude.toStringAsFixed(4)}° N, ${farm.longitude.toStringAsFixed(4)}° E'),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Isara'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _detailRow(IconData icon, String label, String value) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(icon, size: 18, color: AppColors.leaf),
+        const SizedBox(width: 8),
+        Expanded(
+          child: RichText(
+            text: TextSpan(
+              style: const TextStyle(fontSize: 13, color: AppColors.ink),
+              children: [
+                TextSpan(text: '$label: ', style: const TextStyle(fontWeight: FontWeight.bold)),
+                TextSpan(text: value),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final t = AppLocalizations.of(context)!;
     final point = LatLng(widget.input.lat, widget.input.lon);
+    final accountService = Provider.of<AccountService>(context);
+    final allFarms = accountService.farms;
+
+    final allMarkers = <Marker>[
+      for (final f in allFarms)
+        Marker(
+          point: LatLng(f.latitude, f.longitude),
+          width: 38,
+          height: 38,
+          alignment: Alignment.topCenter,
+          child: GestureDetector(
+            onTap: () => _showFarmDetailsDialog(context, f),
+            child: const Icon(Icons.location_pin, size: 36, color: Color(0xFF16A34A)),
+          ),
+        ),
+      Marker(
+        point: point,
+        width: 48,
+        height: 54,
+        alignment: Alignment.topCenter,
+        child: const Icon(Icons.location_on_rounded, size: 48, color: AppColors.down),
+      ),
+    ];
 
     return GlassCard(
       padding: const EdgeInsets.all(14),
@@ -83,15 +172,7 @@ class _FarmMapCardState extends State<FarmMapCard> {
                   PagsanjanMapWidget(
                     initialCenter: point,
                     initialZoom: 15,
-                    markers: [
-                      Marker(
-                        point: point,
-                        width: 48,
-                        height: 54,
-                        alignment: Alignment.topCenter,
-                        child: const Icon(Icons.location_on_rounded, size: 48, color: AppColors.down),
-                      ),
-                    ],
+                    markers: allMarkers,
                     onTap: (p) => widget.input.setLocation(
                       double.parse(p.latitude.toStringAsFixed(5)),
                       double.parse(p.longitude.toStringAsFixed(5)),
@@ -132,21 +213,26 @@ class _FarmMapCardState extends State<FarmMapCard> {
                 onPressed: () {
                   widget.input.setLocation(14.2790, 121.4550);
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Farm pin updated to Mobile GPS coordinates!')),
+                    const SnackBar(content: Text('Inilipat ang pin sa lokasyon ng iyong GPS!'), backgroundColor: Colors.green),
                   );
                 },
                 icon: const Icon(Icons.my_location_rounded, size: 18, color: AppColors.leaf),
                 label: const Text('My GPS'),
               ),
               TextButton.icon(
-                onPressed: widget.input.resetLocation,
+                onPressed: () {
+                  widget.input.resetLocation();
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Ibinalik ang mapa sa gitna ng Pagsanjan!')),
+                  );
+                },
                 icon: const Icon(Icons.restart_alt_rounded, size: 18),
                 label: Text(t.dssResetLocation),
               ),
               OutlinedButton.icon(
                 onPressed: () => Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (_) => const PagsanjanMapScreen()),
+                  MaterialPageRoute(builder: (_) => PagsanjanMapScreen(markers: allMarkers)),
                 ),
                 icon: const Icon(Icons.map_rounded, size: 18, color: AppColors.leaf),
                 label: const Text('Full Map'),

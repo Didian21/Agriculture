@@ -191,32 +191,7 @@ class AccountService extends ChangeNotifier {
   }
 
   // 6. ACTIVITY LOG
-  final List<ActivityLogItem> _activityLogs = [
-    ActivityLogItem(
-      id: 'LOG001',
-      user: 'Dr. Roberto Mendoza (Municipal Agriculturist)',
-      action: 'ADD',
-      module: 'Farmer Records',
-      details: 'Registered new farmer: Juan Dela Cruz (Biñan)',
-      timestamp: DateTime.now().subtract(const Duration(hours: 2)),
-    ),
-    ActivityLogItem(
-      id: 'LOG002',
-      user: 'Clara Gonzales (Administrative Staff)',
-      action: 'UPLOAD',
-      module: 'Historical Data',
-      details: 'Uploaded MAO Rice Production CSV for Jan 2026',
-      timestamp: DateTime.now().subtract(const Duration(hours: 5)),
-    ),
-    ActivityLogItem(
-      id: 'LOG003',
-      user: 'Dr. Roberto Mendoza (Municipal Agriculturist)',
-      action: 'RETRAIN',
-      module: 'Model Management',
-      details: 'Retrained ML Model with 1,250 historical data entries',
-      timestamp: DateTime.now().subtract(const Duration(days: 1)),
-    ),
-  ];
+  final List<ActivityLogItem> _activityLogs = [];
 
   // 7. ML MODEL STATUS
   MLModelStatus _modelStatus = MLModelStatus(
@@ -290,7 +265,8 @@ class AccountService extends ChangeNotifier {
   }
 
   // FARMERS CRUD & ACCOUNTS
-  Future<void> addFarmer({
+  Future<String> addFarmer({
+    String? id,
     required String username,
     required String password,
     required String profileName,
@@ -299,7 +275,7 @@ class AccountService extends ChangeNotifier {
     required String organization,
     String status = 'Active',
   }) async {
-    final newId = 'F${DateTime.now().millisecondsSinceEpoch}';
+    final newId = id ?? 'F${DateTime.now().millisecondsSinceEpoch}';
     final farmer = Farmer(
       id: newId,
       username: username,
@@ -326,10 +302,11 @@ class AccountService extends ChangeNotifier {
         'status': status,
         'records': [],
       });
-      debugPrint('Saved farmer to Supabase: $profileName');
+      debugPrint('Saved farmer to Supabase: $profileName (ID: $newId)');
     } catch (e) {
       debugPrint('Supabase insert error (farmer): $e');
     }
+    return newId;
   }
 
   Future<void> updateFarmer(String id, {

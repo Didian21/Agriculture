@@ -11,7 +11,6 @@ import '../../../services/dss_service.dart';
 import '../../../widgets/common_widgets.dart';
 import '../../../widgets/dss_common.dart';
 import '../../../widgets/planting_graph.dart';
-import '../dss/farm_map_card.dart';
 import '../dss/planting_form_sheet.dart';
 import '../dss/total_land_sheet.dart';
 
@@ -77,10 +76,6 @@ class DssTab extends StatelessWidget {
         _PriceAdvisory(planting: sel),
       ],
       const SizedBox(height: 18),
-      SectionTitle(icon: Icons.map_rounded, text: t.dssFarmMap, subtitle: t.dssFarmMapSub),
-      const SizedBox(height: 10),
-      FarmMapCard(input: input),
-      const SizedBox(height: 14),
       Text(t.dssMyDisclaimer, style: const TextStyle(fontSize: 12, color: AppColors.muted, height: 1.4)),
       const SizedBox(height: 90),
     ]);
@@ -101,82 +96,160 @@ class _LandCard extends StatelessWidget {
     final total = input.totalHectares;
     final used = input.usedHectares;
     final rem = input.remainingHectares();
+    final free = rem ?? 0.0;
 
     return GlassCard(
-      padding: const EdgeInsets.all(14),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              const Icon(Icons.landscape_rounded, color: AppColors.leaf),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(t.dssTotalLand,
-                    style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w900, color: AppColors.ink)),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const IconBubble(icon: Icons.landscape_rounded, color: AppColors.leaf, size: 36),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    t.dssTotalLand,
+                    style: const TextStyle(color: AppColors.ink, fontWeight: FontWeight.w800, fontSize: 14),
+                  ),
+                ),
+                TextButton.icon(
+                  style: TextButton.styleFrom(
+                    visualDensity: VisualDensity.compact,
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                  ),
+                  onPressed: () => showTotalLandSheet(context),
+                  icon: Icon(total == null ? Icons.add_rounded : Icons.edit_rounded, size: 16, color: AppColors.leaf),
+                  label: Text(
+                    total == null ? t.dssLandSet : t.edit,
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: AppColors.leaf),
+                  ),
+                ),
+                const SizedBox(width: 4),
+                Container(
+                  height: 30,
+                  decoration: BoxDecoration(
+                    color: AppColors.mint,
+                    borderRadius: BorderRadius.circular(15),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      GestureDetector(
+                        onTap: () => input.setUseSqm(false),
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 200),
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+                          decoration: BoxDecoration(
+                            color: !sqm ? AppColors.leaf : Colors.transparent,
+                            borderRadius: BorderRadius.circular(15),
+                          ),
+                          child: Text(
+                            t.dssUnitHa,
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                              color: !sqm ? Colors.white : AppColors.muted,
+                            ),
+                          ),
+                        ),
+                      ),
+                      GestureDetector(
+                        onTap: () => input.setUseSqm(true),
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 200),
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+                          decoration: BoxDecoration(
+                            color: sqm ? AppColors.leaf : Colors.transparent,
+                            borderRadius: BorderRadius.circular(15),
+                          ),
+                          child: Text(
+                            t.dssUnitSqm,
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.bold,
+                              color: sqm ? Colors.white : AppColors.muted,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            if (total == null)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 4),
+                child: Text(t.dssLandNotSet, style: const TextStyle(color: AppColors.muted, height: 1.3, fontSize: 12.5)),
+              )
+            else ...[
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.baseline,
+                textBaseline: TextBaseline.alphabetic,
+                children: [
+                  Flexible(
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        DssFmt.area(total, sqm: sqm),
+                        style: const TextStyle(fontSize: 34, fontWeight: FontWeight.w900, color: AppColors.leaf, height: 1.0),
+                      ),
+                    ),
+                  ),
+                ],
               ),
-              TextButton.icon(
-                onPressed: () => showTotalLandSheet(context),
-                icon: Icon(total == null ? Icons.add_rounded : Icons.edit_rounded, size: 18),
-                label: Text(total == null ? t.dssLandSet : t.edit),
+              const SizedBox(height: 12),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Flexible(
+                    child: Text(
+                      t.dssLandUsed(DssFmt.area(used, sqm: sqm)),
+                      style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold, color: AppColors.leaf),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    t.dssRemaining(DssFmt.area(free, sqm: sqm)),
+                    style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold, color: AppColors.muted),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 6),
+              // Adjustable / Adaptive Land Usage Bar
+              Container(
+                height: 16,
+                decoration: BoxDecoration(
+                  color: AppColors.mint,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: AppColors.border, width: 1.2),
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(7),
+                  child: Row(
+                    children: [
+                      for (final p in input.plantings)
+                        Expanded(
+                          flex: (p.hectares * 100000).round().clamp(1, 100000000),
+                          child: Container(color: AppColors.forCrop(p.crop)),
+                        ),
+                      if (free > 0.00001)
+                        Expanded(
+                          flex: (free * 100000).round().clamp(1, 100000000),
+                          child: Container(color: AppColors.mint),
+                        ),
+                    ],
+                  ),
+                ),
               ),
             ],
-          ),
-          if (total == null)
-            Text(t.dssLandNotSet, style: const TextStyle(color: AppColors.muted, height: 1.35))
-          else ...[
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                Expanded(
-                  child: Text(DssFmt.area(total, sqm: sqm),
-                      style: const TextStyle(fontSize: 30, fontWeight: FontWeight.w900, color: AppColors.leaf)),
-                ),
-                SegmentedButton<bool>(
-                  showSelectedIcon: false,
-                  style: const ButtonStyle(visualDensity: VisualDensity.compact),
-                  segments: [
-                    ButtonSegment(value: false, label: Text(t.dssUnitHa)),
-                    ButtonSegment(value: true, label: Text(t.dssUnitSqm)),
-                  ],
-                  selected: {sqm},
-                  onSelectionChanged: (s) => input.setUseSqm(s.first),
-                ),
-              ],
-            ),
-            const SizedBox(height: 10),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(8),
-              child: SizedBox(
-                height: 14,
-                child: Row(
-                  children: [
-                    for (final p in input.plantings)
-                      Expanded(
-                        flex: (p.hectares * 100000).round().clamp(1, 100000000),
-                        child: Container(color: AppColors.forCrop(p.crop)),
-                      ),
-                    Expanded(
-                      flex: ((rem ?? 0) * 100000).round().clamp(0, 100000000),
-                      child: Container(color: AppColors.mint),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                Expanded(
-                  child: Text(t.dssLandUsed(DssFmt.area(used, sqm: sqm)),
-                      style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: AppColors.ink)),
-                ),
-                Text(t.dssRemaining(DssFmt.area(rem ?? 0, sqm: sqm)),
-                    style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w800, color: AppColors.leaf)),
-              ],
-            ),
           ],
-        ],
+        ),
       ),
     );
   }

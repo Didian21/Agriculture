@@ -7,6 +7,7 @@ import 'l10n/app_localizations.dart';
 import 'providers/farm_input_provider.dart';
 import 'screens/dashboard/dashboard_screen.dart';
 import 'screens/login_screen.dart';
+import 'screens/splash_screen.dart';
 import 'screens/thank_you_screen.dart';
 import 'services/account_service.dart';
 import 'services/supabase_service.dart';
@@ -277,8 +278,9 @@ class AgricultureApp extends StatelessWidget {
             data: MediaQuery.of(context).copyWith(textScaler: TextScaler.linear(p.textScale)),
             child: child!,
           ),
-          initialRoute: '/',
+          initialRoute: '/splash',
           routes: {
+            '/splash': (context) => SplashScreen(nextScreen: LoginScreen(p: p)),
             '/': (context) => LoginScreen(p: p),
             '/dashboard': (context) => const DashboardScreen(),
             '/thank_you': (context) => const ThankYouScreen(),
