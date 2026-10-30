@@ -46,7 +46,7 @@ class ThankYouScreen extends StatelessWidget {
                             width: 88,
                             height: 88,
                             fit: BoxFit.cover,
-                            errorBuilder: (_, __, ___) => const CircleAvatar(
+                            errorBuilder: (context, error, stack) => const CircleAvatar(
                               radius: 44,
                               backgroundColor: Color(0xFF0056B3),
                               child: Icon(Icons.eco_rounded, color: Colors.white, size: 48),

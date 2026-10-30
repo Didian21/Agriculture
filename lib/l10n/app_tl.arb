@@ -1,0 +1,587 @@
+{
+  "@@locale": "tl",
+  "appSubtitle": "Sektor ng Agrikultura ng Pagsanjan",
+  "notifications": "Mga Abiso",
+  "refresh": "I-refresh",
+  "navHome": "Home",
+  "navWeather": "Panahon",
+  "navFarm": "Aking Bukid",
+  "navPlanting": "Pagtatanim",
+  "navPrices": "Presyo",
+  "navSettings": "Mga Setting",
+  "loadingWeather": "Kina-karga ang panahon ng iyong bukid...",
+  "tryAgain": "Subukang muli",
+  "cancel": "Kanselahin",
+  "save": "I-save",
+  "edit": "Baguhin",
+  "close": "Isara",
+  "hectares": "hektarya",
+  "sqmShort": "mkv",
+  "now": "Ngayon",
+  "today": "Ngayon",
+  "portalTitle": "Portal ng Magsasaka ng Pagsanjan",
+  "signInTitle": "Mag-login sa Portal",
+  "signInHint": "Ipasok ang numero ng telepono at PIN upang magpatuloy.",
+  "phoneNumber": "Numero ng Telepono",
+  "pinLabel": "4-Digit PIN Passcode",
+  "signIn": "Mag-login",
+  "greetingMorning": "Magandang umaga",
+  "greetingAfternoon": "Magandang hapon",
+  "greetingEvening": "Magandang gabi",
+  "todayWeather": "Panahon ngayon",
+  "heatIndex": "Heat index",
+  "heatIndexSub": "Gaano kainit ang pakiramdam kapag isinama ang halumigmig",
+  "heatNormal": "Normal",
+  "heatCaution": "Mag-ingat",
+  "heatExtremeCaution": "Labis na pag-iingat",
+  "heatDanger": "Panganib",
+  "heatExtremeDanger": "Matinding panganib",
+  "heatAdviceNormal": "Komportable para sa trabaho sa bukid. Uminom ng tubig nang regular.",
+  "heatAdviceCaution": "Maaaring mapagod kapag matagal sa init. Magpahinga sa lilim at uminom ng tubig.",
+  "heatAdviceExtremeCaution": "Posible ang pulikat at panghihina dahil sa init. Magtrabaho sa maagang umaga o hapon at magpahinga nang madalas.",
+  "heatAdviceDanger": "Malamang ang panghihina dahil sa init at posible ang heat stroke. Iwasan ang trabaho sa bukid tuwing tanghali.",
+  "heatAdviceExtremeDanger": "Napakalaki ng tsansa ng heat stroke. Manatili sa loob o sa lilim at iwasan ang trabaho sa bukid.",
+  "heatScaleSource": "Tantiya mula sa temperatura at halumigmig. Ang mga antas ay ayon sa heat index scale ng PAGASA.",
+  "forecastTitle": "Pagtaya",
+  "hourlyTab": "Oras-oras",
+  "weeklyTab": "7 araw",
+  "heatTimeline": "Heat index kada oras ngayong araw",
+  "heatHottest": "Pinakamainit na oras",
+  "farmCropsTitle": "Aking mga pananim",
+  "farmCropsSub": "Pindutin ang pananim para makita ang pinakamagandang buwan ng pagtatanim.",
+  "farmTotalHarvest": "Kabuuang ani",
+  "farmShare": "{percent}% ng iyong lupa",
+  "farmThisMonth": "Ngayong buwan",
+  "farmDaysGrown": "Araw {days} ng tinatayang {total}",
+  "farmExpectedHarvest": "Inaasahang ani: {range}",
+  "farmReadySoon": "Malapit nang anihin",
+  "farmLastHarvest": "Huling ani",
+  "farmYieldPerHa": "{value} kg bawat hektarya",
+  "farmEstimateNote": "Tantiya lamang ang mga petsa. Nakadepende sa panahon at uri ng tanim ang aktwal na ani.",
+  "priceMyCrops": "Aking pananim",
+  "priceAllCrops": "Lahat",
+  "priceRising": "Tumataas",
+  "priceFalling": "Bumababa",
+  "priceGraphTitle": "Inaasahang presyo sa susunod na 7 araw",
+  "priceRange": "Saklaw sa 7 araw",
+  "priceHighest": "Pinakamataas na inaasahan",
+  "priceWhyTitle": "Bakit nagbabago ang presyo?",
+  "priceFactorRain": "Ulan",
+  "priceFactorHeat": "Init",
+  "priceFactorSeason": "Panahon ng ani",
+  "priceRainHeavy": "Mga {mm} mm ng ulan sa susunod na 7 araw. Maaaring bumaha sa bukid at kumonti ang suplay, kaya madalas tumataas ang presyo.",
+  "priceRainDry": "Mga {mm} mm lang ng ulan sa susunod na 7 araw. Ang tagtuyot ay maaaring magpababa ng ani, kaya bahagyang tataas ang presyo.",
+  "priceRainNormal": "Mga {mm} mm ng ulan sa susunod na 7 araw. Normal ang panahon, kaya steady ang suplay.",
+  "priceHeatHigh": "Napakainit sa mga darating na araw (heat index hanggang {hi}°C). Maaaring bumaba ang ani dahil sa init, kaya maaaring tumaas ang presyo.",
+  "priceHeatNormal": "Walang inaasahang matinding init. Walang epekto sa presyo.",
+  "priceSeasonPeak": "Ayon sa kalendaryo ng pagtatanim, panahon na ng anihan ng pananim na ito. Mas maraming suplay, kaya karaniwang mas mababa ang presyo.",
+  "priceSeasonOff": "Ayon sa kalendaryo ng pagtatanim, hindi pa panahon ng anihan ng pananim na ito. Mas kaunti ang suplay, kaya karaniwang steady o mas mataas ang presyo.",
+  "priceLastHarvestValue": "Ang huli mong ani ({kg} kg) ay nagkakahalaga ng mga ₱{value} sa inaasahang presyo.",
+  "priceDisclaimer": "Tantiya lamang ito mula sa simpleng modelo na gumagamit ng 7-araw na weather forecast at kalendaryo ng pagtatanim. Ang mga kasalukuyang presyo ay halimbawa lamang at hindi opisyal na presyo sa palengke. Kumpirmahin sa Tanggapan ng Pambayang Agrikultura o sa palengke bago magbenta.",
+  "farmOverview": "Buod ng bukid",
+  "overviewCrops": "Mga pananim",
+  "overviewCropsSub": "Aktibong pananim",
+  "overviewPlantNow": "Magandang itanim",
+  "overviewPlantNowSub": "pananim ngayong buwan",
+  "next12Hours": "Susunod na 12 oras",
+  "adviceTitle": "Payo sa pagsasaka ngayong araw",
+  "adviceSubtitle": "Batay sa kasalukuyang panahon",
+  "forecast7Days": "Pagtaya sa 7 araw",
+  "plantInMonth": "Magandang itanim ngayong {month}",
+  "noBestCrop": "Walang pananim na nasa pinakamagandang panahon ng pagtatanim ngayong buwan.",
+  "statusLive": "KASALUKUYAN",
+  "statusOffline": "WALANG INTERNET",
+  "feelsLike": "Nararamdaman",
+  "humidity": "Halumigmig",
+  "wind": "Hangin",
+  "rainChance": "Tsansa ng ulan",
+  "todayRange": "Ngayong araw: {min}° - {max}°   •   Ulan {rain} mm",
+  "updatedAt": "Na-update {time}  (awtomatikong nagre-refresh kada 10 min)",
+  "homeCropsTitle": "Mga Pananim sa Pagsanjan",
+  "homeCropsSub": "Pindutin ang pananim para makita ang pinakamagandang buwan ng pagtatanim.",
+  "homeCropsNote": "Mga karaniwang tanim sa Laguna. Ang mga buwan ng pagtatanim ay gabay lamang - kumpirmahin sa Tanggapan ng Pambayang Agrikultura.",
+  "dssTitle": "Pinakamagandang buwan ng pagtatanim",
+  "dssSubtitle": "Pagsanjan, Laguna - gabay batay sa kalendaryo ng pagtatanim",
+  "dssRainNote": "Inaasahan ang maraming ulan ngayong linggo. Suriin ang kanal at daluyan ng tubig bago magtanim.",
+  "dssBestMonths": "Pinakamagandang buwan",
+  "dssPossibleMonths": "Maaaring buwan",
+  "dssTip": "Payo",
+  "dssDisclaimer": "Ang graph na ito ay gabay lamang batay sa kalendaryo ng pagtatanim sa Pagsanjan, Laguna. Hindi ito pagtaya sa ani o presyo. Mangyaring kumpirmahin sa Tanggapan ng Pambayang Agrikultura.",
+  "totalLandSize": "Kabuuan ng sukat ng lupa",
+  "plantedWhere": "Ano ang nakatanim at saan",
+  "cropHistory": "Kasaysayan ng pananim",
+  "plantedOn": "Itinanim noong {date}",
+  "harvestedOn": "Naani noong {date}",
+  "stillGrowing": "Lumalaki pa",
+  "whenToPlant": "Kailan magandang magtanim?",
+  "tapMonth": "Pindutin ang buwan upang makita ang magandang itanim.",
+  "legendBest": "Pinakamaganda",
+  "legendPossible": "Maaari",
+  "legendAvoid": "Hindi inirerekomenda",
+  "myCrop": "Aking tanim",
+  "statusBest": "Pinakamagandang magtanim",
+  "statusPossible": "Maaaring magtanim",
+  "statusAvoid": "Hindi inirerekomenda ngayon",
+  "bestMonthLabel": "Pinakamaganda: {month}",
+  "harvestIn": "Maaani pagkaraan ng {time}",
+  "plantingDisclaimer": "Ito ay pangkalahatang gabay para sa Laguna. Ang panahon ay maaaring magbago - mangyaring sumangguni rin sa Municipal Agriculture Office.",
+  "cropPrices": "Presyo ng mga pananim",
+  "pricesSubtitle": "Inaasahang presyo batay sa darating na panahon. Sa PHP bawat kg.",
+  "noPriceData": "Wala pang datos ng presyo para sa iyong mga tanim.",
+  "expected": "Inaasahan",
+  "appSettings": "Mga Setting ng App",
+  "appSettingsSub": "Tingnan ang iyong account, humingi ng tulong, at basahin ang patakaran sa pagkapribado.",
+  "accountDetails": "Detalye ng Account",
+  "farmerName": "Pangalan ng Magsasaka",
+  "barangay": "Barangay",
+  "birthday": "Kapanganakan",
+  "landSize": "Sukat ng Lupa",
+  "displaySettings": "Itsura ng App",
+  "displaySettingsSub": "Gawing mas madaling basahin ang teksto",
+  "textSize": "Laki ng teksto",
+  "textSizeNormal": "Normal",
+  "textSizeLarge": "Malaki",
+  "textSizeXLarge": "Pinakamalaki",
+  "textSizeSample": "Halimbawa: Magandang umaga, magsasaka!",
+  "helpSupport": "Tulong at Suporta",
+  "helpSupportSub": "Kailangan ng tulong sa app o sa inyong bukid?",
+  "howToUse": "Paano gamitin ang PAGRI",
+  "howTo1": "Home: tingnan ang panahon ngayon, ang 7-araw na pagtaya, payo sa bukid at ang mga pananim sa Pagsanjan.",
+  "howTo2": "Aking Bukid: tingnan ang inyong mga taniman, pananim at tala ng ani.",
+  "howTo3": "Pindutin ang pananim sa Home para makita ang pinakamagandang buwan ng pagtatanim.",
+  "howTo4": "Presyo: tingnan ang inaasahang presyo at kung kailan ibebenta.",
+  "howTo5": "Pindutin ang kampana sa taas para mabasa ang inyong mga abiso.",
+  "contactOffice": "Tanggapan ng Pambayang Agrikultura",
+  "contactOfficeSub": "Bumisita sa tanggapan sa Pagsanjan, Laguna para sa pagbabago ng account, ayuda at tulong sa pagsasaka.",
+  "aboutApp": "Tungkol sa App",
+  "appVersion": "Bersyon 1.0.0 ng PAGRI",
+  "privacyPolicy": "Patakaran sa Pagkapribado",
+  "privacySystemName": "Sistema ng Agrikultura ng Pagsanjan",
+  "privacySummary": "Ang PAGRI (Pagsanjan Agricultural Decision Support System) ay nangangalaga sa datos ng bawat rehistradong magsasaka. Ang mga impormasyon tulad ng barangay, sukat ng lupa, at mga pananim ay ginagamit lamang sa pagbibigay ng tumpak na taya ng panahon, presyo sa pamilihan, at tulong mula sa Municipal Agriculture Office.",
+  "readFullPolicy": "Basahin ang Buong Patakaran sa Pagkapribado",
+  "logout": "Mag-log out",
+  "logoutConfirm": "Sigurado ka bang gusto mong mag-log out sa iyong PAGRI portal?",
+  "logoutButton": "I-log out",
+  "privacySubtitle": "Sistema ng Suporta sa Pagdedesisyon sa Agrikultura (PAGRI - Pagsanjan, Laguna)",
+  "policy1Title": "1. Pangongolekta ng Datos",
+  "policy1Body": "Kinokolekta lamang ng PAGRI ang kinakailangang impormasyon ng magsasaka tulad ng pangalan, barangay, sukat ng lupa, at uri ng mga pananim upang magbigay ng tumpak na pagtaya sa panahon at presyo.",
+  "policy2Title": "2. Paggamit ng Impormasyon",
+  "policy2Body": "Ang iyong datos ay ginagamit lamang para sa pagtaya sa panahon mula sa Open-Meteo, pagkwenta ng inaasahang presyo sa pamilihan, at pagtulong sa Municipal Agriculture Office ng Pagsanjan sa pagpaplano sa sektor ng agrikultura.",
+  "policy3Title": "3. Seguridad at Proteksyon",
+  "policy3Body": "Protektado ang lahat ng impormasyon ng magsasaka. Hindi kailanman ibinebenta o ibinabahagi ang iyong personal na datos sa mga ikatlong partido para sa komersyal na layunin.",
+  "policy4Title": "4. Karapatan ng Magsasaka",
+  "policy4Body": "May karapatan ang magsasaka na tingnan, palitan, o ipabura ang kanyang datos anumang oras sa pamamagitan ng pakikipag-ugnayan sa Municipal Agriculture Office.",
+  "understand": "Naiintindihan Ko",
+  "markAllRead": "Basahin lahat",
+  "noNotifications": "Walang bagong abiso sa kasalukuyan.",
+  "cropRice": "Palay",
+  "cropEggplant": "Talong",
+  "cropTomato": "Kamatis",
+  "cropStringBeans": "Sitaw",
+  "cropBanana": "Saging",
+  "cropCoconut": "Niyog",
+  "cropAmpalaya": "Ampalaya",
+  "cropSquash": "Kalabasa",
+  "cropSweetPotato": "Kamote",
+  "cropTaro": "Gabi",
+  "cropCalamansi": "Calamansi",
+  "cropDescBanana": "Namumunga sa buong taon. Itanim sa simula ng tag-ulan at suhayan ang mga puno bago ang bagyo.",
+  "cropDescRice": "Pangunahing pagkain ng mga Pilipino, itinatanim sa palayan. May tanim sa tag-ulan at tag-araw.",
+  "cropDescCoconut": "Punong pinagkukunan ng buko, kopra at langis ng niyog.",
+  "cropDescEggplant": "Paboritong gulay para sa tortang talong at pinakbet. Pinakamagandang tumubo sa mas malamig na tuyong buwan.",
+  "cropDescAmpalaya": "Mapait na gulay na gumagapang sa balag. Ginagamit sa ginisang ampalaya at pinakbet.",
+  "cropDescStringBeans": "Mabilis tumubong gulay na gumagapang sa balag o suhay.",
+  "cropDescSquash": "Gumagapang na halaman na namumunga ng masustansiyang kalabasa. Kinakain din ang dahon at bulaklak. Karaniwan sa pinakbet at ginataan.",
+  "cropDescTomato": "Kinakain nang sariwa at ginagamit sa sarsa. Ang sobrang ulan ay nagdudulot ng sakit, kaya magtanim pagkatapos ng panahon ng bagyo.",
+  "cropDescSweetPotato": "Ugat na madaling tumubo at kayang tumagal sa tuyong panahon. Kinakain ang ugat at ang talbos.",
+  "cropDescTaro": "Ugat na gustong tumubo sa mamasa-masang lupa. Kinakain ang gabi at ang dahon, ginagamit sa laing at sinigang.",
+  "cropDescCalamansi": "Maliit na punong sitrus. Ang maasim na bunga ay ginagamit sa katas, sawsawan at lutuin. Kailangan ng araw at lupang hindi nababaha.",
+  "plotHarvested": "Naani na",
+  "plotGrowing": "Lumalaki",
+  "weatherSunny": "Maaraw",
+  "weatherClearNight": "Maaliwalas",
+  "weatherPartlyCloudy": "Medyo maulap",
+  "weatherCloudy": "Maulap",
+  "weatherFoggy": "Maulap at malabo",
+  "weatherDrizzle": "Ambon",
+  "weatherRain": "Umuulan",
+  "weatherThunderstorm": "Kulog at ulan",
+  "adviceThunderTitle": "Banta ng kulog at kidlat",
+  "adviceThunderMsg": "Umiwas sa bukas na bukirin at isilong ang mga kagamitan at alagang hayop.",
+  "adviceRainTitle": "Inaasahan ang ulan ngayong araw",
+  "adviceRainMsg": "Huwag muna mag-spray o mag-abono ngayong araw dahil maaagos ng ulan. Tiyaking maayos ang daloy ng kanal.",
+  "adviceHotTitle": "Napakainit ngayong araw",
+  "adviceHotMsg": "Magdilig sa maagang umaga o hapon. Lilungan ang mga batang tanim sa tanghaling tapat.",
+  "adviceWindTitle": "Malakas na hangin",
+  "adviceWindMsg": "Suhayan ang mga saging at itali ang mga pasan ng kamatis at sitaw.",
+  "adviceFieldTitle": "Magandang panahon sa bukid",
+  "adviceFieldMsg": "Tuyo ang mga darating na araw - maganda para sa pag-aani, pagpapatuyo ng palay, pag-i-spray, at pag-aabono.",
+  "adviceNormalTitle": "Normal na panahon",
+  "adviceNormalMsg": "Walang espesyal na babala. Magpatuloy sa karaniwang gawain sa bukid.",
+  "notifWeatherTitle": "Babala sa Panahon sa Pagsanjan",
+  "notifWeatherMsg": "Inaasahan ang malakas na ulan sa mga darating na araw. Tiyaking maayos ang daloy ng kanal sa bukid.",
+  "notifMarketTitle": "Balita sa Presyo ng Pananim",
+  "notifMarketMsg": "Inaasahang tataas ng 8% ang presyo ng Kamatis at Talong sa pamilihan batay sa ulan.",
+  "notifPlantingTitle": "Takdang Panahon ng Pagtatanim",
+  "notifPlantingMsg": "Pinakamagandang panahon ngayon upang magtanim ng Palay sa Laguna.",
+  "notifPestTitle": "Bantay Peste: Rice Stem Borer sa Laguna",
+  "notifPestMsg": "May naiulat na paglitaw ng stem borer sa mga kalapit na barangay. Regular na suriin ang inyong palayan.",
+  "notifSubsidyTitle": "Ayuda sa Abono mula sa LGU Pagsanjan",
+  "notifSubsidyMsg": "Kasalukuyang ipinamamahagi ang libreng organikong abono sa Tanggapan ng Pambayang Agrikultura.",
+  "reasonHeavyRain": "Inaasahan ang malakas na ulan; maaaring bumaba ang supply.",
+  "reasonDry": "Inaasahan ang panahon ng tagtuyot; may kaunting epekto sa supply.",
+  "reasonStable": "Maayos ang panahon; steady ang supply.",
+  "sellWait": "Maaaring tumaas ang presyo - maghintay ng ilang araw bago magbenta.",
+  "sellSlight": "Bahagyang pagtaas ang inaasahan - magbenta kapag handa na ang ani.",
+  "sellSoon": "Maaaring bumaba ang presyo - magbenta agad kung handa na ang ani.",
+  "guideHarvestRice": "110-120 araw",
+  "guideTipRice": "Ang tanim sa tag-ulan ay Hunyo-Hulyo. Ang tanim sa tag-araw ay Nobyembre-Disyembre at kailangan ng tuloy-tuloy na patubig.",
+  "guideHarvestEggplant": "90-120 araw",
+  "guideTipEggplant": "Pinakamagandang tumubo sa mas malamig na tuyong buwan. Iwasang maglipat-tanim kapag malakas ang ulan.",
+  "guideHarvestTomato": "90-110 araw",
+  "guideTipTomato": "Ang sobrang ulan ay nagdudulot ng sakit at pagkalanta. Magtanim pagkatapos ng panahon ng bagyo para sa magandang ani.",
+  "guideHarvestStringBeans": "60-70 araw",
+  "guideTipStringBeans": "Mabilis maani. Lagyan ng suhay o balag. Kailangan ng lupang mabilis matuyo.",
+  "guideHarvestBanana": "9-12 buwan",
+  "guideTipBanana": "Magtanim sa simula ng tag-ulan upang mabilis mag-ugat ang mga suhi. Suhayan ang mga puno bago ang bagyo.",
+  "guideHarvestCoconut": "3-6 taon bago mamunga",
+  "guideTipCoconut": "Itanim ang punla sa simula ng tag-ulan at diligan sa unang tag-araw.",
+  "guideHarvestAmpalaya": "2-3 buwan matapos itanim",
+  "guideTipAmpalaya": "Lagyan ng balag. Diligan nang regular pero iwasan ang lupang binabaha.",
+  "guideHarvestSquash": "3-4 buwan matapos itanim",
+  "guideTipSquash": "Bigyan ng lugar ang mga baging na kumalat. Iwasang magtanim sa pinakamalakas na ulan.",
+  "guideHarvestSweetPotato": "3-4 buwan matapos itanim",
+  "guideTipSweetPotato": "Itanim ang pinagputol na baging sa maluwag na lupa. Iwasan ang bukid na binabaha.",
+  "guideHarvestTaro": "6-9 buwan matapos itanim",
+  "guideTipTaro": "Itanim sa mamasa-masang lupa na may tuloy-tuloy na tubig.",
+  "guideHarvestCalamansi": "1-3 taon bago mamunga",
+  "guideTipCalamansi": "Pumili ng lugar na maaraw at hindi nababaha. Regular na putulan at abonohan.",
+  "errorLoad": "Hindi maikonekta. Tiyaking may internet connection at subukang muli.",
+  "navDss": "DSS",
+  "dssMyTitle": "Gabay sa Desisyon sa Bukid",
+  "dssMySubtitle": "Ilagay ang tanim mo at makakuha ng payong akma sa bukid mo",
+  "dssMyDisclaimer": "Ang mga numerong ito ay tantiya at gabay lamang, hindi opisyal na datos o garantiyang forecast. Kumpirmahin sa Tanggapan ng Pambayang Agrikultura bago gumawa ng malalaking desisyon.",
+  "dssMonthsShort": "Ene,Peb,Mar,Abr,May,Hun,Hul,Ago,Set,Okt,Nob,Dis",
+  "dssEmptyTitle": "Idagdag ang una mong tanim",
+  "dssEmptyBody": "Ilagay ang pananim, laki ng lupa at petsa ng pagtanim. Lalabas dito ang payo sa pagtatanim, inaasahang ani, kita at tamang oras ng pagbebenta.",
+  "dssAddPlanting": "Magdagdag ng tanim",
+  "dssEditPlanting": "I-edit ang tanim",
+  "dssAdd": "Dagdag",
+  "dssDelete": "Burahin",
+  "dssDeleteTitle": "Burahin ang tanim na ito?",
+  "dssDeleteBody": "Aalisin ang {crop} sa listahan mo.",
+  "dssMyPlantings": "Mga tanim ko",
+  "dssCrop": "Pananim",
+  "dssLandSize": "Laki ng lupa",
+  "dssLandSizeHint": "Sa ektarya. 1,000 sq m = 0.1 ha",
+  "dssAreaInvalid": "Maglagay ng numerong higit sa 0",
+  "dssPlantedOn": "Petsa ng pagtanim",
+  "dssLastYield": "Huling ani (opsyonal)",
+  "dssLastYieldHint": "Kabuuang kg sa huling ani mo sa lupang ito. Mas lalapit ang tantiya sa bukid mo.",
+  "dssDaysGrown": "Araw mula nang itanim",
+  "dssDaysCount": "{n} araw",
+  "dssNotYet": "Hindi pa naitatanim",
+  "dssExpectedHarvest": "Inaasahang ani (panahon)",
+  "dssHarvestYearRound": "Inaani buong taon",
+  "dssPlantingAdvisory": "Payo sa pagtatanim",
+  "dssPlantingAdvisorySub": "Aling buwan ang pinakamainam sa pananim na ito",
+  "dssFitBest": "Magandang panahon ngayon magtanim ng {crop}",
+  "dssFitPossible": "Puwede ngayong magtanim ng {crop}, pero hindi ito ang pinakamainam na panahon",
+  "dssFitAvoid": "Hindi magandang panahon ngayon magtanim ng {crop}",
+  "dssLegendBest": "Pinakamainam",
+  "dssLegendPossible": "Puwede",
+  "dssLegendAvoid": "Iwasan",
+  "dssNextBest": "Susunod na pinakamainam na buwan",
+  "dssWeatherBasis": "Batay sa",
+  "dssWeatherBasisBody": "karaniwang tag-ulan at tag-init sa Laguna. Tingnan ang weather forecast bago magtanim.",
+  "dssHarvestIncome": "Ani at kita",
+  "dssHarvestIncomeSub": "Tantiya na may saklaw",
+  "dssExpectedYield": "Inaasahang ani",
+  "dssYieldPerYear": "Ani bawat taon",
+  "dssExpectedIncome": "Inaasahang kita",
+  "dssNoPrice": "Walang halimbawang presyo para sa pananim na ito",
+  "dssNoEstimate": "Wala pang tantiya para sa pananim na ito.",
+  "dssLow": "Mababa",
+  "dssLikely": "Malamang",
+  "dssHigh": "Mataas",
+  "dssHowComputed": "Paano kinuwenta",
+  "dssBasisOwn": "Ang huling ani mo kada ektarya, para sa {ha} (±15%).",
+  "dssBasisTypical": "Karaniwang ani na mga {kgHa} kg kada ektarya, para sa {ha}.",
+  "dssPriceUsed": "Presyong ginamit",
+  "dssPriceAdvisory": "Payo sa presyo",
+  "dssPriceAdvisorySub": "Aling buwan karaniwang mataas ang presyo",
+  "dssSellBest": "Inaasahang mas mataas ang presyo sa {months}",
+  "dssLegendHighPrice": "Mas mataas na presyo",
+  "dssLegendLowPrice": "Mas mababang presyo",
+  "dssYourHarvest": "Ang ani mo",
+  "dssHarvestHighPrice": "Malamang aanihin mo sa paligid ng {month}, kung kailan karaniwang maganda ang presyo.",
+  "dssHarvestLowPrice": "Malamang aanihin mo sa paligid ng {month}, kung kailan maraming nag-aani at karaniwang mababa ang presyo.",
+  "dssTipStorable": "Tumatagal ang pananim na ito. Kung kaya mong itago nang ligtas, isaalang-alang ang pagbebenta sa {months}.",
+  "dssTipFresh": "Mabilis masira ang pananim na ito, kaya ibenta agad pagkatapos anihin. Magtanong sa mga mamimili ng pinakamagandang presyo at direktang magbenta kung kaya.",
+  "dssPriceRangeYear": "Saklaw ng presyo sa buong taon",
+  "dssPriceFlat": "Walang malinaw na buwanang pattern ng presyo para sa {crop} sa gabay namin.",
+  "dssFarmMap": "Mapa ng bukid ko",
+  "dssFarmMapSub": "Lokasyon ng bukid at panahon doon ngayon",
+  "dssMapHint": "I-tap ang mapa para ilipat ang pin sa bukid mo.",
+  "dssResetLocation": "Ibalik sa gitna ng Pagsanjan",
+  "dssWeatherHere": "Panahon sa bukid mo ngayon",
+  "dssWeatherFailed": "Hindi ma-load ang panahon dito.",
+  "dssFeelsLike": "Pakiramdam",
+  "dssSummaryTitle": "DSS",
+  "dssSummaryEmpty": "Idagdag ang tanim mo sa DSS tab para makakuha ng payo para sa bukid mo",
+  "dssSummaryLine": "Inaasahang ani mga {kg}, kita {low} hanggang {high}.",
+  "dssSummaryLineNoPrice": "Inaasahang ani mga {kg}.",
+  "weatherLightRain": "Mahinang ulan",
+  "weatherHeavyRain": "Malakas na ulan",
+  "heatBestWork": "Pinakamainam na oras sa bukid",
+  "heatNoSafe": "Iwasan ang matagal na trabaho sa bukid ngayon",
+  "priceNoMyCrops": "Idagdag ang iyong pananim sa DSS tab para makita rito ang inaasahang presyo nito.",
+  "cropAdvHarvestReadyTitle": "{crop}: suriin para sa ani",
+  "@cropAdvHarvestReadyTitle": {
+    "placeholders": {
+      "crop": {
+        "type": "String"
+      }
+    }
+  },
+  "cropAdvHarvestReadyMsg": "Umabot na ang {crop} mo sa karaniwang edad ng ani. Suriin ang tanim at ihanda ang pag-aani at mga mamimili.",
+  "@cropAdvHarvestReadyMsg": {
+    "placeholders": {
+      "crop": {
+        "type": "String"
+      }
+    }
+  },
+  "cropAdvHarvestSoonTitle": "{crop}: malapit na ang ani",
+  "@cropAdvHarvestSoonTitle": {
+    "placeholders": {
+      "crop": {
+        "type": "String"
+      }
+    }
+  },
+  "cropAdvHarvestSoonMsg": "Maaaring handa na ang {crop} mo sa mga {days} araw. Ihanda ang lalagyan, mga manggagawa, at mamimili.",
+  "@cropAdvHarvestSoonMsg": {
+    "placeholders": {
+      "crop": {
+        "type": "String"
+      },
+      "days": {
+        "type": "int"
+      }
+    }
+  },
+  "cropAdvDrainageTitle": "{crop}: suriin ang kanal",
+  "@cropAdvDrainageTitle": {
+    "placeholders": {
+      "crop": {
+        "type": "String"
+      }
+    }
+  },
+  "cropAdvDrainageMsg": "Inaasahan ang malakas na ulan sa susunod na 3 araw. Linisin ang kanal para hindi mabuhay ang tubig sa paligid ng {crop}.",
+  "@cropAdvDrainageMsg": {
+    "placeholders": {
+      "crop": {
+        "type": "String"
+      }
+    }
+  },
+  "cropAdvHeatTitle": "{crop}: protektahan sa init",
+  "@cropAdvHeatTitle": {
+    "placeholders": {
+      "crop": {
+        "type": "String"
+      }
+    }
+  },
+  "cropAdvHeatMsg": "Napakainit ngayon. Diligan ang {crop} sa maagang umaga o hapon, hindi sa tanghali.",
+  "@cropAdvHeatMsg": {
+    "placeholders": {
+      "crop": {
+        "type": "String"
+      }
+    }
+  },
+  "cropAdvWindTitle": "{crop}: suhayan ang tanim",
+  "@cropAdvWindTitle": {
+    "placeholders": {
+      "crop": {
+        "type": "String"
+      }
+    }
+  },
+  "cropAdvWindMsg": "Malakas ang hangin ngayon. Suhayan o itali ang {crop} para hindi matumba.",
+  "@cropAdvWindMsg": {
+    "placeholders": {
+      "crop": {
+        "type": "String"
+      }
+    }
+  },
+  "cropAdvDryTitle": "{crop}: magandang panahon sa pagpapatuyo",
+  "@cropAdvDryTitle": {
+    "placeholders": {
+      "crop": {
+        "type": "String"
+      }
+    }
+  },
+  "cropAdvDryMsg": "Tuyo ang mga darating na araw. Maganda para sa pag-aani at pagpapatuyo ng {crop}, pati sa pag-i-spray at pag-aabono.",
+  "@cropAdvDryMsg": {
+    "placeholders": {
+      "crop": {
+        "type": "String"
+      }
+    }
+  },
+  "notifStormTitle": "Kulog at kidlat ngayon",
+  "notifStormMsg": "Umiwas sa bukas na bukirin at isilong ang mga kagamitan at alagang hayop.",
+  "notifRainTitle": "Inaasahan ang malakas na ulan",
+  "notifRainMsg": "Mga {mm} mm ng ulan sa susunod na 3 araw. Linisin ang kanal para hindi mabuhay ang tubig sa bukid.",
+  "@notifRainMsg": {
+    "placeholders": {
+      "mm": {
+        "type": "int"
+      }
+    }
+  },
+  "notifHeatTitle": "Mapanganib na init ngayon",
+  "notifHeatMsg": "Heat index hanggang {hi}°C. Iwasan ang trabaho sa bukid sa tanghali, magpahinga sa lilim at uminom ng tubig.",
+  "@notifHeatMsg": {
+    "placeholders": {
+      "hi": {
+        "type": "int"
+      }
+    }
+  },
+  "notifHarvestReadyTitle": "{crop}: suriin para sa ani",
+  "@notifHarvestReadyTitle": {
+    "placeholders": {
+      "crop": {
+        "type": "String"
+      }
+    }
+  },
+  "notifHarvestReadyMsg": "Umabot na ang {crop} mo sa karaniwang edad ng ani. Suriin ang tanim at planuhin ang pag-aani.",
+  "@notifHarvestReadyMsg": {
+    "placeholders": {
+      "crop": {
+        "type": "String"
+      }
+    }
+  },
+  "notifHarvestSoonTitle": "{crop}: malapit na ang ani",
+  "@notifHarvestSoonTitle": {
+    "placeholders": {
+      "crop": {
+        "type": "String"
+      }
+    }
+  },
+  "notifHarvestSoonMsg": "Maaaring handa na ang {crop} mo sa mga {days} araw.",
+  "@notifHarvestSoonMsg": {
+    "placeholders": {
+      "crop": {
+        "type": "String"
+      },
+      "days": {
+        "type": "int"
+      }
+    }
+  },
+  "notifMarketUpTitle": "Maaaring tumaas ang presyo ng {crop}",
+  "@notifMarketUpTitle": {
+    "placeholders": {
+      "crop": {
+        "type": "String"
+      }
+    }
+  },
+  "notifMarketUpMsg": "Maaaring tumaas ng mga {percent}% ang presyo ng {crop} sa susunod na 7 araw. Tantiya lamang ito base sa weather forecast.",
+  "@notifMarketUpMsg": {
+    "placeholders": {
+      "crop": {
+        "type": "String"
+      },
+      "percent": {
+        "type": "int"
+      }
+    }
+  },
+  "notifMarketDownTitle": "Maaaring bumaba ang presyo ng {crop}",
+  "@notifMarketDownTitle": {
+    "placeholders": {
+      "crop": {
+        "type": "String"
+      }
+    }
+  },
+  "notifMarketDownMsg": "Maaaring bumaba ng mga {percent}% ang presyo ng {crop} sa susunod na 7 araw. Tantiya lamang ito base sa weather forecast.",
+  "@notifMarketDownMsg": {
+    "placeholders": {
+      "crop": {
+        "type": "String"
+      },
+      "percent": {
+        "type": "int"
+      }
+    }
+  },
+  "notifPlantingNowTitle": "Magandang panahon para magtanim ng {crop}",
+  "@notifPlantingNowTitle": {
+    "placeholders": {
+      "crop": {
+        "type": "String"
+      }
+    }
+  },
+  "notifPlantingNowMsg": "Ang buwang ito ay isa sa pinakamagandang buwan para magtanim ng {crop} sa Pagsanjan, Laguna.",
+  "@notifPlantingNowMsg": {
+    "placeholders": {
+      "crop": {
+        "type": "String"
+      }
+    }
+  },
+  "dssUnitHa": "Hektarya (ha)",
+  "dssUnitSqm": "Metro kuwadrado (m²)",
+  "dssUnitNote": "1 hektarya = 10,000 m². Puwede mong palitan ang yunit anumang oras.",
+  "dssTotalLand": "Kabuuang sukat ng lupa",
+  "dssTotalLandSub": "Ilagay ang buong sukat ng bukid mo. Hahatiin mo ito sa mga pananim sa \"Add crop\".",
+  "dssTotalTooSmall": "Masyadong maliit. {area} na ang nagagamit ng mga pananim mo.",
+  "@dssTotalTooSmall": {
+    "placeholders": {
+      "area": {
+        "type": "String"
+      }
+    }
+  },
+  "dssExceeds": "Sobra. {area} na lang ang natitira sa lupa mo.",
+  "@dssExceeds": {
+    "placeholders": {
+      "area": {
+        "type": "String"
+      }
+    }
+  },
+  "dssRemaining": "Natitira: {area}",
+  "@dssRemaining": {
+    "placeholders": {
+      "area": {
+        "type": "String"
+      }
+    }
+  },
+  "dssLandUsed": "Natataniman: {area}",
+  "@dssLandUsed": {
+    "placeholders": {
+      "area": {
+        "type": "String"
+      }
+    }
+  },
+  "dssLandSet": "Ilagay ang sukat",
+  "dssLandNotSet": "Ilagay ang kabuuang sukat ng lupa para makita kung ilan ang sakop ng bawat pananim.",
+  "farmUnallocated": "Hindi pa natataniman"
+}

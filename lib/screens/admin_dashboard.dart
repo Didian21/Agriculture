@@ -6,6 +6,9 @@ import 'package:provider/provider.dart';
 
 import '../models/farmer.dart';
 import '../services/account_service.dart';
+import 'package:latlong2/latlong.dart';
+import 'package:flutter_map/flutter_map.dart';
+import 'map_screen.dart';
 
 class AdminLocale {
   final bool isTagalog;
@@ -87,6 +90,16 @@ class _AdminDashboardState extends State<AdminDashboard> {
 
   final ScrollController _kpiScrollController = ScrollController();
   final ScrollController _sidebarScrollController = ScrollController();
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        Provider.of<AccountService>(context, listen: false).loadFromSupabase();
+      }
+    });
+  }
 
   @override
   void dispose() {
@@ -459,6 +472,82 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
                 ),
                 const SizedBox(height: 14),
 
+                // BLANK EXCEL/CSV TEMPLATE DOWNLOAD BUTTON
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: const Color(0xFF0056B3),
+                      side: const BorderSide(color: Color(0xFF0056B3)),
+                      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                    ),
+                    onPressed: () async {
+                      final isHistorical = moduleName.toLowerCase().contains('historical');
+                      final templateCsv = isHistorical
+                          ? 'Crop,Year,Month,Production (MT),Price Per KG (PHP)\n'
+                            'Rice,2026,January,480.0,24.00\n'
+                            'Prutas (Banana),2025,November,120.0,45.00\n'
+                            'Gulay (Talong),2025,December,85.2,55.00\n'
+                          : 'Full Personal Name,Username,Barangay,Contact Number,Organization Membership,Primary Crop Type,Land Area (Hectares)\n'
+                            'Juan Dela Cruz,juan_dela_cruz,Biñan,09171234567,Pagsanjan Farmers Coop,Rice,2.5\n'
+                            'Maria Santos,maria_santos,Buboy,09189876543,Anibong Planters,Gulay,1.2\n';
+
+                      final targetFileName = isHistorical ? 'pagsanjan_historical_data_template.csv' : 'pagsanjan_farmers_blank_template.csv';
+
+                      try {
+                        String userProfile = Platform.environment['USERPROFILE'] ?? 'C:\\Users\\Public';
+                        String downloadsPath = '$userProfile\\Downloads\\$targetFileName';
+                        final file = File(downloadsPath);
+                        await file.writeAsString(templateCsv);
+
+                        setDialogState(() {
+                          fileNameCtrl.text = downloadsPath;
+                          csvCtrl.text = templateCsv;
+                        });
+
+                        if (ctx.mounted) {
+                          ScaffoldMessenger.of(ctx).showSnackBar(
+                            SnackBar(
+                              content: Text(
+                                isTagalog
+                                    ? 'Matagumpay na na-save ang blank template sa Downloads folder: $targetFileName'
+                                    : 'Saved blank template to Downloads folder: $targetFileName',
+                              ),
+                              backgroundColor: const Color(0xFF0056B3),
+                              duration: const Duration(seconds: 4),
+                            ),
+                          );
+                        }
+                      } catch (e) {
+                        setDialogState(() {
+                          csvCtrl.text = templateCsv;
+                        });
+                        if (ctx.mounted) {
+                          ScaffoldMessenger.of(ctx).showSnackBar(
+                            SnackBar(
+                              content: Text(
+                                isTagalog
+                                    ? 'Na-load ang blank template sa preview! Maari mo itong kopyahin.'
+                                    : 'Loaded blank template in preview!',
+                              ),
+                              backgroundColor: Colors.blueAccent,
+                            ),
+                          );
+                        }
+                      }
+                    },
+                    icon: const Icon(Icons.download_rounded, size: 20),
+                    label: Text(
+                      moduleName.toLowerCase().contains('historical')
+                          ? (isTagalog ? '📄 Kumuha ng Blank Excel/CSV Template para sa Historical Data' : '📄 Get Blank Historical Data Template')
+                          : (isTagalog ? '📄 Kumuha ng Blank Excel/CSV Template para sa Farmer Details' : '📄 Get Blank Excel/CSV Farmer Template'),
+                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12.5),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+
                 // NATIVE FILE EXPLORER BROWSE BUTTON
                 SizedBox(
                   width: double.infinity,
@@ -694,42 +783,73 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
                   return;
                 }
 
+                final isHistorical = moduleName.toLowerCase().contains('historical');
                 final lines = rawText.split('\n');
                 int importedCount = 0;
 
                 for (final line in lines) {
-                  final parts = line.split(',');
-                  if (parts.length >= 2) {
-                    final name = parts[0].trim();
-                    final user = parts[1].trim();
-                    final barangay = parts.length > 2 && parts[2].trim().isNotEmpty ? parts[2].trim() : 'Biñan';
-                    final contact = parts.length > 3 && parts[3].trim().isNotEmpty ? parts[3].trim() : '09170000000';
-                    final org = parts.length > 4 && parts[4].trim().isNotEmpty ? parts[4].trim() : 'Pagsanjan Farmers Assoc';
-                    final crop = parts.length > 5 && parts[5].trim().isNotEmpty ? parts[5].trim() : 'Rice';
-                    final land = parts.length > 6 ? (double.tryParse(parts[6].trim()) ?? 2.0) : 2.0;
+                  final trimmedLine = line.trim();
+                  if (trimmedLine.isEmpty) continue;
+                  // Skip header line if present
+                  if (trimmedLine.toLowerCase().startsWith('crop') ||
+                      trimmedLine.toLowerCase().startsWith('full personal name')) {
+                    continue;
+                  }
 
-                    if (name.isNotEmpty && user.isNotEmpty) {
-                      final farmerId = 'F${DateTime.now().millisecondsSinceEpoch}_$importedCount';
-                      service.addFarmer(
-                        username: user,
-                        password: 'password123',
-                        profileName: name,
-                        barangay: barangay,
-                        contactNumber: contact,
-                        organization: org,
-                      );
-                      service.addFarmRecord(
-                        farmerId: farmerId,
-                        farmerName: name,
-                        locationName: 'Sitio $barangay',
-                        latitude: 14.2717,
-                        longitude: 121.4553,
-                        landAreaHectares: land,
-                        tenureStatus: 'Owner',
-                        cropType: crop,
-                        barangay: barangay,
-                      );
-                      importedCount++;
+                  final parts = trimmedLine.split(',');
+                  if (isHistorical) {
+                    if (parts.length >= 4) {
+                      final crop = parts[0].trim();
+                      final year = int.tryParse(parts[1].trim()) ?? DateTime.now().year;
+                      final month = parts[2].trim();
+                      final prod = double.tryParse(parts[3].trim()) ?? 0.0;
+                      final price = parts.length > 4 ? (double.tryParse(parts[4].trim()) ?? 0.0) : 0.0;
+
+                      if (crop.isNotEmpty) {
+                        service.addHistoricalRecord(
+                          crop: crop,
+                          year: year,
+                          month: month,
+                          productionMT: prod,
+                          pricePerKg: price,
+                          uploadedBy: service.activeUserName,
+                        );
+                        importedCount++;
+                      }
+                    }
+                  } else {
+                    if (parts.length >= 2) {
+                      final name = parts[0].trim();
+                      final user = parts[1].trim();
+                      final barangay = parts.length > 2 && parts[2].trim().isNotEmpty ? parts[2].trim() : 'Biñan';
+                      final contact = parts.length > 3 && parts[3].trim().isNotEmpty ? parts[3].trim() : '09170000000';
+                      final org = parts.length > 4 && parts[4].trim().isNotEmpty ? parts[4].trim() : 'Pagsanjan Farmers Assoc';
+                      final crop = parts.length > 5 && parts[5].trim().isNotEmpty ? parts[5].trim() : 'Rice';
+                      final land = parts.length > 6 ? (double.tryParse(parts[6].trim()) ?? 2.0) : 2.0;
+
+                      if (name.isNotEmpty && user.isNotEmpty) {
+                        final farmerId = 'F${DateTime.now().millisecondsSinceEpoch}_$importedCount';
+                        service.addFarmer(
+                          username: user,
+                          password: 'password123',
+                          profileName: name,
+                          barangay: barangay,
+                          contactNumber: contact,
+                          organization: org,
+                        );
+                        service.addFarmRecord(
+                          farmerId: farmerId,
+                          farmerName: name,
+                          locationName: 'Sitio $barangay',
+                          latitude: 14.2717,
+                          longitude: 121.4553,
+                          landAreaHectares: land,
+                          tenureStatus: 'Owner',
+                          cropType: crop,
+                          barangay: barangay,
+                        );
+                        importedCount++;
+                      }
                     }
                   }
                 }
@@ -1130,7 +1250,7 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
         children: [
           ClipRRect(
             borderRadius: BorderRadius.circular(8),
-            child: Image.asset('Pagri.jpg', width: 32, height: 32, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const Icon(Icons.eco, color: Color(0xFF0056B3))),
+            child: Image.asset('Pagri.jpg', width: 32, height: 32, fit: BoxFit.cover, errorBuilder: (context, error, stackTrace) => const Icon(Icons.eco, color: Color(0xFF0056B3))),
           ),
           const SizedBox(width: 12),
           Column(
@@ -1297,7 +1417,7 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
           setState(() {
             _selectedIndex = index;
           });
-          if (Navigator.canPop(context)) {
+          if (Scaffold.maybeOf(context)?.isDrawerOpen ?? false) {
             Navigator.pop(context);
           }
         },
@@ -1882,7 +2002,7 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
               SizedBox(
                 width: 200,
                 child: DropdownButtonFormField<String>(
-                  value: _selectedBarangayFilter,
+                  initialValue: _selectedBarangayFilter,
                   dropdownColor: cardBg,
                   style: TextStyle(color: textColor, fontSize: 13),
                   decoration: InputDecoration(
@@ -1971,7 +2091,7 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
                                 IconButton(
                                   icon: const Icon(Icons.delete_rounded, color: Colors.redAccent, size: 20),
                                   tooltip: 'Delete Farmer',
-                                  onPressed: () => service.deleteFarmer(farmer.id),
+                                  onPressed: () => _confirmDeleteFarmer(context, service, farmer, locale),
                                 ),
                               ],
                             ),
@@ -2063,7 +2183,7 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
                                 IconButton(
                                   icon: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent, size: 18),
                                   tooltip: 'Delete Farm Record',
-                                  onPressed: () => service.deleteFarmRecord(farm.id),
+                                  onPressed: () => _confirmDeleteFarmRecord(context, service, farm, locale),
                                 ),
                               ],
                             ),
@@ -2088,122 +2208,217 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
     final orgCtrl = TextEditingController();
     final locationCtrl = TextEditingController();
     final landAreaCtrl = TextEditingController(text: '2.5');
+    final latCtrl = TextEditingController(text: '14.2790');
+    final lonCtrl = TextEditingController(text: '121.4550');
     String selectedBrgy = 'Biñan';
     String selectedCrop = 'Rice';
     String selectedTenure = 'Owner';
 
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Row(
-          children: [
-            Icon(Icons.person_add_rounded, color: Color(0xFF0056B3)),
-            SizedBox(width: 8),
-            Text('Add New Farmer & Farm Record', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-          ],
-        ),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: const Row(
             children: [
-              const Text('FARMER ACCOUNT INFORMATION', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF0056B3))),
-              const SizedBox(height: 8),
-              TextField(controller: nameCtrl, decoration: const InputDecoration(labelText: 'Full Personal Name', border: OutlineInputBorder())),
-              const SizedBox(height: 10),
-              TextField(controller: userCtrl, decoration: const InputDecoration(labelText: 'Username', border: OutlineInputBorder())),
-              const SizedBox(height: 10),
-              TextField(controller: passCtrl, decoration: const InputDecoration(labelText: 'Password', border: OutlineInputBorder()), obscureText: true),
-              const SizedBox(height: 10),
-              DropdownButtonFormField<String>(
-                value: selectedBrgy,
-                decoration: const InputDecoration(labelText: 'Barangay', border: OutlineInputBorder()),
-                items: AccountService.pagsanjanBarangays.map((b) => DropdownMenuItem(value: b, child: Text(b))).toList(),
-                onChanged: (val) => selectedBrgy = val ?? 'Biñan',
-              ),
-              const SizedBox(height: 10),
-              TextField(controller: contactCtrl, decoration: const InputDecoration(labelText: 'Contact Details', border: OutlineInputBorder())),
-              const SizedBox(height: 10),
-              TextField(controller: orgCtrl, decoration: const InputDecoration(labelText: 'Association / Org Membership', border: OutlineInputBorder())),
-
-              const Divider(height: 24),
-              const Text('FARM INFORMATION (AUTO-SYNCS TO RECORDS)', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF16A34A))),
-              const SizedBox(height: 8),
-              DropdownButtonFormField<String>(
-                value: selectedCrop,
-                decoration: const InputDecoration(labelText: 'Primary Crop Type', border: OutlineInputBorder()),
-                items: ['Rice', 'Prutas', 'Gulay', 'Corn', 'Coconut'].map((c) => DropdownMenuItem(value: c, child: Text(c))).toList(),
-                onChanged: (val) => selectedCrop = val ?? 'Rice',
-              ),
-              const SizedBox(height: 10),
-              Row(
-                children: [
-                  Expanded(
-                    child: TextField(
-                      controller: landAreaCtrl,
-                      keyboardType: TextInputType.number,
-                      decoration: const InputDecoration(labelText: 'Land Area (ha)', border: OutlineInputBorder()),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: DropdownButtonFormField<String>(
-                      value: selectedTenure,
-                      decoration: const InputDecoration(labelText: 'Tenure Status', border: OutlineInputBorder()),
-                      items: ['Owner', 'Tenant', 'Lease', 'CLT'].map((t) => DropdownMenuItem(value: t, child: Text(t))).toList(),
-                      onChanged: (val) => selectedTenure = val ?? 'Owner',
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 10),
-              TextField(controller: locationCtrl, decoration: const InputDecoration(labelText: 'Farm Sitio / Location Name', border: OutlineInputBorder())),
+              Icon(Icons.person_add_rounded, color: Color(0xFF0056B3)),
+              SizedBox(width: 8),
+              Text('Add New Farmer & Farm Record', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
             ],
           ),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
-          FilledButton.icon(
-            style: FilledButton.styleFrom(backgroundColor: const Color(0xFF0056B3)),
-            onPressed: () {
-              if (nameCtrl.text.isNotEmpty && userCtrl.text.isNotEmpty) {
-                final farmerId = 'F${DateTime.now().millisecondsSinceEpoch}';
-                service.addFarmer(
-                  username: userCtrl.text,
-                  password: passCtrl.text.isEmpty ? 'password123' : passCtrl.text,
-                  profileName: nameCtrl.text,
-                  barangay: selectedBrgy,
-                  contactNumber: contactCtrl.text.isEmpty ? 'N/A' : contactCtrl.text,
-                  organization: orgCtrl.text.isEmpty ? 'Independent' : orgCtrl.text,
-                );
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('FARMER ACCOUNT INFORMATION', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF0056B3))),
+                const SizedBox(height: 8),
+                TextField(controller: nameCtrl, decoration: const InputDecoration(labelText: 'Full Personal Name', border: OutlineInputBorder())),
+                const SizedBox(height: 10),
+                TextField(controller: userCtrl, decoration: const InputDecoration(labelText: 'Username', border: OutlineInputBorder())),
+                const SizedBox(height: 10),
+                TextField(controller: passCtrl, decoration: const InputDecoration(labelText: 'Password', border: OutlineInputBorder()), obscureText: true),
+                const SizedBox(height: 10),
+                DropdownButtonFormField<String>(
+                  initialValue: selectedBrgy,
+                  decoration: const InputDecoration(labelText: 'Barangay', border: OutlineInputBorder()),
+                  items: AccountService.pagsanjanBarangays.map((b) => DropdownMenuItem(value: b, child: Text(b))).toList(),
+                  onChanged: (val) => selectedBrgy = val ?? 'Biñan',
+                ),
+                const SizedBox(height: 10),
+                TextField(controller: contactCtrl, decoration: const InputDecoration(labelText: 'Contact Details', border: OutlineInputBorder())),
+                const SizedBox(height: 10),
+                TextField(controller: orgCtrl, decoration: const InputDecoration(labelText: 'Association / Org Membership', border: OutlineInputBorder())),
 
-                // Add associated Farm Record so it syncs automatically to Farmer & Farm Records!
-                service.addFarmRecord(
-                  farmerId: farmerId,
-                  farmerName: nameCtrl.text,
-                  locationName: locationCtrl.text.isEmpty ? 'Sitio $selectedBrgy' : locationCtrl.text,
-                  latitude: 14.2717,
-                  longitude: 121.4553,
-                  landAreaHectares: double.tryParse(landAreaCtrl.text) ?? 2.0,
-                  tenureStatus: selectedTenure,
-                  cropType: selectedCrop,
-                  barangay: selectedBrgy,
-                );
+                const Divider(height: 24),
+                const Text('FARM INFORMATION (AUTO-SYNCS TO RECORDS & MAP)', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF16A34A))),
+                const SizedBox(height: 8),
+                DropdownButtonFormField<String>(
+                  initialValue: selectedCrop,
+                  decoration: const InputDecoration(labelText: 'Primary Crop Type', border: OutlineInputBorder()),
+                  items: ['Rice', 'Prutas', 'Gulay', 'Corn', 'Coconut'].map((c) => DropdownMenuItem(value: c, child: Text(c))).toList(),
+                  onChanged: (val) => selectedCrop = val ?? 'Rice',
+                ),
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: landAreaCtrl,
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(labelText: 'Land Area (ha)', border: OutlineInputBorder()),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: DropdownButtonFormField<String>(
+                        initialValue: selectedTenure,
+                        decoration: const InputDecoration(labelText: 'Tenure Status', border: OutlineInputBorder()),
+                        items: ['Owner', 'Tenant', 'Lease', 'CLT'].map((t) => DropdownMenuItem(value: t, child: Text(t))).toList(),
+                        onChanged: (val) => selectedTenure = val ?? 'Owner',
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                TextField(controller: locationCtrl, decoration: const InputDecoration(labelText: 'Farm Sitio / Location Name', border: OutlineInputBorder())),
+                const SizedBox(height: 12),
 
-                Navigator.pop(context);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Matagumpay na naidagdag ang magsasaka at ang kaniyang sakahan!'),
-                    backgroundColor: Colors.green,
+                // LATITUDE & LONGITUDE INPUTS + MAP PICKER BUTTON
+                const Text('FARM CO-ORDINATES (GPS LOCATION)', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF0056B3))),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: latCtrl,
+                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                        decoration: const InputDecoration(labelText: 'Latitude (°N)', border: OutlineInputBorder()),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: TextField(
+                        controller: lonCtrl,
+                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                        decoration: const InputDecoration(labelText: 'Longitude (°E)', border: OutlineInputBorder()),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: const Color(0xFF16A34A),
+                      side: const BorderSide(color: Color(0xFF16A34A)),
+                    ),
+                    onPressed: () {
+                      final currentLat = double.tryParse(latCtrl.text) ?? 14.2790;
+                      final currentLon = double.tryParse(lonCtrl.text) ?? 121.4550;
+
+                      showDialog(
+                        context: context,
+                        builder: (mapCtx) => AlertDialog(
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                          title: const Row(
+                            children: [
+                              Icon(Icons.touch_app_rounded, color: Color(0xFF16A34A)),
+                              SizedBox(width: 8),
+                              Expanded(child: Text('Tap on Map to Pick Farm Location', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold))),
+                            ],
+                          ),
+                          content: SizedBox(
+                            width: 500,
+                            height: 380,
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(12),
+                              child: PagsanjanMapWidget(
+                                initialCenter: LatLng(currentLat, currentLon),
+                                initialZoom: 14,
+                                markers: [
+                                  Marker(
+                                    point: LatLng(currentLat, currentLon),
+                                    width: 40,
+                                    height: 40,
+                                    child: const Icon(Icons.location_pin, color: Colors.red, size: 36),
+                                  ),
+                                ],
+                                onTap: (point) {
+                                  final detectedBrgy = BarangayResolver.resolveBarangay(point);
+                                  setDialogState(() {
+                                    latCtrl.text = point.latitude.toStringAsFixed(5);
+                                    lonCtrl.text = point.longitude.toStringAsFixed(5);
+                                    selectedBrgy = detectedBrgy;
+                                  });
+                                  Navigator.pop(mapCtx);
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text('Selected location in Barangay $detectedBrgy (${point.latitude.toStringAsFixed(4)}, ${point.longitude.toStringAsFixed(4)})'),
+                                      backgroundColor: Colors.green,
+                                    ),
+                                  );
+                                },
+                              ),
+                            ),
+                          ),
+                          actions: [
+                            TextButton(onPressed: () => Navigator.pop(mapCtx), child: const Text('Cancel')),
+                          ],
+                        ),
+                      );
+                    },
+                    icon: const Icon(Icons.map_rounded),
+                    label: const Text('Pick Location on Pagsanjan Map'),
                   ),
-                );
-              }
-            },
-            icon: const Icon(Icons.check_circle_rounded, size: 16),
-            label: const Text('Save Farmer & Farm'),
+                ),
+              ],
+            ),
           ),
-        ],
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+            FilledButton.icon(
+              style: FilledButton.styleFrom(backgroundColor: const Color(0xFF0056B3)),
+              onPressed: () async {
+                if (nameCtrl.text.isNotEmpty && userCtrl.text.isNotEmpty) {
+                  final farmerId = await service.addFarmer(
+                    username: userCtrl.text,
+                    password: passCtrl.text.isEmpty ? 'password123' : passCtrl.text,
+                    profileName: nameCtrl.text,
+                    barangay: selectedBrgy,
+                    contactNumber: contactCtrl.text.isEmpty ? 'N/A' : contactCtrl.text,
+                    organization: orgCtrl.text.isEmpty ? 'Independent' : orgCtrl.text,
+                  );
+
+                  // Add associated Farm Record so it syncs automatically to Farmer & Farm Records & Supabase!
+                  await service.addFarmRecord(
+                    farmerId: farmerId,
+                    farmerName: nameCtrl.text,
+                    locationName: locationCtrl.text.isEmpty ? 'Sitio $selectedBrgy' : locationCtrl.text,
+                    latitude: double.tryParse(latCtrl.text) ?? 14.2790,
+                    longitude: double.tryParse(lonCtrl.text) ?? 121.4550,
+                    landAreaHectares: double.tryParse(landAreaCtrl.text) ?? 2.0,
+                    tenureStatus: selectedTenure,
+                    cropType: selectedCrop,
+                    barangay: selectedBrgy,
+                  );
+
+                  if (!context.mounted) return;
+                  Navigator.pop(context);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text('Matagumpay na naidagdag ang magsasaka at ang kaniyang sakahan sa Supabase!'),
+                      backgroundColor: Colors.green,
+                    ),
+                  );
+                }
+              },
+              icon: const Icon(Icons.check_circle_rounded, size: 16),
+              label: const Text('Save Farmer & Farm'),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -2225,7 +2440,7 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
             children: [
               TextField(controller: nameCtrl, decoration: const InputDecoration(labelText: 'Full Name')),
               DropdownButtonFormField<String>(
-                value: selectedBrgy,
+                initialValue: selectedBrgy,
                 decoration: const InputDecoration(labelText: 'Barangay'),
                 items: AccountService.pagsanjanBarangays.map((b) => DropdownMenuItem(value: b, child: Text(b))).toList(),
                 onChanged: (val) => selectedBrgy = val ?? farmer.barangay,
@@ -2233,7 +2448,7 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
               TextField(controller: contactCtrl, decoration: const InputDecoration(labelText: 'Contact Details')),
               TextField(controller: orgCtrl, decoration: const InputDecoration(labelText: 'Association Membership')),
               DropdownButtonFormField<String>(
-                value: selectedStatus,
+                initialValue: selectedStatus,
                 decoration: const InputDecoration(labelText: 'Status'),
                 items: ['Active', 'Pending', 'Deactivated'].map((s) => DropdownMenuItem(value: s, child: Text(s))).toList(),
                 onChanged: (val) => selectedStatus = val ?? farmer.status,
@@ -2281,20 +2496,20 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
             children: [
               TextField(controller: locationCtrl, decoration: const InputDecoration(labelText: 'Farm Location / Sitio')),
               DropdownButtonFormField<String>(
-                value: selectedBrgy,
+                initialValue: selectedBrgy,
                 decoration: const InputDecoration(labelText: 'Barangay'),
                 items: AccountService.pagsanjanBarangays.map((b) => DropdownMenuItem(value: b, child: Text(b))).toList(),
                 onChanged: (val) => selectedBrgy = val ?? farmer.barangay,
               ),
               TextField(controller: areaCtrl, decoration: const InputDecoration(labelText: 'Land Area (Hectares)'), keyboardType: TextInputType.number),
               DropdownButtonFormField<String>(
-                value: selectedTenure,
+                initialValue: selectedTenure,
                 decoration: const InputDecoration(labelText: 'Land Tenure Status'),
                 items: ['Owner', 'Tenant', 'Lease', 'CLT'].map((t) => DropdownMenuItem(value: t, child: Text(t))).toList(),
                 onChanged: (val) => selectedTenure = val ?? 'Owner',
               ),
               DropdownButtonFormField<String>(
-                value: selectedCrop,
+                initialValue: selectedCrop,
                 decoration: const InputDecoration(labelText: 'Crop Type'),
                 items: ['Rice', 'Prutas', 'Gulay'].map((c) => DropdownMenuItem(value: c, child: Text(c))).toList(),
                 onChanged: (val) => selectedCrop = val ?? 'Rice',
@@ -2327,6 +2542,242 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
               Navigator.pop(context);
             },
             child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _confirmDeleteFarmer(BuildContext context, AccountService service, Farmer farmer, AdminLocale locale) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+        title: Row(
+          children: [
+            const Icon(Icons.warning_amber_rounded, color: Colors.redAccent, size: 28),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                locale.isTagalog ? 'Kumpirmahin ang Pagbura' : 'Confirm Account Deletion',
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 17),
+              ),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              locale.isTagalog
+                  ? 'Sigurado ka bang gusto mong burahin ang account ni ${farmer.profileName}?'
+                  : 'Are you sure you want to permanently delete ${farmer.profileName}\'s farmer account?',
+              style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14),
+            ),
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.red.shade50,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Colors.red.shade200),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.info_outline_rounded, color: Colors.red, size: 20),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      locale.isTagalog
+                          ? 'Babala: Hindi na maibabalik ang account na ito at mabubura rin ang lahat ng kaniyang mga rekord sa Supabase.'
+                          : 'Warning: This action cannot be undone. All profile data and associated farm records will be permanently removed from Supabase.',
+                      style: const TextStyle(fontSize: 12, color: Colors.red, height: 1.3),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text(locale.isTagalog ? 'Kanselahin' : 'Cancel'),
+          ),
+          ElevatedButton.icon(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red.shade700,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () async {
+              Navigator.pop(context);
+              await service.deleteFarmer(farmer.id);
+              await service.loadFromSupabase();
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('Permanently deleted account for ${farmer.profileName}'),
+                    backgroundColor: Colors.red.shade700,
+                  ),
+                );
+              }
+            },
+            icon: const Icon(Icons.delete_forever_rounded, size: 18),
+            label: Text(locale.isTagalog ? 'Oo, Burahin Na' : 'Permanently Delete'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _confirmDeleteFarmRecord(BuildContext context, AccountService service, FarmRecord farm, AdminLocale locale) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+        title: Row(
+          children: [
+            const Icon(Icons.warning_amber_rounded, color: Colors.redAccent, size: 28),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                locale.isTagalog ? 'Kumpirmahin ang Pagbura' : 'Confirm Farm Deletion',
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 17),
+              ),
+            ),
+          ],
+        ),
+        content: Text(
+          locale.isTagalog
+              ? 'Sigurado ka bang gusto mong burahin ang sakahan na ${farm.locationName} (${farm.barangay})?'
+              : 'Are you sure you want to permanently delete the farm record for ${farm.locationName} in ${farm.barangay}?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text(locale.isTagalog ? 'Kanselahin' : 'Cancel'),
+          ),
+          ElevatedButton.icon(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red.shade700,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () async {
+              Navigator.pop(context);
+              await service.deleteFarmRecord(farm.id);
+              await service.loadFromSupabase();
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('Deleted farm record for ${farm.locationName}'),
+                    backgroundColor: Colors.red.shade700,
+                  ),
+                );
+              }
+            },
+            icon: const Icon(Icons.delete_forever_rounded, size: 18),
+            label: Text(locale.isTagalog ? 'Oo, Burahin Na' : 'Permanently Delete'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _confirmDeleteHistoricalRecord(BuildContext context, AccountService service, HistoricalDataRecord record, AdminLocale locale) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+        title: Row(
+          children: [
+            const Icon(Icons.warning_amber_rounded, color: Colors.redAccent, size: 28),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                locale.isTagalog ? 'Kumpirmahin ang Pagbura' : 'Confirm Record Deletion',
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 17),
+              ),
+            ),
+          ],
+        ),
+        content: Text(
+          locale.isTagalog
+              ? 'Sigurado ka bang gusto mong burahin ang historical record para sa ${record.crop} (${record.month} ${record.year})?'
+              : 'Are you sure you want to delete the historical record for ${record.crop} (${record.month} ${record.year})?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text(locale.isTagalog ? 'Kanselahin' : 'Cancel'),
+          ),
+          ElevatedButton.icon(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red.shade700,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () {
+              Navigator.pop(context);
+              service.deleteHistoricalRecord(record.id);
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('Deleted record for ${record.crop}'),
+                  backgroundColor: Colors.red.shade700,
+                ),
+              );
+            },
+            icon: const Icon(Icons.delete_forever_rounded, size: 18),
+            label: Text(locale.isTagalog ? 'Oo, Burahin Na' : 'Permanently Delete'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _confirmDeleteAdminStaff(BuildContext context, AccountService service, AdminStaff staff, AdminLocale locale) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+        title: Row(
+          children: [
+            const Icon(Icons.warning_amber_rounded, color: Colors.redAccent, size: 28),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                locale.isTagalog ? 'Kumpirmahin ang Pagbura' : 'Confirm Staff Access Removal',
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 17),
+              ),
+            ),
+          ],
+        ),
+        content: Text(
+          locale.isTagalog
+              ? 'Sigurado ka bang gusto mong alisin ang access ni ${staff.name} (${staff.role})?'
+              : 'Are you sure you want to remove admin access for ${staff.name} (${staff.role})?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text(locale.isTagalog ? 'Kanselahin' : 'Cancel'),
+          ),
+          ElevatedButton.icon(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red.shade700,
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () {
+              Navigator.pop(context);
+              service.deleteAdminStaff(staff.id);
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('Removed admin access for ${staff.name}'),
+                  backgroundColor: Colors.red.shade700,
+                ),
+              );
+            },
+            icon: const Icon(Icons.delete_forever_rounded, size: 18),
+            label: Text(locale.isTagalog ? 'Oo, Alisin Na' : 'Permanently Remove Access'),
           ),
         ],
       ),
@@ -2453,7 +2904,7 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
                         DataCell(
                           IconButton(
                             icon: const Icon(Icons.delete_rounded, color: Colors.redAccent, size: 20),
-                            onPressed: () => service.deleteHistoricalRecord(r.id),
+                            onPressed: () => _confirmDeleteHistoricalRecord(context, service, r, locale),
                           ),
                         ),
                       ],
@@ -2462,6 +2913,35 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
                 ),
               ),
             ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPredictionChip(String cropCategory, AccountService service, bool isDark, Color textColor, Color subtextColor) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF1E293B) : const Color(0xFFF1F5F9),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            cropCategory == 'Rice' ? Icons.grass_rounded : cropCategory == 'Prutas' ? Icons.park_rounded : Icons.eco_rounded,
+            size: 18,
+            color: const Color(0xFF0284C7),
+          ),
+          const SizedBox(width: 8),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(cropCategory, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: textColor)),
+              Text('Inaasahang Presyo: Stable (+3.2%)', style: TextStyle(fontSize: 11, color: subtextColor)),
+            ],
           ),
         ],
       ),
@@ -2517,6 +2997,78 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
     );
   }
 
+  void _showFarmInfoDialog(BuildContext context, FarmRecord farm) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Row(
+          children: [
+            const CircleAvatar(
+              backgroundColor: Color(0xFF16A34A),
+              foregroundColor: Colors.white,
+              radius: 18,
+              child: Icon(Icons.agriculture_rounded, size: 20),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(farm.farmerName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                  Text('Barangay ${farm.barangay}, Pagsanjan', style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
+                ],
+              ),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Divider(height: 12),
+            _infoRow(Icons.location_on_rounded, 'Farm Sitio / Location', farm.locationName),
+            const SizedBox(height: 8),
+            _infoRow(Icons.eco_rounded, 'Primary Crop Type', farm.cropType),
+            const SizedBox(height: 8),
+            _infoRow(Icons.square_foot_rounded, 'Land Size', '${farm.landAreaHectares} Hectares (${(farm.landAreaHectares * 10000).round()} m²)'),
+            const SizedBox(height: 8),
+            _infoRow(Icons.badge_rounded, 'Tenure Status', farm.tenureStatus),
+            const SizedBox(height: 8),
+            _infoRow(Icons.my_location_rounded, 'GPS Coordinates', '${farm.latitude.toStringAsFixed(5)}° N, ${farm.longitude.toStringAsFixed(5)}° E'),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _infoRow(IconData icon, String label, String value) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Icon(icon, size: 18, color: const Color(0xFF16A34A)),
+        const SizedBox(width: 8),
+        Expanded(
+          child: RichText(
+            text: TextSpan(
+              style: const TextStyle(fontSize: 13, color: Colors.black87),
+              children: [
+                TextSpan(text: '$label: ', style: const TextStyle(fontWeight: FontWeight.bold)),
+                TextSpan(text: value),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
   // ==========================================
   // MODULE 4: INTERACTIVE MAP
   // ==========================================
@@ -2556,7 +3108,6 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
                   Text(locale.mapTitle, style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: textColor)),
                 ],
               ),
-              _buildExportImportButtons(context, 'Farms Map List', locale, service),
             ],
           ),
           const SizedBox(height: 16),
@@ -2571,18 +3122,49 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
               ),
               child: Stack(
                 children: [
-                  Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(Icons.map_rounded, size: 80, color: isDark ? const Color(0xFF2563EB) : const Color(0xFF38BDF8)),
-                        const SizedBox(height: 8),
-                        Text(
-                          'PAGSANJAN FARMS MAP VIEW',
-                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: primaryAccent),
+                  Positioned.fill(
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(18),
+                      child: PagsanjanMapWidget(
+                        initialZoom: 13.5,
+                        markers: farms.map((f) => Marker(
+                          point: LatLng(f.latitude, f.longitude),
+                          width: 40,
+                          height: 40,
+                          child: GestureDetector(
+                            onTap: () => _showFarmInfoDialog(context, f),
+                            child: const Icon(Icons.location_pin, color: Colors.red, size: 38),
+                          ),
+                        )).toList(),
+                      ),
+                    ),
+                  ),
+                  Positioned(
+                    right: 16,
+                    top: 16,
+                    child: ElevatedButton.icon(
+                      onPressed: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => PagsanjanMapScreen(
+                            markers: farms.map((f) => Marker(
+                              point: LatLng(f.latitude, f.longitude),
+                              width: 40,
+                              height: 40,
+                              child: GestureDetector(
+                                onTap: () => _showFarmInfoDialog(context, f),
+                                child: const Icon(Icons.location_pin, color: Colors.red, size: 38),
+                              ),
+                            )).toList(),
+                          ),
                         ),
-                        Text('Coordinates: 14.2717° N, 121.4553° E', style: TextStyle(color: subtextColor, fontSize: 12)),
-                      ],
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: primaryAccent,
+                        foregroundColor: Colors.white,
+                      ),
+                      icon: const Icon(Icons.fullscreen),
+                      label: const Text('Full Screen'),
                     ),
                   ),
                   Positioned(
@@ -2620,7 +3202,7 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
                           ),
                           const SizedBox(height: 8),
                           DropdownButtonFormField<String>(
-                            value: _selectedBarangayFilter,
+                            initialValue: _selectedBarangayFilter,
                             dropdownColor: cardBg,
                             style: TextStyle(color: textColor, fontSize: 12),
                             decoration: InputDecoration(
@@ -2762,7 +3344,7 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
               Wrap(
                 spacing: 8,
                 children: [
-                  _buildExportImportButtons(context, 'Farmer Accounts', locale, service, showImport: false),
+                  _buildExportImportButtons(context, 'Farmer Accounts', locale, service, showImport: true),
                   ElevatedButton.icon(
                     onPressed: () => _showAddFarmerDialog(context, service),
                     style: ElevatedButton.styleFrom(
@@ -2802,7 +3384,7 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
               SizedBox(
                 width: 200,
                 child: DropdownButtonFormField<String>(
-                  value: _selectedBarangayFilter,
+                  initialValue: _selectedBarangayFilter,
                   dropdownColor: cardBg,
                   style: TextStyle(color: textColor, fontSize: 13),
                   decoration: InputDecoration(
@@ -2831,7 +3413,7 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
               child: ListView.separated(
                 padding: const EdgeInsets.all(8),
                 itemCount: farmers.length,
-                separatorBuilder: (_, __) => Divider(height: 1, color: cardBorder),
+                separatorBuilder: (context, index) => Divider(height: 1, color: cardBorder),
                 itemBuilder: (context, index) {
                   final farmer = farmers[index];
                   final isPending = farmer.status == 'Pending';
@@ -2863,8 +3445,14 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
                           child: const Text('Reset Pass'),
                         ),
                         IconButton(
-                          icon: Icon(farmer.status == 'Deactivated' ? Icons.check_circle_rounded : Icons.block_rounded, color: farmer.status == 'Deactivated' ? Colors.green : Colors.redAccent),
+                          icon: Icon(farmer.status == 'Deactivated' ? Icons.check_circle_rounded : Icons.block_rounded, color: farmer.status == 'Deactivated' ? Colors.green : Colors.orange),
+                          tooltip: farmer.status == 'Deactivated' ? 'Activate Account' : 'Deactivate Account',
                           onPressed: () => service.setFarmerStatus(farmer.id, farmer.status == 'Deactivated' ? 'Active' : 'Deactivated'),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.delete_forever_rounded, color: Colors.redAccent),
+                          tooltip: 'Delete Farmer Account',
+                          onPressed: () => _confirmDeleteFarmer(context, service, farmer, locale),
                         ),
                       ],
                     ),
@@ -2934,22 +3522,16 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
                   Text(locale.adminStaffTitle, style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: textColor)),
                 ],
               ),
-              Wrap(
-                spacing: 8,
-                children: [
-                  _buildExportImportButtons(context, 'Admin Accounts', locale, service),
-                  ElevatedButton.icon(
-                    onPressed: () => _showAddStaffDialog(context, service),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: primaryAccent,
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                    ),
-                    icon: const Icon(Icons.person_add_rounded),
-                    label: Text(locale.addStaff, style: const TextStyle(fontWeight: FontWeight.bold)),
-                  ),
-                ],
+              ElevatedButton.icon(
+                onPressed: () => _showAddStaffDialog(context, service),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: primaryAccent,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                ),
+                icon: const Icon(Icons.person_add_rounded),
+                label: Text(locale.addStaff, style: const TextStyle(fontWeight: FontWeight.bold)),
               ),
             ],
           ),
@@ -2965,7 +3547,7 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
               child: ListView.separated(
                 padding: const EdgeInsets.all(8),
                 itemCount: staff.length,
-                separatorBuilder: (_, __) => Divider(height: 1, color: cardBorder),
+                separatorBuilder: (context, index) => Divider(height: 1, color: cardBorder),
                 itemBuilder: (context, index) {
                   final s = staff[index];
                   return ListTile(
@@ -2978,7 +3560,7 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
                     subtitle: Text('Username: ${s.username} • Email: ${s.email}', style: TextStyle(color: subtextColor)),
                     trailing: IconButton(
                       icon: const Icon(Icons.delete_rounded, color: Colors.redAccent),
-                      onPressed: () => service.deleteAdminStaff(s.id),
+                      onPressed: () => _confirmDeleteAdminStaff(context, service, s, locale),
                     ),
                   );
                 },
@@ -3008,7 +3590,7 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
               TextField(controller: userCtrl, decoration: const InputDecoration(labelText: 'Username')),
               TextField(controller: emailCtrl, decoration: const InputDecoration(labelText: 'Email Address')),
               DropdownButtonFormField<String>(
-                value: selectedRole,
+                initialValue: selectedRole,
                 decoration: const InputDecoration(labelText: 'Role / Position'),
                 items: ['Municipal Agriculturist', 'Administrative Staff', 'Agricultural Technician'].map((r) => DropdownMenuItem(value: r, child: Text(r))).toList(),
                 onChanged: (val) => selectedRole = val ?? 'Agricultural Technician',
@@ -3083,7 +3665,7 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
               child: ListView.separated(
                 padding: const EdgeInsets.all(8),
                 itemCount: logs.length,
-                separatorBuilder: (_, __) => Divider(height: 1, color: cardBorder),
+                separatorBuilder: (context, index) => Divider(height: 1, color: cardBorder),
                 itemBuilder: (context, index) {
                   final log = logs[index];
                   Color actionColor;

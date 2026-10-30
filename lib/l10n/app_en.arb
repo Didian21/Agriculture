@@ -1,0 +1,822 @@
+
+{
+  "@@locale": "en",
+  "appSubtitle": "Pagsanjan Agriculture",
+  "notifications": "Notifications",
+  "refresh": "Refresh",
+  "navHome": "Home",
+  "navWeather": "Weather",
+  "navFarm": "My Farm",
+  "navPlanting": "Planting",
+  "navPrices": "Prices",
+  "navSettings": "Settings",
+  "loadingWeather": "Getting your farm weather...",
+  "tryAgain": "Try again",
+  "cancel": "Cancel",
+  "save": "Save",
+  "edit": "Edit",
+  "close": "Close",
+  "hectares": "hectares",
+  "sqmShort": "sqm",
+  "now": "Now",
+  "today": "Today",
+  "portalTitle": "Pagsanjan Farmer Portal",
+  "signInTitle": "Sign In to Portal",
+  "signInHint": "Enter your phone number and security PIN to continue.",
+  "phoneNumber": "Phone Number",
+  "pinLabel": "4-Digit PIN Passcode",
+  "signIn": "Sign In",
+  "greetingMorning": "Good morning",
+  "greetingAfternoon": "Good afternoon",
+  "greetingEvening": "Good evening",
+  "todayWeather": "Today's weather",
+  "heatIndex": "Heat index",
+  "heatIndexSub": "How hot it feels when humidity is included",
+  "heatNormal": "Normal",
+  "heatCaution": "Caution",
+  "heatExtremeCaution": "Extreme caution",
+  "heatDanger": "Danger",
+  "heatExtremeDanger": "Extreme danger",
+  "heatAdviceNormal": "Comfortable for field work. Drink water regularly.",
+  "heatAdviceCaution": "Fatigue is possible with long exposure. Rest in the shade and drink water.",
+  "heatAdviceExtremeCaution": "Heat cramps and exhaustion are possible. Work early morning or late afternoon and rest often.",
+  "heatAdviceDanger": "Heat exhaustion is likely and heat stroke is possible. Avoid field work at midday.",
+  "heatAdviceExtremeDanger": "Heat stroke is highly likely. Stay indoors or in the shade and avoid field work.",
+  "heatScaleSource": "Estimated from temperature and humidity. Levels follow the PAGASA heat index scale.",
+  "forecastTitle": "Forecast",
+  "hourlyTab": "Hourly",
+  "weeklyTab": "7 days",
+  "heatTimeline": "Heat index by hour today",
+  "heatHottest": "Hottest time",
+  "farmCropsTitle": "My crops",
+  "farmCropsSub": "Tap a crop to see its best planting months.",
+  "farmTotalHarvest": "Total harvest",
+  "farmShare": "{percent}% of your land",
+  "@farmShare": {
+    "placeholders": {
+      "percent": {
+        "type": "String"
+      }
+    }
+  },
+  "farmThisMonth": "This month",
+  "farmDaysGrown": "Day {days} of about {total}",
+  "@farmDaysGrown": {
+    "placeholders": {
+      "days": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "farmExpectedHarvest": "Expected harvest: {range}",
+  "@farmExpectedHarvest": {
+    "placeholders": {
+      "range": {
+        "type": "String"
+      }
+    }
+  },
+  "farmReadySoon": "Almost ready to harvest",
+  "farmLastHarvest": "Last harvest",
+  "farmYieldPerHa": "{value} kg per hectare",
+  "@farmYieldPerHa": {
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "farmEstimateNote": "Dates are estimates. The actual harvest depends on the weather and the variety.",
+  "priceMyCrops": "My crops",
+  "priceAllCrops": "All crops",
+  "priceRising": "Rising",
+  "priceFalling": "Falling",
+  "priceGraphTitle": "Expected price, next 7 days",
+  "priceRange": "7-day range",
+  "priceHighest": "Highest expected",
+  "priceWhyTitle": "Why is the price changing?",
+  "priceFactorRain": "Rain",
+  "priceFactorHeat": "Heat",
+  "priceFactorSeason": "Harvest season",
+  "priceRainHeavy": "About {mm} mm of rain in the next 7 days. Flooded fields can cut supply, so prices tend to rise.",
+  "@priceRainHeavy": {
+    "placeholders": {
+      "mm": {
+        "type": "String"
+      }
+    }
+  },
+  "priceRainDry": "Only about {mm} mm of rain in the next 7 days. A dry spell can reduce harvests, so prices may rise slightly.",
+  "@priceRainDry": {
+    "placeholders": {
+      "mm": {
+        "type": "String"
+      }
+    }
+  },
+  "priceRainNormal": "About {mm} mm of rain in the next 7 days. Normal weather, so supply stays steady.",
+  "@priceRainNormal": {
+    "placeholders": {
+      "mm": {
+        "type": "String"
+      }
+    }
+  },
+  "priceHeatHigh": "Very hot days ahead (heat index up to {hi}°C). Heat stress can lower harvests, so prices may rise.",
+  "@priceHeatHigh": {
+    "placeholders": {
+      "hi": {
+        "type": "String"
+      }
+    }
+  },
+  "priceHeatNormal": "No extreme heat expected. No effect on the price.",
+  "priceSeasonPeak": "Based on the planting calendar, this crop is in its peak harvest time. More supply usually means lower prices.",
+  "priceSeasonOff": "Based on the planting calendar, this crop is not in its peak harvest time. Less supply usually keeps prices steady or higher.",
+  "priceLastHarvestValue": "Your last harvest ({kg} kg) would be worth about ₱{value} at the expected price.",
+  "@priceLastHarvestValue": {
+    "placeholders": {
+      "kg": {
+        "type": "String"
+      },
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "priceDisclaimer": "These are estimates from a simple model that uses the 7-day weather forecast and the planting calendar. The current prices are sample values, not official market prices. Please check with your Municipal Agriculture Office or the market before selling.",
+  "farmOverview": "Farm overview",
+  "overviewCrops": "Crops",
+  "overviewCropsSub": "Active crops",
+  "overviewPlantNow": "Good to plant",
+  "overviewPlantNowSub": "crops this month",
+  "next12Hours": "Next 12 hours",
+  "adviceTitle": "Farm advice for today",
+  "adviceSubtitle": "Based on the live weather",
+  "forecast7Days": "7-day forecast",
+  "plantInMonth": "Good to plant in {month}",
+  "@plantInMonth": {
+    "placeholders": {
+      "month": {
+        "type": "String"
+      }
+    }
+  },
+  "noBestCrop": "No crop is at its best planting time this month.",
+  "statusLive": "LIVE",
+  "statusOffline": "OFFLINE",
+  "feelsLike": "Feels like",
+  "humidity": "Humidity",
+  "wind": "Wind",
+  "rainChance": "Rain chance",
+  "todayRange": "Today: {min}° - {max}°   •   Rain {rain} mm",
+  "@todayRange": {
+    "placeholders": {
+      "min": {
+        "type": "String"
+      },
+      "max": {
+        "type": "String"
+      },
+      "rain": {
+        "type": "String"
+      }
+    }
+  },
+  "updatedAt": "Updated {time}  (auto-refresh every 10 min)",
+  "@updatedAt": {
+    "placeholders": {
+      "time": {
+        "type": "DateTime",
+        "format": "jm"
+      }
+    }
+  },
+  "homeCropsTitle": "Crops of Pagsanjan",
+  "homeCropsSub": "Tap a crop to see the best months to plant it.",
+  "homeCropsNote": "Common crops grown in Laguna. Planting months are a guide - confirm with your Municipal Agriculture Office.",
+  "dssTitle": "Best months to plant",
+  "dssSubtitle": "Pagsanjan, Laguna - planting calendar guide",
+  "dssRainNote": "A lot of rain is expected this week. Check your canals and drainage before planting.",
+  "dssBestMonths": "Best months",
+  "dssPossibleMonths": "Possible months",
+  "dssTip": "Tip",
+  "dssDisclaimer": "This graph is a guide based on the planting calendar for Pagsanjan, Laguna. It is not a forecast of yield or price. Please confirm with your Municipal Agriculture Office.",
+  "totalLandSize": "Total land size",
+  "plantedWhere": "What is planted where",
+  "cropHistory": "Crop record history",
+  "plantedOn": "Planted {date}",
+  "@plantedOn": {
+    "placeholders": {
+      "date": {
+        "type": "DateTime",
+        "format": "yMMMd"
+      }
+    }
+  },
+  "harvestedOn": "Harvested {date}",
+  "@harvestedOn": {
+    "placeholders": {
+      "date": {
+        "type": "DateTime",
+        "format": "yMMMd"
+      }
+    }
+  },
+  "stillGrowing": "Still growing",
+  "whenToPlant": "When should I plant?",
+  "tapMonth": "Tap a month to see which crops are best to plant.",
+  "legendBest": "Best",
+  "legendPossible": "Possible",
+  "legendAvoid": "Not advised",
+  "myCrop": "My crop",
+  "statusBest": "Best time to plant",
+  "statusPossible": "Can plant, some risk",
+  "statusAvoid": "Not advised now",
+  "bestMonthLabel": "Best: {month}",
+  "@bestMonthLabel": {
+    "placeholders": {
+      "month": {
+        "type": "String"
+      }
+    }
+  },
+  "harvestIn": "Ready to harvest in {time}",
+  "@harvestIn": {
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "plantingDisclaimer": "This is a general guide for Laguna. Weather can change from year to year - please confirm with your Municipal Agriculture Office.",
+  "cropPrices": "Crop prices",
+  "pricesSubtitle": "Expected price based on the coming weather. In PHP per kg.",
+  "noPriceData": "No price data for your crops yet.",
+  "expected": "Expected",
+  "appSettings": "App Settings",
+  "appSettingsSub": "View your account, get help, and read the privacy policy.",
+  "accountDetails": "Account Details",
+  "farmerName": "Farmer Name",
+  "barangay": "Barangay",
+  "birthday": "Birthday",
+  "landSize": "Land Size",
+  "displaySettings": "Display",
+  "displaySettingsSub": "Make the text easier to read",
+  "textSize": "Text size",
+  "textSizeNormal": "Normal",
+  "textSizeLarge": "Large",
+  "textSizeXLarge": "Extra large",
+  "textSizeSample": "Sample: Good morning, farmer!",
+  "helpSupport": "Help & Support",
+  "helpSupportSub": "Need help with the app or your farm?",
+  "howToUse": "How to use PAGRI",
+  "howTo1": "Home: see today's weather, the 7-day forecast, farm advice and the crops of Pagsanjan.",
+  "howTo2": "My Farm: see your plots, crops and harvest records.",
+  "howTo3": "Tap a crop on Home to see the best months to plant it.",
+  "howTo4": "Prices: see expected crop prices and when to sell.",
+  "howTo5": "Tap the bell at the top to read your notifications.",
+  "contactOffice": "Municipal Agriculture Office",
+  "contactOfficeSub": "Visit the office in Pagsanjan, Laguna for account changes, subsidies and farming help.",
+  "aboutApp": "About",
+  "appVersion": "PAGRI version 1.0.0",
+  "privacyPolicy": "Privacy Policy",
+  "privacySystemName": "Pagsanjan Agriculture System",
+  "privacySummary": "PAGRI (Pagsanjan Agricultural Decision Support System) protects the data of every registered farmer. Information such as barangay, land size, and crops are used solely for weather forecasting, market pricing, and support from the Municipal Agriculture Office.",
+  "readFullPolicy": "Read Full Privacy Policy",
+  "logout": "Log Out",
+  "logoutConfirm": "Are you sure you want to log out of your PAGRI portal?",
+  "logoutButton": "Log Out",
+  "privacySubtitle": "Agricultural Decision Support System (PAGRI - Pagsanjan, Laguna)",
+  "policy1Title": "1. Information We Collect",
+  "policy1Body": "PAGRI collects basic farmer information including name, barangay, land size, and crop types to generate localized weather advisories and price forecasts.",
+  "policy2Title": "2. How Information is Used",
+  "policy2Body": "Your data is strictly utilized to process Open-Meteo weather forecasts, model estimated market prices, and assist the Pagsanjan Municipal Agriculture Office in local agricultural planning.",
+  "policy3Title": "3. Data Protection & Security",
+  "policy3Body": "All farmer records are protected under secure protocols. Personal details are never sold or shared with third parties for commercial gain.",
+  "policy4Title": "4. Farmer Rights",
+  "policy4Body": "Farmers maintain full rights to review, update, or request deletion of their profile records anytime through the app or by contacting the Municipal Agriculture Office.",
+  "understand": "I Understand",
+  "markAllRead": "Mark all read",
+  "noNotifications": "No new notifications right now.",
+  "cropRice": "Rice",
+  "cropEggplant": "Eggplant",
+  "cropTomato": "Tomato",
+  "cropStringBeans": "String beans",
+  "cropBanana": "Banana",
+  "cropCoconut": "Coconut",
+  "cropAmpalaya": "Bitter gourd",
+  "cropSquash": "Squash",
+  "cropSweetPotato": "Sweet potato",
+  "cropTaro": "Taro (Gabi)",
+  "cropCalamansi": "Calamansi",
+  "cropDescBanana": "Bears fruit through the year. Plant at the start of the rainy season and prop plants before typhoons.",
+  "cropDescRice": "Staple grain of the Philippines, grown in flooded paddies. Planted in both the wet and dry seasons.",
+  "cropDescCoconut": "A tree crop that gives buko, copra and coconut oil.",
+  "cropDescEggplant": "A popular vegetable for tortang talong and pinakbet. Grows best in the cooler dry months.",
+  "cropDescAmpalaya": "A bitter vegetable that climbs on a trellis. Used in ginisang ampalaya and pinakbet.",
+  "cropDescStringBeans": "A fast-growing vegetable that climbs on a trellis or stakes.",
+  "cropDescSquash": "A vine with nutritious fruit. The leaves and flowers are also eaten. Common in pinakbet and ginataan.",
+  "cropDescTomato": "Eaten fresh and used in sauces. Too much rain causes disease, so plant after the typhoon season.",
+  "cropDescSweetPotato": "An easy-to-grow root crop that handles dry weather. Both the roots and the tops (talbos) are eaten.",
+  "cropDescTaro": "A root crop that likes moist soil. The corm (gabi) and the leaves are eaten, used in laing and sinigang.",
+  "cropDescCalamansi": "A small citrus tree. The sour fruit is used for juice, dipping sauce and cooking. Needs sun and well-drained soil.",
+  "plotHarvested": "Harvested",
+  "plotGrowing": "Growing",
+  "weatherSunny": "Sunny",
+  "weatherClearNight": "Clear night",
+  "weatherPartlyCloudy": "Partly cloudy",
+  "weatherCloudy": "Cloudy",
+  "weatherFoggy": "Foggy",
+  "weatherDrizzle": "Light drizzle",
+  "weatherRain": "Rain",
+  "weatherThunderstorm": "Thunderstorm",
+  "adviceThunderTitle": "Thunderstorm risk",
+  "adviceThunderMsg": "Stay out of open fields and keep tools and animals under shelter.",
+  "adviceRainTitle": "Rain is likely today",
+  "adviceRainMsg": "Do not spray or fertilize today - rain will wash it away. Check that your canals drain well.",
+  "adviceHotTitle": "Very hot today",
+  "adviceHotMsg": "Water early morning or late afternoon. Shade young seedlings during midday.",
+  "adviceWindTitle": "Strong wind",
+  "adviceWindMsg": "Secure banana plants with props and tie up tomato and bean stakes.",
+  "adviceFieldTitle": "Good days for field work",
+  "adviceFieldMsg": "Dry days ahead - good for harvesting, drying palay, spraying and fertilizing.",
+  "adviceNormalTitle": "Normal weather",
+  "adviceNormalMsg": "No special warnings. Continue your regular farm work.",
+  "notifWeatherTitle": "Weather Alert for Pagsanjan",
+  "notifWeatherMsg": "Heavy rain expected in the coming days. Ensure proper canal drainage for your crops.",
+  "notifMarketTitle": "Market Price Update",
+  "notifMarketMsg": "Tomato and Eggplant market prices show a potential 8% increase based on rain forecasts.",
+  "notifPlantingTitle": "Planting Season Window",
+  "notifPlantingMsg": "Optimal planting window for Rice (Palay) is open this month in Laguna.",
+  "notifPestTitle": "Pest Alert: Rice Stem Borer",
+  "notifPestMsg": "Farmers in surrounding barangays reported minor stem borer activity. Monitor your paddies.",
+  "notifSubsidyTitle": "Municipal Agri Subsidy",
+  "notifSubsidyMsg": "Organic fertilizer distribution is ongoing at the Municipal Agriculture Office.",
+  "reasonHeavyRain": "Heavy rain expected; supply may drop.",
+  "reasonDry": "Dry spell expected; mild supply pressure.",
+  "reasonStable": "Stable weather; supply steady.",
+  "sellWait": "Price may rise - consider waiting a few days to sell.",
+  "sellSlight": "Slight rise expected - sell when your harvest is ready.",
+  "sellSoon": "Price may dip - sell soon if your crop is ready.",
+  "guideHarvestRice": "110-120 days",
+  "guideTipRice": "Wet season crop starts June-July. Dry season crop starts Nov-Dec and needs steady irrigation.",
+  "guideHarvestEggplant": "90-120 days",
+  "guideTipEggplant": "Grows best in the cooler dry months. Avoid transplanting during heavy rain.",
+  "guideHarvestTomato": "90-110 days",
+  "guideTipTomato": "Too much rain causes disease and rotting. Plant after the typhoon season for best yield.",
+  "guideHarvestStringBeans": "60-70 days",
+  "guideTipStringBeans": "Fast crop. Provide trellis or stakes. Needs well-drained soil.",
+  "guideHarvestBanana": "9-12 months",
+  "guideTipBanana": "Plant at the start of the rainy season so suckers root well. Prop plants before typhoons.",
+  "guideHarvestCoconut": "3-6 years to the first fruits",
+  "guideTipCoconut": "Plant seedlings at the start of the rainy season and keep them watered during the first dry season.",
+  "guideHarvestAmpalaya": "2-3 months after planting",
+  "guideTipAmpalaya": "Provide a trellis. Water regularly but avoid waterlogged soil.",
+  "guideHarvestSquash": "3-4 months after planting",
+  "guideTipSquash": "Give the vines room to spread. Avoid planting during the heaviest rains.",
+  "guideHarvestSweetPotato": "3-4 months after planting",
+  "guideTipSweetPotato": "Plant vine cuttings in loose soil. Avoid fields that flood.",
+  "guideHarvestTaro": "6-9 months after planting",
+  "guideTipTaro": "Plant in moist soil with a steady water supply.",
+  "guideHarvestCalamansi": "1-3 years to the first fruits",
+  "guideTipCalamansi": "Choose a sunny spot with good drainage. Prune and fertilize regularly.",
+  "errorLoad": "Could not load data. Check your internet connection and try again.",
+  "navDss": "DSS",
+  "dssMyTitle": "Farm Decision Support",
+  "dssMySubtitle": "Enter your crop and get advice made for your farm",
+  "dssMyDisclaimer": "These numbers are estimates and a guide only, not official data or a guaranteed forecast. Confirm with your Municipal Agriculture Office before making big decisions.",
+  "dssMonthsShort": "Jan,Feb,Mar,Apr,May,Jun,Jul,Aug,Sep,Oct,Nov,Dec",
+  "dssEmptyTitle": "Add your first crop",
+  "dssEmptyBody": "Enter the crop, land size and planting date. The planting advice, expected harvest, income and selling time will appear here.",
+  "dssAddPlanting": "Add crop",
+  "dssEditPlanting": "Edit crop",
+  "dssAdd": "Add",
+  "dssDelete": "Delete",
+  "dssDeleteTitle": "Delete this crop?",
+  "dssDeleteBody": "{crop} will be removed from your list.",
+  "@dssDeleteBody": {
+    "placeholders": {
+      "crop": {
+        "type": "String"
+      }
+    }
+  },
+  "dssMyPlantings": "My crops",
+  "dssCrop": "Crop",
+  "dssLandSize": "Land size",
+  "dssLandSizeHint": "In hectares. 1,000 sq m = 0.1 ha",
+  "dssAreaInvalid": "Enter a number greater than 0",
+  "dssPlantedOn": "Date planted",
+  "dssLastYield": "Last harvest (optional)",
+  "dssLastYieldHint": "Total kg from your last harvest on this land. Makes the estimate closer to your farm.",
+  "dssDaysGrown": "Days since planting",
+  "dssDaysCount": "{n} days",
+  "@dssDaysCount": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
+  "dssNotYet": "Not yet planted",
+  "dssExpectedHarvest": "Expected harvest",
+  "dssHarvestYearRound": "Harvested through the year",
+  "dssPlantingAdvisory": "Planting advice",
+  "dssPlantingAdvisorySub": "Which months are best for this crop",
+  "dssFitBest": "Now is a good time to plant {crop}",
+  "@dssFitBest": {
+    "placeholders": {
+      "crop": {
+        "type": "String"
+      }
+    }
+  },
+  "dssFitPossible": "You can plant {crop} now, but it is not the best time",
+  "@dssFitPossible": {
+    "placeholders": {
+      "crop": {
+        "type": "String"
+      }
+    }
+  },
+  "dssFitAvoid": "Not a good time to plant {crop} now",
+  "@dssFitAvoid": {
+    "placeholders": {
+      "crop": {
+        "type": "String"
+      }
+    }
+  },
+  "dssLegendBest": "Best",
+  "dssLegendPossible": "Possible",
+  "dssLegendAvoid": "Avoid",
+  "dssNextBest": "Next best months",
+  "dssWeatherBasis": "Based on",
+  "dssWeatherBasisBody": "the usual rainy and dry seasons in Laguna. Check the weather forecast before planting.",
+  "dssHarvestIncome": "Harvest and income",
+  "dssHarvestIncomeSub": "Estimate with a range",
+  "dssExpectedYield": "Expected harvest",
+  "dssYieldPerYear": "Harvest per year",
+  "dssExpectedIncome": "Expected income",
+  "dssNoPrice": "No sample price for this crop",
+  "dssNoEstimate": "No estimate available for this crop yet.",
+  "dssLow": "Low",
+  "dssLikely": "Likely",
+  "dssHigh": "High",
+  "dssHowComputed": "How it is computed",
+  "dssBasisOwn": "Your last harvest per hectare, for {ha} (±15%).",
+  "@dssBasisOwn": {
+    "placeholders": {
+      "ha": {
+        "type": "String"
+      }
+    }
+  },
+  "dssBasisTypical": "Typical harvest of about {kgHa} kg per hectare, for {ha}.",
+  "@dssBasisTypical": {
+    "placeholders": {
+      "ha": {
+        "type": "String"
+      },
+      "kgHa": {
+        "type": "String"
+      }
+    }
+  },
+  "dssPriceUsed": "Price used",
+  "dssPriceAdvisory": "Price advice",
+  "dssPriceAdvisorySub": "Which months prices are usually high",
+  "dssSellBest": "Prices are expected to be higher in {months}",
+  "@dssSellBest": {
+    "placeholders": {
+      "months": {
+        "type": "String"
+      }
+    }
+  },
+  "dssLegendHighPrice": "Higher price",
+  "dssLegendLowPrice": "Lower price",
+  "dssYourHarvest": "Your harvest",
+  "dssHarvestHighPrice": "You will likely harvest around {month}, when prices are usually good.",
+  "@dssHarvestHighPrice": {
+    "placeholders": {
+      "month": {
+        "type": "String"
+      }
+    }
+  },
+  "dssHarvestLowPrice": "You will likely harvest around {month}, when many farmers harvest and prices tend to be lower.",
+  "@dssHarvestLowPrice": {
+    "placeholders": {
+      "month": {
+        "type": "String"
+      }
+    }
+  },
+  "dssTipStorable": "This crop keeps well. If you can store it safely, consider selling in {months}.",
+  "@dssTipStorable": {
+    "placeholders": {
+      "months": {
+        "type": "String"
+      }
+    }
+  },
+  "dssTipFresh": "This crop spoils quickly, so sell soon after harvest. Ask buyers for the best price and sell directly if you can.",
+  "dssPriceRangeYear": "Price range through the year",
+  "dssPriceFlat": "There is no clear monthly price pattern for {crop} in our guide.",
+  "@dssPriceFlat": {
+    "placeholders": {
+      "crop": {
+        "type": "String"
+      }
+    }
+  },
+  "dssFarmMap": "My farm map",
+  "dssFarmMapSub": "Farm location and weather there now",
+  "dssMapHint": "Tap the map to move the pin to your farm.",
+  "dssResetLocation": "Back to Pagsanjan center",
+  "dssWeatherHere": "Weather at your farm now",
+  "dssWeatherFailed": "Could not load the weather here.",
+  "dssFeelsLike": "Feels like",
+  "dssSummaryTitle": "DSS",
+  "dssSummaryEmpty": "Add your crop in the DSS tab to get advice for your farm",
+  "dssSummaryLine": "Expected harvest about {kg}, income {low} to {high}.",
+  "@dssSummaryLine": {
+    "placeholders": {
+      "kg": {
+        "type": "String"
+      },
+      "low": {
+        "type": "String"
+      },
+      "high": {
+        "type": "String"
+      }
+    }
+  },
+  "dssSummaryLineNoPrice": "Expected harvest about {kg}.",
+  "@dssSummaryLineNoPrice": {
+    "placeholders": {
+      "kg": {
+        "type": "String"
+      }
+    }
+  },
+  "weatherLightRain": "Light rain",
+  "weatherHeavyRain": "Heavy rain",
+  "heatBestWork": "Best time for field work",
+  "heatNoSafe": "Avoid long field work today",
+  "priceNoMyCrops": "Add your crop in the DSS tab to see its expected price here.",
+  "cropAdvHarvestReadyTitle": "{crop}: check for harvest",
+  "@cropAdvHarvestReadyTitle": {
+    "placeholders": {
+      "crop": {
+        "type": "String"
+      }
+    }
+  },
+  "cropAdvHarvestReadyMsg": "Your {crop} has reached the usual harvest age. Check the crop and plan your harvest and buyers.",
+  "@cropAdvHarvestReadyMsg": {
+    "placeholders": {
+      "crop": {
+        "type": "String"
+      }
+    }
+  },
+  "cropAdvHarvestSoonTitle": "{crop}: harvest is near",
+  "@cropAdvHarvestSoonTitle": {
+    "placeholders": {
+      "crop": {
+        "type": "String"
+      }
+    }
+  },
+  "cropAdvHarvestSoonMsg": "Your {crop} may be ready in about {days} days. Prepare containers, workers and buyers.",
+  "@cropAdvHarvestSoonMsg": {
+    "placeholders": {
+      "crop": {
+        "type": "String"
+      },
+      "days": {
+        "type": "int"
+      }
+    }
+  },
+  "cropAdvDrainageTitle": "{crop}: check drainage",
+  "@cropAdvDrainageTitle": {
+    "placeholders": {
+      "crop": {
+        "type": "String"
+      }
+    }
+  },
+  "cropAdvDrainageMsg": "Heavy rain is expected in the next 3 days. Clear the canals so water does not pool around your {crop}.",
+  "@cropAdvDrainageMsg": {
+    "placeholders": {
+      "crop": {
+        "type": "String"
+      }
+    }
+  },
+  "cropAdvHeatTitle": "{crop}: protect from heat",
+  "@cropAdvHeatTitle": {
+    "placeholders": {
+      "crop": {
+        "type": "String"
+      }
+    }
+  },
+  "cropAdvHeatMsg": "It is very hot today. Water your {crop} early morning or late afternoon, not at midday.",
+  "@cropAdvHeatMsg": {
+    "placeholders": {
+      "crop": {
+        "type": "String"
+      }
+    }
+  },
+  "cropAdvWindTitle": "{crop}: secure your plants",
+  "@cropAdvWindTitle": {
+    "placeholders": {
+      "crop": {
+        "type": "String"
+      }
+    }
+  },
+  "cropAdvWindMsg": "Strong wind today. Support or tie your {crop} so the plants do not fall.",
+  "@cropAdvWindMsg": {
+    "placeholders": {
+      "crop": {
+        "type": "String"
+      }
+    }
+  },
+  "cropAdvDryTitle": "{crop}: good drying days",
+  "@cropAdvDryTitle": {
+    "placeholders": {
+      "crop": {
+        "type": "String"
+      }
+    }
+  },
+  "cropAdvDryMsg": "Dry days ahead. Good for harvesting and drying your {crop}, and for spraying and fertilizing.",
+  "@cropAdvDryMsg": {
+    "placeholders": {
+      "crop": {
+        "type": "String"
+      }
+    }
+  },
+  "notifStormTitle": "Thunderstorm now",
+  "notifStormMsg": "Stay out of open fields and keep tools and animals under shelter.",
+  "notifRainTitle": "Heavy rain expected",
+  "notifRainMsg": "About {mm} mm of rain in the next 3 days. Clear your canals so water does not pool in the field.",
+  "@notifRainMsg": {
+    "placeholders": {
+      "mm": {
+        "type": "int"
+      }
+    }
+  },
+  "notifHeatTitle": "Dangerous heat today",
+  "notifHeatMsg": "Heat index up to {hi}°C. Avoid field work at midday, rest in the shade and drink water.",
+  "@notifHeatMsg": {
+    "placeholders": {
+      "hi": {
+        "type": "int"
+      }
+    }
+  },
+  "notifHarvestReadyTitle": "{crop}: check for harvest",
+  "@notifHarvestReadyTitle": {
+    "placeholders": {
+      "crop": {
+        "type": "String"
+      }
+    }
+  },
+  "notifHarvestReadyMsg": "Your {crop} has reached the usual harvest age. Check the crop and plan your harvest.",
+  "@notifHarvestReadyMsg": {
+    "placeholders": {
+      "crop": {
+        "type": "String"
+      }
+    }
+  },
+  "notifHarvestSoonTitle": "{crop}: harvest is near",
+  "@notifHarvestSoonTitle": {
+    "placeholders": {
+      "crop": {
+        "type": "String"
+      }
+    }
+  },
+  "notifHarvestSoonMsg": "Your {crop} may be ready in about {days} days.",
+  "@notifHarvestSoonMsg": {
+    "placeholders": {
+      "crop": {
+        "type": "String"
+      },
+      "days": {
+        "type": "int"
+      }
+    }
+  },
+  "notifMarketUpTitle": "{crop} price may go up",
+  "@notifMarketUpTitle": {
+    "placeholders": {
+      "crop": {
+        "type": "String"
+      }
+    }
+  },
+  "notifMarketUpMsg": "The price of {crop} may rise about {percent}% in the next 7 days. This is an estimate from the weather forecast.",
+  "@notifMarketUpMsg": {
+    "placeholders": {
+      "crop": {
+        "type": "String"
+      },
+      "percent": {
+        "type": "int"
+      }
+    }
+  },
+  "notifMarketDownTitle": "{crop} price may go down",
+  "@notifMarketDownTitle": {
+    "placeholders": {
+      "crop": {
+        "type": "String"
+      }
+    }
+  },
+  "notifMarketDownMsg": "The price of {crop} may fall about {percent}% in the next 7 days. This is an estimate from the weather forecast.",
+  "@notifMarketDownMsg": {
+    "placeholders": {
+      "crop": {
+        "type": "String"
+      },
+      "percent": {
+        "type": "int"
+      }
+    }
+  },
+  "notifPlantingNowTitle": "Good time to plant {crop}",
+  "@notifPlantingNowTitle": {
+    "placeholders": {
+      "crop": {
+        "type": "String"
+      }
+    }
+  },
+  "notifPlantingNowMsg": "This month is one of the best months to plant {crop} in Pagsanjan, Laguna.",
+  "@notifPlantingNowMsg": {
+    "placeholders": {
+      "crop": {
+        "type": "String"
+      }
+    }
+  },
+  "dssUnitHa": "Hectares (ha)",
+  "dssUnitSqm": "Square meters (m²)",
+  "dssUnitNote": "1 hectare = 10,000 m². You can switch between the two anytime.",
+  "dssTotalLand": "Total land size",
+  "dssTotalLandSub": "Enter the whole size of your farm. You will divide it among your crops in \"Add crop\".",
+  "dssTotalTooSmall": "Too small. Your crops already use {area}.",
+  "@dssTotalTooSmall": {
+    "placeholders": {
+      "area": {
+        "type": "String"
+      }
+    }
+  },
+  "dssExceeds": "Too much. Only {area} of your land is left.",
+  "@dssExceeds": {
+    "placeholders": {
+      "area": {
+        "type": "String"
+      }
+    }
+  },
+  "dssRemaining": "Remaining: {area}",
+  "@dssRemaining": {
+    "placeholders": {
+      "area": {
+        "type": "String"
+      }
+    }
+  },
+  "dssLandUsed": "Planted: {area}",
+  "@dssLandUsed": {
+    "placeholders": {
+      "area": {
+        "type": "String"
+      }
+    }
+  },
+  "dssLandSet": "Set land size",
+  "dssLandNotSet": "Enter your total land size so the app can show how much each crop uses.",
+  "farmUnallocated": "Not planted"
+}
