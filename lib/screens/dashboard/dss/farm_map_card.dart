@@ -33,6 +33,11 @@ class _FarmMapCardState extends State<FarmMapCard> {
   void initState() {
     super.initState();
     _load();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        Provider.of<AccountService>(context, listen: false).loadFromSupabase();
+      }
+    });
   }
 
   @override

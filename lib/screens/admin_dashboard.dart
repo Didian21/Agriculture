@@ -92,6 +92,16 @@ class _AdminDashboardState extends State<AdminDashboard> {
   final ScrollController _sidebarScrollController = ScrollController();
 
   @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        Provider.of<AccountService>(context, listen: false).loadFromSupabase();
+      }
+    });
+  }
+
+  @override
   void dispose() {
     _searchController.dispose();
     _kpiScrollController.dispose();
@@ -2600,15 +2610,18 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
               backgroundColor: Colors.red.shade700,
               foregroundColor: Colors.white,
             ),
-            onPressed: () {
+            onPressed: () async {
               Navigator.pop(context);
-              service.deleteFarmer(farmer.id);
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text('Permanently deleted account for ${farmer.profileName}'),
-                  backgroundColor: Colors.red.shade700,
-                ),
-              );
+              await service.deleteFarmer(farmer.id);
+              await service.loadFromSupabase();
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('Permanently deleted account for ${farmer.profileName}'),
+                    backgroundColor: Colors.red.shade700,
+                  ),
+                );
+              }
             },
             icon: const Icon(Icons.delete_forever_rounded, size: 18),
             label: Text(locale.isTagalog ? 'Oo, Burahin Na' : 'Permanently Delete'),
@@ -2650,15 +2663,18 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
               backgroundColor: Colors.red.shade700,
               foregroundColor: Colors.white,
             ),
-            onPressed: () {
+            onPressed: () async {
               Navigator.pop(context);
-              service.deleteFarmRecord(farm.id);
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text('Deleted farm record for ${farm.locationName}'),
-                  backgroundColor: Colors.red.shade700,
-                ),
-              );
+              await service.deleteFarmRecord(farm.id);
+              await service.loadFromSupabase();
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('Deleted farm record for ${farm.locationName}'),
+                    backgroundColor: Colors.red.shade700,
+                  ),
+                );
+              }
             },
             icon: const Icon(Icons.delete_forever_rounded, size: 18),
             label: Text(locale.isTagalog ? 'Oo, Burahin Na' : 'Permanently Delete'),
