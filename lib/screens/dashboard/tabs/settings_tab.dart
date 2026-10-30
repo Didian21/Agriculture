@@ -4,6 +4,7 @@ import '../../../dashboard_data.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../main.dart';
 import '../../../widgets/common_widgets.dart';
+import '../../farmer_login_screen.dart';
 import '../dialogs/privacy_policy_dialog.dart';
 
 class SettingsTab extends StatelessWidget {
@@ -72,6 +73,10 @@ class SettingsTab extends StatelessWidget {
             onPressed: () {
               Navigator.pop(ctx);
               p.logout();
+              Navigator.pushReplacement(
+                context,
+                MaterialPageRoute(builder: (_) => FarmerLoginScreen(p: p)),
+              );
             },
             child: Text(t.logoutButton),
           ),
