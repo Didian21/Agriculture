@@ -1,3 +1,5 @@
+import 'dart:ui' show ImageFilter;
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -6,6 +8,7 @@ import '../../l10n/app_localizations.dart';
 import '../../main.dart';
 import '../../providers/farm_input_provider.dart';
 import '../../widgets/common_widgets.dart';
+import '../../widgets/field_background.dart';
 import '../login_screen.dart';
 import 'dialogs/notifications_modal.dart';
 import 'tabs/dss_tab.dart';
@@ -23,7 +26,10 @@ class DashboardScreen extends StatefulWidget {
 }
 
 class _DashboardScreenState extends State<DashboardScreen> {
-  int _tab = 0;
+  static const int _dssIndex = 2;
+
+  // Pagbukas ng app, DSS agad ang makikita.
+  int _tab = _dssIndex;
 
   // (outlined icon, filled icon) - ang mga label ay galing sa ARB
   static const _icons = [
@@ -59,7 +65,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         key: ValueKey('$_tab-${p.isTagalog}'),
         child: RefreshIndicator(
           color: AppColors.leaf,
-          backgroundColor: AppColors.surface,
+          backgroundColor: Colors.white,
           onRefresh: p.load,
           child: tabs[_tab],
         ),
@@ -81,33 +87,218 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final t = AppLocalizations.of(context)!;
     final labels = [t.navWeather, t.navFarm, t.navDss, t.navPrices, t.navSettings];
 
-    return Container(
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topCenter,
-          end: Alignment.bottomCenter,
-          colors: [AppColors.bg1, AppColors.bg0],
-        ),
-      ),
-      child: Scaffold(
+    return Stack(children: [
+      const Positioned.fill(child: FieldBackground()),
+      Scaffold(
         backgroundColor: Colors.transparent,
         appBar: _DashboardAppBar(p: p),
-        body: _buildBody(p, t),
-        bottomNavigationBar: DecoratedBox(
-          decoration: const BoxDecoration(border: Border(top: BorderSide(color: AppColors.border))),
-          child: NavigationBar(
-            selectedIndex: _tab,
-            onDestinationSelected: (i) => setState(() => _tab = i),
-            destinations: [
-              for (var i = 0; i < _icons.length; i++)
-                NavigationDestination(
-                  icon: Icon(_icons[i].$1),
-                  selectedIcon: Icon(_icons[i].$2),
-                  label: labels[i],
+        body: Column(
+          children: [
+            if (p.weatherStale)
+              Container(
+                width: double.infinity,
+                color: Colors.orange.shade800,
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                child: const Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.offline_bolt_rounded, color: Colors.white, size: 16),
+                    SizedBox(width: 8),
+                    Text(
+                      'Offline Mode - Viewing last cached update',
+                      style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
+                    ),
+                  ],
                 ),
-            ],
-          ),
+              ),
+            Expanded(child: _buildBody(p, t)),
+          ],
         ),
+        bottomNavigationBar: _FloatingNav(
+          selected: _tab,
+          icons: _icons,
+          labels: labels,
+          onSelect: (i) => setState(() => _tab = i),
+        ),
+      ),
+    ]);
+  }
+}
+
+/// Lumulutang na "salamin" na navigation bar (bilugan, may blur).
+/// Ang DSS (gitna) ay malaking berdeng bilog na bahagyang nakaangat - ang pangunahing button.
+class _FloatingNav extends StatelessWidget {
+  final int selected;
+  final List<(IconData, IconData)> icons;
+  final List<String> labels;
+  final ValueChanged<int> onSelect;
+  const _FloatingNav({required this.selected, required this.icons, required this.labels, required this.onSelect});
+
+  static const double _barH = 68;
+  static const double _lift = 26;
+  static const double _circle = 62;
+
+  @override
+  Widget build(BuildContext context) {
+    const r = BorderRadius.all(Radius.circular(30));
+    const mid = _DashboardScreenState._dssIndex;
+    return SafeArea(
+      top: false,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+        child: SizedBox(
+          height: _barH + _lift,
+          child: Stack(alignment: Alignment.bottomCenter, children: [
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 0,
+              height: _barH,
+              child: DecoratedBox(
+                decoration: const BoxDecoration(
+                  borderRadius: r,
+                  boxShadow: [BoxShadow(color: Color(0x261B5E20), blurRadius: 24, offset: Offset(0, 8))],
+                ),
+                child: ClipRRect(
+                  borderRadius: r,
+                  child: BackdropFilter(
+                    filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.72),
+                        borderRadius: r,
+                        border: Border.all(color: Colors.white.withValues(alpha: 0.9), width: 1.2),
+                      ),
+                      child: Row(children: [
+                        for (var i = 0; i < icons.length; i++)
+                          Expanded(
+                            child: i == mid
+                                ? _MainNavLabel(label: labels[i], selected: selected == i, onTap: () => onSelect(i))
+                                : _NavItem(
+                              icon: selected == i ? icons[i].$2 : icons[i].$1,
+                              label: labels[i],
+                              selected: selected == i,
+                              onTap: () => onSelect(i),
+                            ),
+                          ),
+                      ]),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            Positioned(
+              top: 0,
+              child: Semantics(
+                button: true,
+                selected: selected == mid,
+                label: labels[mid],
+                child: GestureDetector(
+                  onTap: () => onSelect(mid),
+                  child: AnimatedScale(
+                    scale: selected == mid ? 1.06 : 1.0,
+                    duration: const Duration(milliseconds: 250),
+                    curve: Curves.easeOutBack,
+                    child: Container(
+                      width: _circle,
+                      height: _circle,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        gradient: const LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors: [AppColors.fern, AppColors.leaf],
+                        ),
+                        border: Border.all(color: Colors.white.withValues(alpha: 0.95), width: 4),
+                        boxShadow: [
+                          BoxShadow(
+                            color: AppColors.leaf.withValues(alpha: selected == mid ? 0.45 : 0.28),
+                            blurRadius: selected == mid ? 22 : 14,
+                            offset: const Offset(0, 8),
+                          ),
+                        ],
+                      ),
+                      child: Icon(icons[mid].$2, color: Colors.white, size: 28),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ]),
+        ),
+      ),
+    );
+  }
+}
+
+/// Label ng DSS sa ilalim ng nakaangat na bilog (ang bilog mismo ay nasa itaas).
+class _MainNavLabel extends StatelessWidget {
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+  const _MainNavLabel({required this.label, required this.selected, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: Align(
+        alignment: Alignment.bottomCenter,
+        child: Padding(
+          padding: const EdgeInsets.only(bottom: 9),
+          child: Text(label,
+              maxLines: 1,
+              style: TextStyle(
+                  fontSize: 10.5,
+                  fontWeight: selected ? FontWeight.w900 : FontWeight.w700,
+                  color: AppColors.leaf)),
+        ),
+      ),
+    );
+  }
+}
+
+class _NavItem extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+  const _NavItem({required this.icon, required this.label, required this.selected, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final color = selected ? AppColors.leaf : AppColors.muted;
+    return Semantics(
+      button: true,
+      selected: selected,
+      label: label,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onTap,
+        child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+          AnimatedContainer(
+            duration: const Duration(milliseconds: 250),
+            curve: Curves.easeOutCubic,
+            width: 50,
+            height: 30,
+            decoration: BoxDecoration(
+              color: selected ? AppColors.leaf.withValues(alpha: 0.16) : Colors.transparent,
+              borderRadius: BorderRadius.circular(15),
+            ),
+            child: Icon(icon, size: 23, color: color),
+          ),
+          const SizedBox(height: 2),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 2),
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(label,
+                  maxLines: 1,
+                  style: TextStyle(fontSize: 10.5, fontWeight: selected ? FontWeight.w800 : FontWeight.w600, color: color)),
+            ),
+          ),
+        ]),
       ),
     );
   }
@@ -124,6 +315,7 @@ class _DashboardAppBar extends StatelessWidget implements PreferredSizeWidget {
   Widget build(BuildContext context) {
     final t = AppLocalizations.of(context)!;
     return AppBar(
+      automaticallyImplyLeading: false,
       titleSpacing: 16,
       title: Row(children: [
         const PagriLogo(height: 38),
@@ -205,9 +397,9 @@ class _LanguageToggle extends StatelessWidget {
       padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
       child: Container(
         decoration: BoxDecoration(
-          color: AppColors.surface,
+          color: Colors.white.withValues(alpha: 0.7),
           borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: AppColors.border),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.9)),
         ),
         child: Row(mainAxisSize: MainAxisSize.min, children: [
           _LangChip(label: 'Tagalog', selected: p.isTagalog, onTap: () => p.setLanguage(AppLanguage.tagalog)),

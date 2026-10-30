@@ -26,25 +26,42 @@ class _FarmerLoginScreenState extends State<FarmerLoginScreen> {
     super.dispose();
   }
 
-  void _login() {
+  Future<void> _login() async {
     final username = _phoneCtrl.text.trim();
     final password = _pinCtrl.text.trim();
 
-    if (username.isEmpty) {
+    if (username.isEmpty || password.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter your phone number or username')),
+        const SnackBar(content: Text('Please enter your username/phone and password')),
       );
       return;
     }
 
-    final accountService = Provider.of<AccountService>(context, listen: false);
-    final farmer = accountService.authenticateFarmer(username, password);
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const Center(child: CircularProgressIndicator(color: AppColors.leaf)),
+    );
 
-    if (farmer != null || username.isNotEmpty) {
-      widget.p.login();
-      Navigator.pushReplacement(
+    final accountService = Provider.of<AccountService>(context, listen: false);
+    final farmer = await accountService.authenticateFarmerAsync(username, password);
+
+    if (!mounted) return;
+    Navigator.pop(context); // Pop loading
+
+    if (farmer != null) {
+      widget.p.login(username: farmer.username, phone: farmer.contactNumber);
+      Navigator.pushAndRemoveUntil(
         context,
         MaterialPageRoute(builder: (context) => const DashboardScreen()),
+        (route) => false,
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Invalid username/phone or password. Please check your Supabase credentials.'),
+          backgroundColor: Colors.redAccent,
+        ),
       );
     }
   }

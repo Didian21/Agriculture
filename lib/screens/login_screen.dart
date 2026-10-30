@@ -61,9 +61,10 @@ class _LoginScreenState extends State<LoginScreen> {
       }
     } else {
       widget.p.login();
-      Navigator.pushReplacement(
+      Navigator.pushAndRemoveUntil(
         context,
         MaterialPageRoute(builder: (context) => const DashboardScreen()),
+        (route) => false,
       );
     }
   }

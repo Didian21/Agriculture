@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../core/crop_data.dart';
 import '../core/localization.dart';
@@ -49,15 +50,37 @@ class DashboardProvider extends ChangeNotifier {
     }
   }
 
-  bool isLoggedIn = true;
+  // Auth & Session State
+  static const _authKeyLoggedIn = 'pagri_farmer_is_logged_in';
+  static const _authKeyUsername = 'pagri_farmer_username';
+  static const _authKeyPhone = 'pagri_farmer_phone';
+
+  bool isLoggedIn = false;
   String currentUsername = '';
 
-  void logout() {
-    isLoggedIn = false;
+  Future<void> loadAuthSession() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      isLoggedIn = prefs.getBool(_authKeyLoggedIn) ?? false;
+      currentUsername = prefs.getString(_authKeyUsername) ?? '';
+      phoneNumber = prefs.getString(_authKeyPhone) ?? phoneNumber;
+    } catch (_) {}
     notifyListeners();
   }
 
-  void login({String? username, String? phone}) {
+  Future<void> logout() async {
+    isLoggedIn = false;
+    currentUsername = '';
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool(_authKeyLoggedIn, false);
+      await prefs.remove(_authKeyUsername);
+      await prefs.remove(_authKeyPhone);
+    } catch (_) {}
+    notifyListeners();
+  }
+
+  Future<void> login({String? username, String? phone}) async {
     isLoggedIn = true;
     if (username != null && username.isNotEmpty) {
       currentUsername = username;
@@ -65,6 +88,12 @@ class DashboardProvider extends ChangeNotifier {
     if (phone != null && phone.isNotEmpty) {
       phoneNumber = phone;
     }
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool(_authKeyLoggedIn, true);
+      await prefs.setString(_authKeyUsername, currentUsername);
+      await prefs.setString(_authKeyPhone, phoneNumber);
+    } catch (_) {}
     load();
     notifyListeners();
   }
@@ -72,24 +101,6 @@ class DashboardProvider extends ChangeNotifier {
   // Account Metadata (view only - galing sa admin)
   String phoneNumber = '+63 912 345 6789';
   String birthday = '08/11/2001';
-
-  void updateProfileDetails({
-    required String name,
-    required String barangay,
-    required String phone,
-    required String birthday,
-    required double landSize,
-  }) {
-    profile = FarmerProfile(
-      name: name,
-      barangay: barangay,
-      landSizeHectares: landSize,
-      cropTypes: profile?.cropTypes ?? ['Rice', 'Eggplant', 'Tomato'],
-    );
-    phoneNumber = phone;
-    this.birthday = birthday;
-    notifyListeners();
-  }
 
   // Notifications List State
   List<AppNotification> notifications = [];
@@ -166,7 +177,7 @@ class DashboardProvider extends ChangeNotifier {
   }
 
   void start() {
-    load();
+    loadAuthSession().then((_) => load());
     _timer = Timer.periodic(const Duration(minutes: 10), (_) => load(silent: true));
   }
 
@@ -177,7 +188,7 @@ class DashboardProvider extends ChangeNotifier {
     }
     hasError = false;
     try {
-      profile ??= await _repo.getProfile(username: currentUsername);
+      profile = await _repo.getProfile(username: currentUsername, phone: phoneNumber);
       guides = _repo.getPlantingGuides();
       // Isang kalendaryo para sa buong app (DSS, My Farm, abiso, presyo).
       for (final g in guides) {

@@ -13,6 +13,7 @@ const Map<String, double> kBasePrices = {
   'Tomato': 55.0,
   'String beans': 70.0,
   'Banana': 40.0,
+  'Coconut': 15.0, // tantiya: buong niyog (hilaw), hindi opisyal
   'Ampalaya': 65.0,
   'Squash': 30.0,
   'Sweet potato': 35.0,
@@ -36,11 +37,11 @@ const Map<String, (int, int)> _harvestDays = {
 // Gaano kasensitibo ang presyo ng pananim sa ulan at init (1.0 = pinakasensitibo).
 const Map<String, double> _rainSens = {
   'Eggplant': 1.0, 'Tomato': 1.0, 'String beans': 1.0, 'Ampalaya': 1.0, 'Squash': 0.8,
-  'Rice': 0.6, 'Banana': 0.8, 'Sweet potato': 0.6, 'Taro': 0.3, 'Calamansi': 0.5,
+  'Rice': 0.6, 'Coconut': 0.3, 'Banana': 0.8, 'Sweet potato': 0.6, 'Taro': 0.3, 'Calamansi': 0.5,
 };
 const Map<String, double> _heatSens = {
   'Eggplant': 1.0, 'Tomato': 1.0, 'String beans': 1.0, 'Ampalaya': 1.0, 'Squash': 0.8,
-  'Rice': 0.3, 'Banana': 0.5, 'Sweet potato': 0.5, 'Taro': 0.4, 'Calamansi': 0.5,
+  'Rice': 0.3, 'Coconut': 0.3, 'Banana': 0.5, 'Sweet potato': 0.5, 'Taro': 0.4, 'Calamansi': 0.5,
 };
 
 /// SIMPLENG MODELO (hindi opisyal na taya sa palengke).

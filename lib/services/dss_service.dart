@@ -11,6 +11,10 @@ class HarvestEstimate {
   final double? priceLow, priceMid, priceHigh;
   final double? incomeLow, incomeMid, incomeHigh;
 
+  /// Gastos na inilagay ng farmer at ang tubo (kita bawas gastos). Null kung walang gastos o walang presyo.
+  final double? cost;
+  final double? profitLow, profitMid, profitHigh;
+
   const HarvestEstimate({
     required this.kgLow,
     required this.kgMid,
@@ -25,9 +29,17 @@ class HarvestEstimate {
     this.incomeLow,
     this.incomeMid,
     this.incomeHigh,
+    this.cost,
+    this.profitLow,
+    this.profitMid,
+    this.profitHigh,
   });
 
   bool get hasPrice => priceMid != null;
+  bool get hasProfit => profitMid != null;
+
+  /// Balik sa puhunan (%) = tubo / gastos.
+  double? get roiPercent => (profitMid == null || cost == null || cost! <= 0) ? null : profitMid! / cost! * 100;
 }
 
 enum PlantFit { best, possible, avoid }
@@ -98,12 +110,15 @@ class DssService {
     return top;
   }
 
-  static HarvestEstimate? estimate(FarmPlanting p) {
+  /// [historyKgPerHa]: karaniwang ani kada ektarya ng farmer mula sa sarili niyang talaan ng ani (kung mayroon).
+  static HarvestEstimate? estimate(FarmPlanting p, {double? historyKgPerHa}) {
     final f = factsFor(p.crop);
     if (f == null || p.hectares <= 0) return null;
 
-    final own = p.lastYieldKg != null && p.lastYieldKg! > 0;
-    final double mid = own ? p.lastYieldKg! / p.hectares : f.midKgHa.toDouble();
+    final fromLast = p.lastYieldKg != null && p.lastYieldKg! > 0;
+    final fromHistory = !fromLast && historyKgPerHa != null && historyKgPerHa > 0;
+    final own = fromLast || fromHistory;
+    final double mid = fromLast ? p.lastYieldKg! / p.hectares : (fromHistory ? historyKgPerHa : f.midKgHa.toDouble());
     final double lo = own ? mid * 0.85 : f.lowKgHa.toDouble();
     final double hi = own ? mid * 1.15 : f.highKgHa.toDouble();
 
@@ -123,6 +138,7 @@ class DssService {
     }
 
     final kgLow = lo * p.hectares, kgMid = mid * p.hectares, kgHigh = hi * p.hectares;
+    final cost = (p.costPhp != null && p.costPhp! > 0) ? p.costPhp : null;
     return HarvestEstimate(
       kgLow: kgLow,
       kgMid: kgMid,
@@ -137,6 +153,10 @@ class DssService {
       incomeLow: pLow == null ? null : kgLow * pLow,
       incomeMid: pMid == null ? null : kgMid * pMid,
       incomeHigh: pHigh == null ? null : kgHigh * pHigh,
+      cost: cost,
+      profitLow: (pLow == null || cost == null) ? null : kgLow * pLow - cost,
+      profitMid: (pMid == null || cost == null) ? null : kgMid * pMid - cost,
+      profitHigh: (pHigh == null || cost == null) ? null : kgHigh * pHigh - cost,
     );
   }
 }

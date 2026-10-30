@@ -5,11 +5,28 @@ import '../models/planting_guide.dart';
 import 'supabase_service.dart';
 
 class FarmerRepository {
-  Future<FarmerProfile> getProfile({String? username}) async {
+  Future<FarmerProfile> getProfile({String? username, String? phone}) async {
     try {
-      final res = username != null && username.isNotEmpty
-          ? await SupabaseService.client.from('farmers').select().eq('username', username).maybeSingle()
-          : await SupabaseService.client.from('farmers').select().limit(1).maybeSingle();
+      dynamic res;
+      if (username != null && username.isNotEmpty) {
+        res = await SupabaseService.client
+            .from('farmers')
+            .select()
+            .or('username.eq.$username,contact_number.eq.$username,profile_name.eq.$username')
+            .maybeSingle();
+      } else if (phone != null && phone.isNotEmpty) {
+        res = await SupabaseService.client
+            .from('farmers')
+            .select()
+            .eq('contact_number', phone)
+            .maybeSingle();
+      } else {
+        res = await SupabaseService.client
+            .from('farmers')
+            .select()
+            .limit(1)
+            .maybeSingle();
+      }
 
       if (res != null) {
         final profileName = res['profile_name'] as String? ?? 'Magsasaka ng Pagsanjan';

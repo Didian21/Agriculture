@@ -146,11 +146,11 @@
   "helpSupport": "Tulong at Suporta",
   "helpSupportSub": "Kailangan ng tulong sa app o sa inyong bukid?",
   "howToUse": "Paano gamitin ang PAGRI",
-  "howTo1": "Home: tingnan ang panahon ngayon, ang 7-araw na pagtaya, payo sa bukid at ang mga pananim sa Pagsanjan.",
-  "howTo2": "Aking Bukid: tingnan ang inyong mga taniman, pananim at tala ng ani.",
-  "howTo3": "Pindutin ang pananim sa Home para makita ang pinakamagandang buwan ng pagtatanim.",
-  "howTo4": "Presyo: tingnan ang inaasahang presyo at kung kailan ibebenta.",
-  "howTo5": "Pindutin ang kampana sa taas para mabasa ang inyong mga abiso.",
+  "howTo1": "DSS (ang berdeng button sa gitna): ilagay muna ang kabuuang sukat ng lupa, tapos idagdag ang pananim, sukat ng taniman, petsa ng pagtatanim, huling ani at gastos. Makikita mo ang payo kung kailan magtanim, tantiya ng ani at kita, at payo sa presyo.",
+  "howTo2": "Panahon: tingnan ang panahon ngayon, ang 7-araw na pagtaya, ang heat index at payo para sa inyong mga pananim.",
+  "howTo3": "Aking Bukid: tingnan ang inyong mga pananim at kung paano hinati ang inyong lupa (hektarya o metro kuwadrado). Pindutin ang pananim para buksan ito sa DSS. Nandito rin ang tala ng inyong mga ani.",
+  "howTo4": "Presyo: ang mga pananim lang na inilagay ninyo sa DSS ang lalabas dito, kasama ang inaasahang presyo at kung kailan magandang magbenta.",
+  "howTo5": "Pagkatapos mag-ani, pindutin ang \"I-record ang ani\" sa DSS para mas lumapit ang tantiya sa sarili ninyong bukid. Pindutin ang kampana sa taas para mabasa ang mga abiso. Ang mga numero ay tantiya lang at hindi opisyal.",
   "contactOffice": "Tanggapan ng Pambayang Agrikultura",
   "contactOfficeSub": "Bumisita sa tanggapan sa Pagsanjan, Laguna para sa pagbabago ng account, ayuda at tulong sa pagsasaka.",
   "aboutApp": "Tungkol sa App",
@@ -305,7 +305,7 @@
   "dssLikely": "Malamang",
   "dssHigh": "Mataas",
   "dssHowComputed": "Paano kinuwenta",
-  "dssBasisOwn": "Ang huling ani mo kada ektarya, para sa {ha} (±15%).",
+  "dssBasisOwn": "Ang sarili mong ani kada ektarya (mula sa talaan mo), para sa {ha} (±15%).",
   "dssBasisTypical": "Karaniwang ani na mga {kgHa} kg kada ektarya, para sa {ha}.",
   "dssPriceUsed": "Presyong ginamit",
   "dssPriceAdvisory": "Payo sa presyo",
@@ -583,5 +583,53 @@
   },
   "dssLandSet": "Ilagay ang sukat",
   "dssLandNotSet": "Ilagay ang kabuuang sukat ng lupa para makita kung ilan ang sakop ng bawat pananim.",
-  "farmUnallocated": "Hindi pa natataniman"
+  "farmUnallocated": "Hindi pa natataniman",
+  "dssCost": "Gastos sa produksyon (opsyonal)",
+  "dssCostHint": "Kabuuang nagastos o gagastusin mo sa pananim na ito: binhi, abono, pestisidyo, upa, tubig. Ginagamit ito para makita ang tubo mo.",
+  "dssCostDetails": "Detalye ng gastos (opsyonal)",
+  "dssCostSeed": "Binhi / punla",
+  "dssCostFertilizer": "Abono",
+  "dssCostPesticide": "Pestisidyo",
+  "dssCostLabor": "Upa at manggagawa",
+  "dssCostOther": "Iba pa (tubig, gasolina, pamasahe)",
+  "dssYourCost": "Gastos mo",
+  "dssProfit": "Tinatayang tubo",
+  "dssRoi": "Balik sa puhunan",
+  "dssCostAsk": "Ilagay ang gastos sa produksyon kapag ine-edit ang pananim para makita ang tubo mo.",
+  "dssProfitNote": "Tubo = inaasahang kita bawas ang gastos mo. Ang mababang bilang ay gumagamit ng mas mababang ani at presyo, at ang mataas ay ng mas mataas.",
+  "dssRecordHarvest": "I-record ang ani",
+  "dssRecordTitle": "I-record ang ani: {crop}",
+  "@dssRecordTitle": {
+    "placeholders": {
+      "crop": {
+        "type": "String"
+      }
+    }
+  },
+  "dssRecordSub": "Ilagay ang totoong nangyari. Ang mga talaan mo ay nagpapalapit ng payo sa sarili mong bukid.",
+  "dssHarvestedOn": "Petsa ng ani",
+  "dssActualYield": "Kabuuang ani",
+  "dssSoldPrice": "Presyong naibenta mo",
+  "dssSoldPriceHint": "Tantiyang presyo: {price} kada kg",
+  "@dssSoldPriceHint": {
+    "placeholders": {
+      "price": {
+        "type": "String"
+      }
+    }
+  },
+  "dssRecIncome": "Kita",
+  "dssRecProfit": "Tubo",
+  "dssRecordSaved": "Na-save ang ani. Malaya na ulit ang lupa para sa susunod mong tanim.",
+  "farmHistoryTitle": "Kasaysayan ng ani",
+  "farmHistorySub": "Ang mga naitala mong ani, kita at tubo.",
+  "farmHistoryDeleteTitle": "Burahin ang talaang ito?",
+  "farmHistoryDeleteBody": "Buburahin ang talaan ng ani ng {crop}.",
+  "@farmHistoryDeleteBody": {
+    "placeholders": {
+      "crop": {
+        "type": "String"
+      }
+    }
+  }
 }

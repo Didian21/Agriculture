@@ -11,6 +11,8 @@ import '../../../services/dss_service.dart';
 import '../../../widgets/common_widgets.dart';
 import '../../../widgets/dss_common.dart';
 import '../../../widgets/planting_graph.dart';
+import '../dss/farm_map_card.dart';
+import '../dss/harvest_record_sheet.dart';
 import '../dss/planting_form_sheet.dart';
 import '../dss/total_land_sheet.dart';
 
@@ -26,6 +28,16 @@ class DssTab extends StatelessWidget {
   Future<void> _edit(BuildContext context, FarmInputProvider input, FarmPlanting p) async {
     final r = await showPlantingForm(context, existing: p);
     if (r != null) input.update(r);
+  }
+
+  Future<void> _record(BuildContext context, FarmInputProvider input, FarmPlanting p) async {
+    final t = AppLocalizations.of(context)!;
+    final r = await showHarvestRecordSheet(context, p, historyKgPerHa: input.historyKgPerHa(p.crop));
+    if (r == null) return;
+    input.recordHarvest(p.id, r);
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(t.dssRecordSaved)));
+    }
   }
 
   Future<void> _delete(BuildContext context, FarmInputProvider input, FarmPlanting p) async {
@@ -59,6 +71,7 @@ class DssTab extends StatelessWidget {
         input: input,
         onAdd: () => _add(context, input),
         onEdit: (p) => _edit(context, input, p),
+        onRecord: (p) => _record(context, input, p),
         onDelete: (p) => _delete(context, input, p),
       ),
       if (sel != null) ...[
@@ -76,6 +89,10 @@ class DssTab extends StatelessWidget {
         _PriceAdvisory(planting: sel),
       ],
       const SizedBox(height: 18),
+      SectionTitle(icon: Icons.map_rounded, text: t.dssFarmMap, subtitle: t.dssFarmMapSub),
+      const SizedBox(height: 10),
+      FarmMapCard(input: input),
+      const SizedBox(height: 14),
       Text(t.dssMyDisclaimer, style: const TextStyle(fontSize: 12, color: AppColors.muted, height: 1.4)),
       const SizedBox(height: 90),
     ]);
@@ -96,160 +113,79 @@ class _LandCard extends StatelessWidget {
     final total = input.totalHectares;
     final used = input.usedHectares;
     final rem = input.remainingHectares();
-    final free = rem ?? 0.0;
 
     return GlassCard(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                const IconBubble(icon: Icons.landscape_rounded, color: AppColors.leaf, size: 36),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text(
-                    t.dssTotalLand,
-                    style: const TextStyle(color: AppColors.ink, fontWeight: FontWeight.w800, fontSize: 14),
-                  ),
-                ),
-                TextButton.icon(
-                  style: TextButton.styleFrom(
-                    visualDensity: VisualDensity.compact,
-                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-                  ),
-                  onPressed: () => showTotalLandSheet(context),
-                  icon: Icon(total == null ? Icons.add_rounded : Icons.edit_rounded, size: 16, color: AppColors.leaf),
-                  label: Text(
-                    total == null ? t.dssLandSet : t.edit,
-                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: AppColors.leaf),
-                  ),
-                ),
-                const SizedBox(width: 4),
-                Container(
-                  height: 30,
-                  decoration: BoxDecoration(
-                    color: AppColors.mint,
-                    borderRadius: BorderRadius.circular(15),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      GestureDetector(
-                        onTap: () => input.setUseSqm(false),
-                        child: AnimatedContainer(
-                          duration: const Duration(milliseconds: 200),
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
-                          decoration: BoxDecoration(
-                            color: !sqm ? AppColors.leaf : Colors.transparent,
-                            borderRadius: BorderRadius.circular(15),
-                          ),
-                          child: Text(
-                            t.dssUnitHa,
-                            style: TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.bold,
-                              color: !sqm ? Colors.white : AppColors.muted,
-                            ),
-                          ),
-                        ),
-                      ),
-                      GestureDetector(
-                        onTap: () => input.setUseSqm(true),
-                        child: AnimatedContainer(
-                          duration: const Duration(milliseconds: 200),
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
-                          decoration: BoxDecoration(
-                            color: sqm ? AppColors.leaf : Colors.transparent,
-                            borderRadius: BorderRadius.circular(15),
-                          ),
-                          child: Text(
-                            t.dssUnitSqm,
-                            style: TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.bold,
-                              color: sqm ? Colors.white : AppColors.muted,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            if (total == null)
-              Padding(
-                padding: const EdgeInsets.symmetric(vertical: 4),
-                child: Text(t.dssLandNotSet, style: const TextStyle(color: AppColors.muted, height: 1.3, fontSize: 12.5)),
-              )
-            else ...[
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.baseline,
-                textBaseline: TextBaseline.alphabetic,
-                children: [
-                  Flexible(
-                    child: FittedBox(
-                      fit: BoxFit.scaleDown,
-                      alignment: Alignment.centerLeft,
-                      child: Text(
-                        DssFmt.area(total, sqm: sqm),
-                        style: const TextStyle(fontSize: 34, fontWeight: FontWeight.w900, color: AppColors.leaf, height: 1.0),
-                      ),
-                    ),
-                  ),
-                ],
+      padding: const EdgeInsets.all(14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.landscape_rounded, color: AppColors.leaf),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(t.dssTotalLand,
+                    style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w900, color: AppColors.ink)),
               ),
-              const SizedBox(height: 12),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Flexible(
-                    child: Text(
-                      t.dssLandUsed(DssFmt.area(used, sqm: sqm)),
-                      style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold, color: AppColors.leaf),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Text(
-                    t.dssRemaining(DssFmt.area(free, sqm: sqm)),
-                    style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold, color: AppColors.muted),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 6),
-              // Adjustable / Adaptive Land Usage Bar
-              Container(
-                height: 16,
-                decoration: BoxDecoration(
-                  color: AppColors.mint,
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: AppColors.border, width: 1.2),
-                ),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(7),
-                  child: Row(
-                    children: [
-                      for (final p in input.plantings)
-                        Expanded(
-                          flex: (p.hectares * 100000).round().clamp(1, 100000000),
-                          child: Container(color: AppColors.forCrop(p.crop)),
-                        ),
-                      if (free > 0.00001)
-                        Expanded(
-                          flex: (free * 100000).round().clamp(1, 100000000),
-                          child: Container(color: AppColors.mint),
-                        ),
-                    ],
-                  ),
-                ),
+              TextButton.icon(
+                onPressed: () => showTotalLandSheet(context),
+                icon: Icon(total == null ? Icons.add_rounded : Icons.edit_rounded, size: 18),
+                label: Text(total == null ? t.dssLandSet : t.edit),
               ),
             ],
+          ),
+          if (total == null)
+            Text(t.dssLandNotSet, style: const TextStyle(color: AppColors.muted, height: 1.35))
+          else ...[
+            Text(DssFmt.area(total, sqm: sqm),
+                style: const TextStyle(fontSize: 30, fontWeight: FontWeight.w900, color: AppColors.leaf)),
+            const SizedBox(height: 8),
+            SizedBox(
+              width: double.infinity,
+              child: SegmentedButton<bool>(
+                showSelectedIcon: false,
+                style: const ButtonStyle(visualDensity: VisualDensity.compact),
+                segments: [
+                  ButtonSegment(value: false, label: Text(t.dssUnitHa, maxLines: 1, overflow: TextOverflow.ellipsis)),
+                  ButtonSegment(value: true, label: Text(t.dssUnitSqm, maxLines: 1, overflow: TextOverflow.ellipsis)),
+                ],
+                selected: {sqm},
+                onSelectionChanged: (s) => input.setUseSqm(s.first),
+              ),
+            ),
+            const SizedBox(height: 10),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: SizedBox(
+                height: 14,
+                child: Row(
+                  children: [
+                    for (final p in input.plantings)
+                      Expanded(
+                        flex: (p.hectares * 100000).round().clamp(1, 100000000),
+                        child: Container(color: AppColors.forCrop(p.crop)),
+                      ),
+                    Expanded(
+                      flex: ((rem ?? 0) * 100000).round().clamp(0, 100000000),
+                      child: Container(color: AppColors.mint),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Expanded(
+                  child: Text(t.dssLandUsed(DssFmt.area(used, sqm: sqm)),
+                      style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: AppColors.ink)),
+                ),
+                Text(t.dssRemaining(DssFmt.area(rem ?? 0, sqm: sqm)),
+                    style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w800, color: AppColors.leaf)),
+              ],
+            ),
           ],
-        ),
+        ],
       ),
     );
   }
@@ -261,9 +197,10 @@ class _InputCard extends StatelessWidget {
   final FarmInputProvider input;
   final VoidCallback onAdd;
   final void Function(FarmPlanting) onEdit;
+  final void Function(FarmPlanting) onRecord;
   final void Function(FarmPlanting) onDelete;
 
-  const _InputCard({required this.input, required this.onAdd, required this.onEdit, required this.onDelete});
+  const _InputCard({required this.input, required this.onAdd, required this.onEdit, required this.onRecord, required this.onDelete});
 
   @override
   Widget build(BuildContext context) {
@@ -319,7 +256,16 @@ class _InputCard extends StatelessWidget {
           if (sel != null) ...[
             const SizedBox(height: 12),
             _SelectedSummary(p: sel, sqm: input.useSqm),
-            const SizedBox(height: 4),
+            const SizedBox(height: 10),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton.tonalIcon(
+                onPressed: () => onRecord(sel),
+                icon: const Icon(Icons.inventory_2_rounded, size: 18),
+                label: Text(t.dssRecordHarvest),
+              ),
+            ),
+            const SizedBox(height: 2),
             Row(
               children: [
                 TextButton.icon(
@@ -351,7 +297,7 @@ class _SelectedSummary extends StatelessWidget {
   Widget build(BuildContext context) {
     final t = AppLocalizations.of(context)!;
     final grown = DateTime.now().difference(p.plantedOn).inDays;
-    final est = DssService.estimate(p);
+    final est = context.watch<FarmInputProvider>().estimateFor(p);
     final harvest = (est?.harvestFrom != null && est?.harvestTo != null)
         ? '${DssFmt.date(est!.harvestFrom!)} – ${DssFmt.date(est.harvestTo!)}'
         : t.dssHarvestYearRound;
@@ -494,7 +440,7 @@ class _MonthStrip extends StatelessWidget {
                     tween: Tween(begin: 0, end: heightOf?.call(m) ?? 1),
                     duration: Duration(milliseconds: 350 + m * 40),
                     curve: Curves.easeOutCubic,
-                    builder: (_, v, _) => Container(
+                    builder: (_, v, __) => Container(
                       height: 54 * v.clamp(0.12, 1.0),
                       decoration: BoxDecoration(
                         color: builder(m),
@@ -531,7 +477,7 @@ class _HarvestIncome extends StatelessWidget {
   Widget build(BuildContext context) {
     final t = AppLocalizations.of(context)!;
     final sqm = context.watch<FarmInputProvider>().useSqm;
-    final e = DssService.estimate(planting);
+    final e = context.watch<FarmInputProvider>().estimateFor(planting);
     if (e == null) {
       return GlassCard(padding: const EdgeInsets.all(14), child: Text(t.dssNoEstimate));
     }
@@ -565,6 +511,13 @@ class _HarvestIncome extends StatelessWidget {
               ),
             ],
           ),
+          if (e.hasProfit) ...[
+            const SizedBox(height: 10),
+            _ProfitBox(e: e),
+          ] else if (e.hasPrice) ...[
+            const SizedBox(height: 10),
+            _line(Icons.lightbulb_rounded, t.dssProfit, t.dssCostAsk),
+          ],
           const SizedBox(height: 14),
           _RangeBar(low: e.kgLow, mid: e.kgMid, high: e.kgHigh),
           const SizedBox(height: 12),
@@ -574,6 +527,60 @@ class _HarvestIncome extends StatelessWidget {
             const SizedBox(height: 6),
             _line(Icons.sell_rounded, t.dssPriceUsed, '${DssFmt.pesoKg(e.priceLow!)} – ${DssFmt.pesoKg(e.priceHigh!)} / kg'),
           ],
+        ],
+      ),
+    );
+  }
+}
+
+/// Gastos, tubo (kita bawas gastos) at balik sa puhunan.
+class _ProfitBox extends StatelessWidget {
+  final HarvestEstimate e;
+  const _ProfitBox({required this.e});
+
+  @override
+  Widget build(BuildContext context) {
+    final t = AppLocalizations.of(context)!;
+    final profit = e.profitMid!;
+    final good = profit >= 0;
+    final color = good ? AppColors.leaf : AppColors.soil;
+    final roi = e.roiPercent;
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(color: color.withValues(alpha: 0.10), borderRadius: BorderRadius.circular(16)),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(children: [
+            Icon(good ? Icons.savings_rounded : Icons.trending_down_rounded, size: 16, color: color),
+            const SizedBox(width: 5),
+            Expanded(
+              child: Text(t.dssProfit, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: AppColors.muted)),
+            ),
+            if (roi != null)
+              Text('${t.dssRoi}: ${roi >= 0 ? '+' : ''}${roi.round()}%',
+                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w900, color: color)),
+          ]),
+          const SizedBox(height: 6),
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerLeft,
+            child: Text('${good ? '' : '-'}${DssFmt.peso(profit.abs())}',
+                style: TextStyle(fontSize: 24, fontWeight: FontWeight.w900, color: color)),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            '${DssFmt.peso(e.profitLow!)} – ${DssFmt.peso(e.profitHigh!)}',
+            style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700, color: AppColors.muted),
+          ),
+          const SizedBox(height: 8),
+          Row(children: [
+            Expanded(child: Text(t.dssYourCost, style: const TextStyle(fontSize: 12.5, color: AppColors.muted, fontWeight: FontWeight.w700))),
+            Text(DssFmt.peso(e.cost!), style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w900, color: AppColors.ink)),
+          ]),
+          const SizedBox(height: 6),
+          Text(t.dssProfitNote, style: const TextStyle(fontSize: 11, color: AppColors.muted, height: 1.3)),
         ],
       ),
     );
@@ -640,7 +647,7 @@ class _RangeBar extends StatelessWidget {
                   tween: Tween(begin: 0, end: pos),
                   duration: const Duration(milliseconds: 700),
                   curve: Curves.easeOutCubic,
-                  builder: (_, v, _) => Positioned(
+                  builder: (_, v, __) => Positioned(
                     left: (c.maxWidth - 18) * v,
                     child: Container(
                       width: 18,

@@ -1,4 +1,3 @@
-
 {
   "@@locale": "en",
   "appSubtitle": "Pagsanjan Agriculture",
@@ -274,11 +273,11 @@
   "helpSupport": "Help & Support",
   "helpSupportSub": "Need help with the app or your farm?",
   "howToUse": "How to use PAGRI",
-  "howTo1": "Home: see today's weather, the 7-day forecast, farm advice and the crops of Pagsanjan.",
-  "howTo2": "My Farm: see your plots, crops and harvest records.",
-  "howTo3": "Tap a crop on Home to see the best months to plant it.",
-  "howTo4": "Prices: see expected crop prices and when to sell.",
-  "howTo5": "Tap the bell at the top to read your notifications.",
+  "howTo1": "DSS (the green button in the middle): first set your total land size, then add your crops with land area, planting date, last yield and cost. You will see when to plant, an estimate of harvest and income, and price advice.",
+  "howTo2": "Weather: see today's weather, the 7-day forecast, the heat index and advice for your crops.",
+  "howTo3": "My Farm: see your crops and how your land is shared (hectares or square meters). Tap a crop to open it in DSS. Your harvest records are here too.",
+  "howTo4": "Prices: only the crops you added in DSS appear here, with expected prices and when it is a good time to sell.",
+  "howTo5": "After harvest, tap \"Record harvest\" in DSS so estimates get closer to your own farm. Tap the bell at the top to read notifications. Numbers are estimates only, not official.",
   "contactOffice": "Municipal Agriculture Office",
   "contactOfficeSub": "Visit the office in Pagsanjan, Laguna for account changes, subsidies and farming help.",
   "aboutApp": "About",
@@ -468,7 +467,7 @@
   "dssLikely": "Likely",
   "dssHigh": "High",
   "dssHowComputed": "How it is computed",
-  "dssBasisOwn": "Your last harvest per hectare, for {ha} (±15%).",
+  "dssBasisOwn": "Your own harvest per hectare (from your records), for {ha} (±15%).",
   "@dssBasisOwn": {
     "placeholders": {
       "ha": {
@@ -818,5 +817,53 @@
   },
   "dssLandSet": "Set land size",
   "dssLandNotSet": "Enter your total land size so the app can show how much each crop uses.",
-  "farmUnallocated": "Not planted"
+  "farmUnallocated": "Not planted",
+  "dssCost": "Production cost (optional)",
+  "dssCostHint": "Total you spent or will spend on this crop: seeds, fertilizer, pesticide, labor, water. It is used to show your profit.",
+  "dssCostDetails": "Cost details (optional)",
+  "dssCostSeed": "Seeds / seedlings",
+  "dssCostFertilizer": "Fertilizer",
+  "dssCostPesticide": "Pesticide",
+  "dssCostLabor": "Labor and hired work",
+  "dssCostOther": "Other (water, fuel, transport)",
+  "dssYourCost": "Your cost",
+  "dssProfit": "Estimated profit",
+  "dssRoi": "Return on cost",
+  "dssCostAsk": "Add your production cost when you edit this crop to see your profit.",
+  "dssProfitNote": "Profit = expected income minus your cost. The low value uses the lower harvest and price, and the high value uses the higher ones.",
+  "dssRecordHarvest": "Record harvest",
+  "dssRecordTitle": "Record harvest: {crop}",
+  "@dssRecordTitle": {
+    "placeholders": {
+      "crop": {
+        "type": "String"
+      }
+    }
+  },
+  "dssRecordSub": "Enter what really happened. Your records make the advice closer to your own farm.",
+  "dssHarvestedOn": "Date harvested",
+  "dssActualYield": "Total harvest",
+  "dssSoldPrice": "Price you sold at",
+  "dssSoldPriceHint": "Estimated price: {price} per kg",
+  "@dssSoldPriceHint": {
+    "placeholders": {
+      "price": {
+        "type": "String"
+      }
+    }
+  },
+  "dssRecIncome": "Income",
+  "dssRecProfit": "Profit",
+  "dssRecordSaved": "Harvest saved. The land is free again for your next crop.",
+  "farmHistoryTitle": "Harvest history",
+  "farmHistorySub": "Your recorded harvests, income and profit.",
+  "farmHistoryDeleteTitle": "Delete this record?",
+  "farmHistoryDeleteBody": "The {crop} harvest record will be removed.",
+  "@farmHistoryDeleteBody": {
+    "placeholders": {
+      "crop": {
+        "type": "String"
+      }
+    }
+  }
 }

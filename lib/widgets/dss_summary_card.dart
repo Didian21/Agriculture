@@ -37,7 +37,7 @@ class DssSummaryCard extends StatelessWidget {
 
     final now = DateTime.now().month;
     final fit = DssService.fitFor(sel.crop, now);
-    final est = DssService.estimate(sel);
+    final est = context.watch<FarmInputProvider>().estimateFor(sel);
     final sell = DssService.bestSellMonths(sel.crop);
 
     final color = switch (fit) {

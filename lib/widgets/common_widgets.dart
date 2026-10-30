@@ -1,4 +1,5 @@
 import 'dart:math' as math;
+import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/material.dart';
 
@@ -92,13 +93,15 @@ class _PressableScaleState extends State<PressableScale> {
   }
 }
 
-/// Malambot na puting "salamin" na card na may manipis na guhit at banayad na anino.
+/// "Frosted glass" na card: malabong salamin na may manipis na puting guhit at malambot na anino.
+/// Nakikita nang bahagya ang burol sa likod nito.
 class GlassCard extends StatelessWidget {
   final Widget child;
   final EdgeInsetsGeometry padding;
   final VoidCallback? onTap;
   final Color? tint;
   final double radius;
+  final bool blur;
 
   const GlassCard({
     super.key,
@@ -106,12 +109,14 @@ class GlassCard extends StatelessWidget {
     this.padding = EdgeInsets.zero,
     this.onTap,
     this.tint,
-    this.radius = 20,
+    this.radius = 24,
+    this.blur = true,
   });
 
   @override
   Widget build(BuildContext context) {
-    final content = Container(
+    final r = BorderRadius.circular(radius);
+    Widget inner = Container(
       width: double.infinity,
       padding: padding,
       decoration: BoxDecoration(
@@ -119,17 +124,27 @@ class GlassCard extends StatelessWidget {
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
           colors: [
-            (tint ?? Colors.white).withValues(alpha: 0.88),
-            Colors.white.withValues(alpha: 0.64),
+            (tint ?? Colors.white).withValues(alpha: 0.80),
+            Colors.white.withValues(alpha: 0.58),
           ],
         ),
-        borderRadius: BorderRadius.circular(radius),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.9), width: 1.2),
-        boxShadow: const [
-          BoxShadow(color: Color(0x1A1B5E20), blurRadius: 18, offset: Offset(0, 8)),
-        ],
+        borderRadius: r,
+        border: Border.all(color: Colors.white.withValues(alpha: 0.85), width: 1.2),
       ),
       child: child,
+    );
+    if (blur) {
+      inner = ClipRRect(
+        borderRadius: r,
+        child: BackdropFilter(filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14), child: inner),
+      );
+    }
+    final content = DecoratedBox(
+      decoration: BoxDecoration(
+        borderRadius: r,
+        boxShadow: const [BoxShadow(color: Color(0x1F1B5E20), blurRadius: 24, offset: Offset(0, 10))],
+      ),
+      child: inner,
     );
     if (onTap == null) return content;
     return PressableScale(onTap: onTap, child: content);
@@ -181,7 +196,7 @@ class CountUp extends StatelessWidget {
       tween: Tween(begin: 0, end: value),
       duration: const Duration(milliseconds: 900),
       curve: Curves.easeOutCubic,
-      builder: (_, v, _) => Text('$prefix${v.toStringAsFixed(decimals)}$suffix', style: style),
+      builder: (_, v, __) => Text('$prefix${v.toStringAsFixed(decimals)}$suffix', style: style),
     );
   }
 }

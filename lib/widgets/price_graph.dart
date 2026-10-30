@@ -18,7 +18,7 @@ class PriceGraph extends StatelessWidget {
         tween: Tween(begin: 0, end: 1),
         duration: const Duration(milliseconds: 900),
         curve: Curves.easeOutCubic,
-        builder: (_, v, _) => CustomPaint(
+        builder: (_, v, __) => CustomPaint(
           painter: _PricePainter(values: values, labels: labels, color: color, progress: v),
         ),
       ),

@@ -34,6 +34,8 @@ class _PlantingFormState extends State<_PlantingForm> {
   late DateTime _date;
   late final TextEditingController _area;
   late final TextEditingController _yield;
+  late final TextEditingController _cost;
+  final List<TextEditingController> _parts = List.generate(5, (_) => TextEditingController());
   String? _areaError;
   late bool _sqm;
 
@@ -46,18 +48,32 @@ class _PlantingFormState extends State<_PlantingForm> {
     _sqm = context.read<FarmInputProvider>().useSqm;
     _area = TextEditingController(text: e == null ? '' : DssFmt.areaNumber(e.hectares, sqm: _sqm));
     _yield = TextEditingController(text: e?.lastYieldKg == null ? '' : _trim(e!.lastYieldKg!));
+    _cost = TextEditingController(text: e?.costPhp == null ? '' : _trim(e!.costPhp!));
   }
 
   @override
   void dispose() {
     _area.dispose();
     _yield.dispose();
+    _cost.dispose();
+    for (final c in _parts) {
+      c.dispose();
+    }
     super.dispose();
   }
 
   String _trim(double v) => v == v.roundToDouble() ? v.toStringAsFixed(0) : v.toString();
 
   double? _parse(String s) => double.tryParse(s.trim().replaceAll(',', '.'));
+
+  /// Kapag may nilagay sa detalye ng gastos, ang kabuuan nito ang ilalagay sa kabuuang gastos.
+  void _sumParts() {
+    var sum = 0.0;
+    for (final c in _parts) {
+      sum += _parse(c.text) ?? 0;
+    }
+    if (sum > 0) _cost.text = _trim(sum);
+  }
 
   Future<void> _pickDate() async {
     final now = DateTime.now();
@@ -98,6 +114,7 @@ class _PlantingFormState extends State<_PlantingForm> {
       return;
     }
     final y = _parse(_yield.text);
+    final cost = _parse(_cost.text);
     Navigator.pop(
       context,
       FarmPlanting(
@@ -106,6 +123,7 @@ class _PlantingFormState extends State<_PlantingForm> {
         hectares: ha,
         plantedOn: _date,
         lastYieldKg: (y != null && y > 0) ? y : null,
+        costPhp: (cost != null && cost > 0) ? cost : null,
       ),
     );
   }
@@ -198,7 +216,43 @@ class _PlantingFormState extends State<_PlantingForm> {
                 helperText: t.dssLastYieldHint,
               ),
             ),
-            const SizedBox(height: 18),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _cost,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              decoration: InputDecoration(
+                labelText: t.dssCost,
+                prefixIcon: const Icon(Icons.payments_outlined),
+                prefixText: '₱ ',
+                helperText: t.dssCostHint,
+                helperMaxLines: 3,
+              ),
+            ),
+            Theme(
+              data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+              child: ExpansionTile(
+                tilePadding: EdgeInsets.zero,
+                childrenPadding: const EdgeInsets.only(bottom: 4),
+                title: Text(t.dssCostDetails, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 14)),
+                children: [
+                  for (var i = 0; i < 5; i++)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: TextField(
+                        controller: _parts[i],
+                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                        onChanged: (_) => _sumParts(),
+                        decoration: InputDecoration(
+                          isDense: true,
+                          labelText: [t.dssCostSeed, t.dssCostFertilizer, t.dssCostPesticide, t.dssCostLabor, t.dssCostOther][i],
+                          prefixText: '₱ ',
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 10),
             Row(
               children: [
                 Expanded(
