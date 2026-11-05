@@ -1,0 +1,16 @@
+[1mdiff --git a/.gitignore b/.gitignore[m
+[1mindex aa724b7..7398afd 100644[m
+[1m--- a/.gitignore[m
+[1m+++ b/.gitignore[m
+[36m@@ -13,3 +13,10 @@[m
+ .externalNativeBuild[m
+ .cxx[m
+ local.properties[m
+[32m+[m
+[32m+[m[32m# Flutter/Dart build files[m
+[32m+[m[32m.dart_tool/[m
+[32m+[m[32mbuild/[m
+[32m+[m[32m.packages[m
+[32m+[m[32m.flutter-plugins[m
+[32m+[m[32m.flutter-plugins-dependencies[m
+\ No newline at end of file[m
