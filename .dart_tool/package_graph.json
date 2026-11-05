@@ -575,6 +575,8 @@
       ]
     },
     {
+
+
       "name": "leak_tracker_testing",
       "version": "3.0.2",
       "dependencies": [
@@ -602,21 +604,8 @@
     {
       "name": "boolean_selector",
       "version": "2.1.2",
-      "dependencies": [
-        "source_span",
-        "string_scanner"
-      ]
-    },
-    {
-      "name": "typed_data",
-      "version": "1.4.0",
-      "dependencies": [
-        "collection"
-      ]
-    },
-    {
-      "name": "posix",
-      "version": "6.5.4",
+
+
       "dependencies": [
         "ffi",
         "meta",
@@ -876,6 +865,8 @@
       ]
     },
     {
+
+
       "name": "vm_service",
       "version": "15.3.0",
       "dependencies": []

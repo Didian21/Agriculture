@@ -425,7 +425,7 @@ class _HeatScale extends StatelessWidget {
             tween: Tween(begin: _min, end: value),
             duration: const Duration(milliseconds: 900),
             curve: Curves.easeOutCubic,
-            builder: (_, v, _) => Positioned(
+            builder: (_, v, __) => Positioned(
               left: x(v) - 8,
               top: 3,
               child: Container(
@@ -489,14 +489,14 @@ class _ForecastCardState extends State<_ForecastCard> {
       key: const ValueKey('week'),
       scrollDirection: Axis.horizontal,
       itemCount: widget.days.length,
-      separatorBuilder: (_, _) => const SizedBox(width: 8),
+      separatorBuilder: (_, __) => const SizedBox(width: 8),
       itemBuilder: (_, i) => _DayItem(day: widget.days[i], isToday: i == 0, locale: locale, todayLabel: t.today),
     )
         : ListView.separated(
       key: const ValueKey('hours'),
       scrollDirection: Axis.horizontal,
       itemCount: widget.hours.length,
-      separatorBuilder: (_, _) => const SizedBox(width: 8),
+      separatorBuilder: (_, __) => const SizedBox(width: 8),
       itemBuilder: (_, i) => _HourItem(hour: widget.hours[i], isFirst: i == 0, locale: locale, nowLabel: t.now),
     );
 

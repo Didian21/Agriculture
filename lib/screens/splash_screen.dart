@@ -1,6 +1,10 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+
+import '../dashboard_data.dart';
 import '../main.dart';
+import 'dashboard/dashboard_screen.dart';
 
 class SplashScreen extends StatefulWidget {
   final Widget nextScreen;
@@ -36,9 +40,12 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
 
     Timer(const Duration(milliseconds: 2400), () {
       if (mounted) {
+        final p = Provider.of<DashboardProvider>(context, listen: false);
+        final targetScreen = p.isLoggedIn ? const DashboardScreen() : widget.nextScreen;
+
         Navigator.of(context).pushReplacement(
           PageRouteBuilder(
-            pageBuilder: (context, anim, secondAnim) => widget.nextScreen,
+            pageBuilder: (context, anim, secondAnim) => targetScreen,
             transitionsBuilder: (context, anim, secondaryAnim, child) => FadeTransition(opacity: anim, child: child),
             transitionDuration: const Duration(milliseconds: 600),
           ),

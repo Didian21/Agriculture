@@ -32,6 +32,8 @@ class _PricesTabState extends State<PricesTab> {
 
   /// Huling ani (kg) na inilagay ng magsasaka sa DSS para sa pananim na ito.
   double? _lastHarvestKg(FarmInputProvider farm, String crop) {
+    final recorded = farm.lastRecordedYieldKg(crop);
+    if (recorded != null) return recorded;
     FarmPlanting? best;
     for (final e in farm.plantings) {
       if (e.crop != crop || e.lastYieldKg == null || e.lastYieldKg! <= 0) continue;
@@ -175,7 +177,7 @@ class _PriceCard extends StatelessWidget {
                 tween: Tween(begin: i.currentPrice, end: i.predictedPrice),
                 duration: const Duration(milliseconds: 900),
                 curve: Curves.easeOutCubic,
-                builder: (_, v, _) => Text('₱${v.toStringAsFixed(2)}',
+                builder: (_, v, __) => Text('₱${v.toStringAsFixed(2)}',
                     style: TextStyle(fontSize: 26, fontWeight: FontWeight.w900, color: color)),
               ),
             ]),

@@ -236,11 +236,50 @@ class AccountService extends ChangeNotifier {
   Farmer? authenticateFarmer(String username, String password) {
     try {
       return _farmers.firstWhere(
-        (f) => f.username == username && f.password == password && f.status == 'Active',
+        (f) => (f.username == username || f.contactNumber == username) && f.password == password && f.status == 'Active',
       );
     } catch (e) {
       return null;
     }
+  }
+
+  Future<Farmer?> authenticateFarmerAsync(String username, String password) async {
+    try {
+      final localMatch = authenticateFarmer(username, password);
+      if (localMatch != null) return localMatch;
+    } catch (_) {}
+
+    try {
+      final res = await SupabaseService.client
+          .from('farmers')
+          .select()
+          .or('username.eq.$username,contact_number.eq.$username')
+          .eq('password', password)
+          .eq('status', 'Active')
+          .maybeSingle();
+
+      if (res != null) {
+        final farmer = Farmer(
+          id: res['id'] ?? '',
+          username: res['username'] ?? '',
+          password: res['password'] ?? '',
+          profileName: res['profile_name'] ?? '',
+          barangay: res['barangay'] ?? 'Biñan',
+          contactNumber: res['contact_number'] ?? '',
+          organization: res['organization'] ?? '',
+          status: res['status'] ?? 'Active',
+          records: res['records'] != null ? List<String>.from(res['records']) : [],
+        );
+        if (!_farmers.any((f) => f.id == farmer.id)) {
+          _farmers.add(farmer);
+        }
+        return farmer;
+      }
+    } catch (e) {
+      debugPrint('Supabase auth error (farmer): $e');
+    }
+
+    return null;
   }
 
   bool authenticateAdmin(String username, String password) {
