@@ -1,12 +1,15 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
+import 'package:pdf/pdf.dart' as pdf_lib;
+import 'package:pdf/widgets.dart' as pw;
 
 import '../models/farmer.dart';
 import '../services/account_service.dart';
-import 'package:latlong2/latlong.dart';
+import 'package:latlong2/latlong.dart' hide Path;
 import 'package:flutter_map/flutter_map.dart';
 import 'map_screen.dart';
 
@@ -87,6 +90,243 @@ class _AdminDashboardState extends State<AdminDashboard> {
   String _selectedCropFilter = 'All';
   String _selectedBarangayFilter = 'All';
   String _selectedTimePeriodFilter = 'All';
+
+  // Interactive Map State
+  bool _showRegisteredPins = true;
+  LatLng _mapCenter = const LatLng(14.2790, 121.4550);
+  double _mapZoom = 13.5;
+
+  static final Map<String, LatLng> _barangayCenterMap = {
+    'Anibong': const LatLng(14.2855, 121.4682),
+    'Biñan': const LatLng(14.2750, 121.4580),
+    'Buboy': const LatLng(14.2950, 121.4420),
+    'Cabanbanan': const LatLng(14.2620, 121.4650),
+    'Calusiche': const LatLng(14.2980, 121.4580),
+    'Dingin': const LatLng(14.2880, 121.4350),
+    'Lambac': const LatLng(14.2680, 121.4420),
+    'Layug': const LatLng(14.2710, 121.4480),
+    'Magdapio': const LatLng(14.2650, 121.4380),
+    'Maulawin': const LatLng(14.2780, 121.4410),
+    'Pinagsanjan': const LatLng(14.2720, 121.4520),
+    'Poblacion Uno': const LatLng(14.2785, 121.4515),
+    'Poblacion Dos': const LatLng(14.2760, 121.4530),
+    'Sabang': const LatLng(14.2820, 121.4460),
+    'Sampaloc': const LatLng(14.2910, 121.4510),
+    'San Isidro': const LatLng(14.2630, 121.4520),
+  };
+
+  LatLng _getBarangayCenter(String barangay, List<FarmRecord> allFarms) {
+    if (barangay == 'All') {
+      return const LatLng(14.2790, 121.4550);
+    }
+    final brgyFarms = allFarms.where((f) => f.barangay == barangay).toList();
+    if (brgyFarms.isNotEmpty) {
+      double sumLat = 0;
+      double sumLon = 0;
+      for (final f in brgyFarms) {
+        sumLat += f.latitude;
+        sumLon += f.longitude;
+      }
+      return LatLng(sumLat / brgyFarms.length, sumLon / brgyFarms.length);
+    }
+    return _barangayCenterMap[barangay] ?? const LatLng(14.2790, 121.4550);
+  }
+
+  List<String> _parseCsvLine(String line) {
+    String delimiter = ',';
+    if (line.contains(';') && !line.contains(',')) {
+      delimiter = ';';
+    } else if (line.contains('\t') && !line.contains(',') && !line.contains(';')) {
+      delimiter = '\t';
+    }
+    return line.split(delimiter).map((p) => p.trim().replaceAll('"', '').replaceAll("'", "")).toList();
+  }
+
+  bool _matchesCrop(String cropType, String selectedCrop) {
+    if (selectedCrop == 'All') return true;
+    final c = cropType.toLowerCase();
+    final s = selectedCrop.toLowerCase();
+    if (c.contains(s)) return true;
+    if (s == 'rice' && (c.contains('palay') || c.contains('rice'))) return true;
+    if (s == 'gulay' && (c.contains('gulay') || c.contains('vegetable') || c.contains('talong') || c.contains('kamatis'))) return true;
+    if (s == 'prutas' && (c.contains('prutas') || c.contains('fruit') || c.contains('saging') || c.contains('banana') || c.contains('mangga'))) return true;
+    return false;
+  }
+
+  Future<String> _readFileSafely(File file) async {
+    try {
+      return await file.readAsString(encoding: utf8);
+    } catch (_) {
+      try {
+        return await file.readAsString(encoding: latin1);
+      } catch (e) {
+        return '';
+      }
+    }
+  }
+
+  Future<String> _extractTextFromPdfFile(File file) async {
+    try {
+      final bytes = await file.readAsBytes();
+      final content = latin1.decode(bytes, allowInvalid: true);
+      
+      final regExp = RegExp(r'\(([^)]+)\)\s*Tj');
+      final matches = regExp.allMatches(content);
+      
+      final sb = StringBuffer();
+      for (final m in matches) {
+        final text = m.group(1) ?? '';
+        final cleanText = text.replaceAll(r'\(', '(').replaceAll(r'\)', ')').replaceAll(r'\\', '\\');
+        sb.writeln(cleanText);
+      }
+
+      if (sb.isEmpty) {
+        final lines = content.split('\n');
+        for (final l in lines) {
+          if (l.contains('|') || l.contains(',') || l.contains('\t')) {
+            sb.writeln(l);
+          }
+        }
+      }
+
+      return sb.toString();
+    } catch (e) {
+      debugPrint('PDF extraction error: $e');
+      return '';
+    }
+  }
+
+  bool _parsePdfRowAndImport(String line, bool isHistorical, AccountService service, int index) {
+    if (!line.contains('|')) return false;
+    final parts = line.split('|').map((p) => p.trim()).toList();
+    if (parts.length < 3) return false;
+
+    final firstCol = parts[0].toLowerCase();
+    if (firstCol.contains('no') || firstCol.contains('report') || firstCol.contains('generated') || firstCol.contains('pagsanjan') || firstCol.contains('smart') || firstCol.contains('agricultural')) {
+      return false;
+    }
+
+    if (isHistorical) {
+      if (parts.length >= 5) {
+        final crop = parts[1];
+        final year = int.tryParse(parts[2]) ?? DateTime.now().year;
+        final month = parts[3];
+        final prod = double.tryParse(parts[4].replaceAll('MT', '').trim()) ?? 0.0;
+        final price = parts.length > 5 ? double.tryParse(parts[5].replaceAll('P', '').replaceAll('PHP', '').trim()) ?? 0.0 : 0.0;
+
+        if (crop.isNotEmpty && prod >= 0) {
+          final isDuplicate = service.historicalRecords.any((h) =>
+              h.crop.toLowerCase() == crop.toLowerCase() && h.year == year && h.month.toLowerCase() == month.toLowerCase());
+          if (!isDuplicate) {
+            service.addHistoricalRecord(
+              crop: crop,
+              year: year,
+              month: month,
+              productionMT: prod,
+              pricePerKg: price,
+              uploadedBy: service.activeUserName,
+            );
+            return true;
+          }
+        }
+      }
+    } else {
+      if (parts.length >= 5) {
+        final name = parts[1];
+        if (name.isEmpty || name.toLowerCase() == 'farmer name' || name.toLowerCase() == 'n/a') return false;
+
+        final location = parts.length > 2 ? parts[2] : 'Sitio Pagsanjan';
+        final crop = parts.length > 3 ? parts[3] : 'Rice';
+        final area = parts.length > 4 ? double.tryParse(parts[4].replaceAll('ha', '').trim()) ?? 2.0 : 2.0;
+
+        final existing = service.farmers.any((f) => f.profileName.trim().toLowerCase() == name.toLowerCase());
+        if (!existing) {
+          final farmerId = 'F${DateTime.now().millisecondsSinceEpoch}_$index';
+          final username = name.toLowerCase().replaceAll(RegExp(r'\s+'), '_');
+          service.addFarmer(
+            id: farmerId,
+            username: username,
+            password: 'password123',
+            profileName: name,
+            barangay: 'Biñan',
+            contactNumber: '09171234567',
+            organization: 'Independent',
+          );
+          service.addFarmRecord(
+            farmerId: farmerId,
+            farmerName: name,
+            locationName: location,
+            latitude: 14.2717,
+            longitude: 121.4553,
+            landAreaHectares: area,
+            tenureStatus: 'Owner',
+            cropType: crop,
+            barangay: 'Biñan',
+          );
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  Marker _buildBlueFarmMarker(FarmRecord farm, VoidCallback onTap) {
+    Color primaryBlue;
+    IconData cropIcon;
+
+    final cropLower = farm.cropType.toLowerCase();
+    if (cropLower.contains('rice') || cropLower.contains('palay')) {
+      primaryBlue = const Color(0xFF1E3A8A); // Deep Royal Blue
+      cropIcon = Icons.grass_rounded;
+    } else if (cropLower.contains('gulay') || cropLower.contains('veg')) {
+      primaryBlue = const Color(0xFF0284C7); // Ocean Cyan Blue
+      cropIcon = Icons.eco_rounded;
+    } else if (cropLower.contains('prutas') || cropLower.contains('fruit')) {
+      primaryBlue = const Color(0xFF2563EB); // Electric Blue
+      cropIcon = Icons.apple_rounded;
+    } else {
+      primaryBlue = const Color(0xFF0056B3); // Municipal Blue
+      cropIcon = Icons.location_on_rounded;
+    }
+
+    return Marker(
+      point: LatLng(farm.latitude, farm.longitude),
+      width: 44,
+      height: 48,
+      child: GestureDetector(
+        onTap: onTap,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(6),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [primaryBlue, primaryBlue.withValues(alpha: 0.85)],
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                ),
+                shape: BoxShape.circle,
+                border: Border.all(color: Colors.white, width: 2),
+                boxShadow: const [
+                  BoxShadow(color: Colors.black26, blurRadius: 6, offset: Offset(0, 3)),
+                ],
+              ),
+              child: Icon(cropIcon, color: Colors.white, size: 18),
+            ),
+            ClipPath(
+              clipper: _TriangleClipper(),
+              child: Container(
+                width: 8,
+                height: 6,
+                color: primaryBlue,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 
   final ScrollController _kpiScrollController = ScrollController();
   final ScrollController _sidebarScrollController = ScrollController();
@@ -181,95 +421,146 @@ $offsetXref
 
   String _generateExportContent(String moduleName, String format, AccountService service) {
     final now = DateTime.now();
-    final dateStr = DateFormat('yyyy-MM-dd HH:mm:ss').format(now);
+    final dateStr = DateFormat('yyyy-MM-dd HH:mm').format(now);
     final isCsv = format.toLowerCase().contains('excel') || format.toLowerCase().contains('csv');
     final mod = moduleName.toLowerCase();
+    final operatorName = service.activeUserName.isNotEmpty ? service.activeUserName : 'MAO Admin';
 
     if (isCsv) {
       final sb = StringBuffer();
-      sb.writeln('PAGSANJAN MUNICIPAL AGRICULTURE OFFICE (MAO)');
-      sb.writeln('OFFICIAL EXPORT REPORT: ${moduleName.toUpperCase()}');
-      sb.writeln('GENERATED ON: $dateStr');
-      sb.writeln('OPERATOR: ${service.activeUserName}');
+      sb.writeln('================================================================================');
+      sb.writeln('PAGSANJAN AGRICULTURAL SYSTEM - MUNICIPAL AGRICULTURE OFFICE (MAO)');
+      sb.writeln('Smart Farming. Brighter Tomorrow.');
+      sb.writeln('================================================================================');
+      sb.writeln('AGRICULTURAL REPORT');
+      sb.writeln('Report Type    : ${moduleName.toUpperCase()}');
+      sb.writeln('Generated Date : $dateStr');
+      sb.writeln('Generated By   : $operatorName');
+      sb.writeln('--------------------------------------------------------------------------------');
       sb.writeln('');
 
       if (mod.contains('farmer') && mod.contains('farm')) {
-        sb.writeln('Farmer ID,Full Personal Name,Username,Barangay,Contact Details,Association / Org,Status,Farm Sitio,Land Area (ha),Tenure Status,Crop Type');
+        sb.writeln('No.,Farmer Name,Barangay,Crop Type,Area (ha),Status,Contact,Organization');
+        int i = 1;
         for (final f in service.farmers) {
           final farmerFarms = service.farms.where((farm) => farm.farmerId == f.id || farm.farmerName == f.profileName).toList();
           if (farmerFarms.isEmpty) {
-            sb.writeln('${f.id},"${f.profileName}",${f.username},${f.barangay},${f.contactNumber},"${f.organization}",${f.status},N/A,0.0,N/A,N/A');
+            sb.writeln('$i,"${f.profileName}","${f.barangay}","N/A",0.0,"${f.status}","${f.contactNumber}","${f.organization}"');
+            i++;
           } else {
             for (final farm in farmerFarms) {
-              sb.writeln('${f.id},"${f.profileName}",${f.username},${f.barangay},${f.contactNumber},"${f.organization}",${f.status},"${farm.locationName}",${farm.landAreaHectares},${farm.tenureStatus},${farm.cropType}');
+              sb.writeln('$i,"${f.profileName}","${farm.barangay}","${farm.cropType}",${farm.landAreaHectares},"${f.status}","${f.contactNumber}","${f.organization}"');
+              i++;
             }
           }
         }
       } else if (mod.contains('account')) {
         if (mod.contains('admin')) {
-          sb.writeln('Staff ID,Staff Name,Username,Email Address,Role / Position,Status');
+          sb.writeln('No.,Staff Name,Username,Email Address,Role,Status');
+          int i = 1;
           for (final s in service.adminStaffList) {
-            sb.writeln('${s.id},"${s.name}",${s.username},${s.email},"${s.role}",${s.status}');
+            sb.writeln('$i,"${s.name}",${s.username},${s.email},"${s.role}",${s.status}');
+            i++;
           }
         } else {
-          sb.writeln('Farmer ID,Full Name,Username,Barangay,Contact Details,Organization,Account Status');
+          sb.writeln('No.,Farmer Name,Username,Barangay,Contact Number,Organization,Status');
+          int i = 1;
           for (final f in service.farmers) {
-            sb.writeln('${f.id},"${f.profileName}",${f.username},${f.barangay},${f.contactNumber},"${f.organization}",${f.status}');
+            sb.writeln('$i,"${f.profileName}",${f.username},${f.barangay},${f.contactNumber},"${f.organization}",${f.status}');
+            i++;
           }
         }
       } else if (mod.contains('historical')) {
-        sb.writeln('Record ID,Crop,Year,Month,Production (MT),Price per Kg (PHP),Uploaded By');
+        sb.writeln('No.,Crop,Year,Month,Production (MT),Price per Kg (PHP),Uploaded By');
+        int i = 1;
         for (final h in service.historicalRecords) {
-          sb.writeln('${h.id},${h.crop},${h.year},${h.month},${h.productionMT},${h.pricePerKg},"${h.uploadedBy}"');
+          sb.writeln('$i,${h.crop},${h.year},${h.month},${h.productionMT},${h.pricePerKg},"${h.uploadedBy}"');
+          i++;
         }
       } else if (mod.contains('map')) {
-        sb.writeln('Farm ID,Farmer Name,Sitio Location,Barangay,Latitude,Longitude,Land Area (ha),Tenure,Crop Type');
+        sb.writeln('No.,Farmer Name,Barangay,Land Area (ha),Crop Type');
+        int i = 1;
         for (final farm in service.farms) {
-          sb.writeln('${farm.id},"${farm.farmerName}","${farm.locationName}",${farm.barangay},${farm.latitude},${farm.longitude},${farm.landAreaHectares},${farm.tenureStatus},${farm.cropType}');
+          sb.writeln('$i,"${farm.farmerName}","${farm.barangay}",${farm.landAreaHectares},"${farm.cropType}"');
+          i++;
         }
       } else if (mod.contains('activity') || mod.contains('log')) {
-        sb.writeln('Log ID,Timestamp,Operator User,Module,Action,Details');
+        sb.writeln('No.,Timestamp,Operator,Module,Action,Details');
+        int i = 1;
         for (final l in service.activityLogs) {
-          sb.writeln('${l.id},"${DateFormat('yyyy-MM-dd HH:mm').format(l.timestamp)}",${l.user},${l.module},${l.action},"${l.details}"');
+          sb.writeln('$i,"${DateFormat('yyyy-MM-dd HH:mm').format(l.timestamp)}",${l.user},${l.module},${l.action},"${l.details}"');
+          i++;
         }
       } else {
-        sb.writeln('Metric Title,Value,Details');
-        sb.writeln('Registered Farmers,${service.farmers.length},Active Agricultural Directory');
+        sb.writeln('No.,Metric Title,Value,Description');
+        sb.writeln('1,Registered Farmers,${service.farmers.length},Active Agricultural Directory');
         final totalArea = service.farms.fold(0.0, (sum, item) => sum + item.landAreaHectares);
-        sb.writeln('Total Farm Area (ha),${totalArea.toStringAsFixed(1)},Pagsanjan Registered Farmlands');
-        sb.writeln('Historical Records,${service.historicalRecords.length},MAO Production Data');
-        sb.writeln('Audit Log Items,${service.activityLogs.length},Logged System Operations');
+        sb.writeln('2,Total Farm Area (ha),${totalArea.toStringAsFixed(1)},Pagsanjan Registered Farmlands');
       }
       return sb.toString();
     } else {
+      // PDF FORMAT MATCHING THE REQUESTED REPORT TEMPLATE
       final textSb = StringBuffer();
+      textSb.writeln('================================================================================');
+      textSb.writeln(' PAGSANJAN AGRICULTURAL SYSTEM');
+      textSb.writeln(' Smart Farming. Brighter Tomorrow.');
+      textSb.writeln('================================================================================');
+      textSb.writeln(' AGRICULTURAL REPORT');
+      textSb.writeln(' Report Type    : ${moduleName.toUpperCase()}');
+      textSb.writeln(' Generated Date : $dateStr');
+      textSb.writeln(' Generated By   : $operatorName');
+      textSb.writeln('--------------------------------------------------------------------------------');
+
       if (mod.contains('farmer') && mod.contains('farm')) {
+        textSb.writeln(' No. | Farmer Name        | Farm Location       | Crop Type      | Area | Status');
+        textSb.writeln('--------------------------------------------------------------------------------');
+        int i = 1;
         for (final f in service.farmers) {
           final farmerFarms = service.farms.where((farm) => farm.farmerId == f.id || farm.farmerName == f.profileName).toList();
-          textSb.writeln('FARMER: ${f.profileName} (@${f.username}) - Brgy. ${f.barangay}');
-          textSb.writeln('Contact: ${f.contactNumber} | Org: ${f.organization} | Status: ${f.status}');
-          for (final farm in farmerFarms) {
-            textSb.writeln('  -> Farm: ${farm.cropType} (${farm.landAreaHectares} ha, ${farm.tenureStatus}) - ${farm.locationName}');
+          if (farmerFarms.isEmpty) {
+            textSb.writeln(' ${i.toString().padLeft(3)} | ${f.profileName.padRight(18)} | ${'N/A'.padRight(19)} | ${'N/A'.padRight(14)} | ${'0.0'.padRight(4)} | ${f.status}');
+            i++;
+          } else {
+            for (final farm in farmerFarms) {
+              textSb.writeln(' ${i.toString().padLeft(3)} | ${f.profileName.padRight(18)} | ${farm.locationName.padRight(19)} | ${farm.cropType.padRight(14)} | ${farm.landAreaHectares.toStringAsFixed(1).padRight(4)} | ${f.status}');
+              i++;
+            }
           }
-          textSb.writeln('');
         }
       } else if (mod.contains('historical')) {
+        textSb.writeln(' No. | Crop Name          | Year | Month     | Prod (MT) | Price/kg');
+        textSb.writeln('--------------------------------------------------------------------------------');
+        int i = 1;
         for (final h in service.historicalRecords) {
-          textSb.writeln('RECORD ${h.id}: ${h.crop} (${h.month} ${h.year}) - ${h.productionMT} MT @ PHP ${h.pricePerKg}/kg [By: ${h.uploadedBy}]');
+          textSb.writeln(' ${i.toString().padLeft(3)} | ${h.crop.padRight(18)} | ${h.year} | ${h.month.padRight(9)} | ${h.productionMT.toStringAsFixed(1).padRight(9)} | P${h.pricePerKg.toStringAsFixed(2)}');
+          i++;
         }
       } else if (mod.contains('map')) {
+        textSb.writeln(' No. | Farmer Name        | Sitio Location      | Barangay    | Area (ha)');
+        textSb.writeln('--------------------------------------------------------------------------------');
+        int i = 1;
         for (final farm in service.farms) {
-          textSb.writeln('PIN ${farm.id}: ${farm.farmerName} - ${farm.cropType} (${farm.landAreaHectares} ha) @ ${farm.locationName}, ${farm.barangay}');
+          textSb.writeln(' ${i.toString().padLeft(3)} | ${farm.farmerName.padRight(18)} | ${farm.locationName.padRight(19)} | ${farm.barangay.padRight(11)} | ${farm.landAreaHectares.toStringAsFixed(1)}');
+          i++;
         }
       } else if (mod.contains('activity') || mod.contains('log')) {
+        textSb.writeln(' No. | Timestamp       | Operator   | Module     | Action');
+        textSb.writeln('--------------------------------------------------------------------------------');
+        int i = 1;
         for (final l in service.activityLogs) {
-          textSb.writeln('[${DateFormat('MM-dd HH:mm').format(l.timestamp)}] ${l.user} (${l.action} in ${l.module}): ${l.details}');
+          textSb.writeln(' ${i.toString().padLeft(3)} | ${DateFormat('MM-dd HH:mm').format(l.timestamp).padRight(15)} | ${l.user.padRight(10)} | ${l.module.padRight(10)} | ${l.action}');
+          i++;
         }
       } else {
-        textSb.writeln('REGISTERED FARMERS COUNT: ${service.farmers.length}');
-        textSb.writeln('TOTAL FARM AREA: ${service.farms.fold(0.0, (s, i) => s + i.landAreaHectares).toStringAsFixed(1)} hectares');
-        textSb.writeln('HISTORICAL RECORDS: ${service.historicalRecords.length} entries');
+        textSb.writeln(' No. | Summary Metric     | Value / Details');
+        textSb.writeln('--------------------------------------------------------------------------------');
+        int i = 1;
+        textSb.writeln(' ${i.toString().padLeft(3)} | Registered Farmers  | ${service.farmers.length} Active Records');
+        i++;
+        final totalArea = service.farms.fold(0.0, (sum, item) => sum + item.landAreaHectares);
+        textSb.writeln(' ${i.toString().padLeft(3)} | Total Farm Area     | ${totalArea.toStringAsFixed(1)} Hectares');
       }
+
       return _generateValidPdfContent('PAGSANJAN MAO REPORT: ${moduleName.toUpperCase()}', textSb.toString());
     }
   }
@@ -296,17 +587,211 @@ $offsetXref
     }
   }
 
-  void _triggerExport(BuildContext context, String fullType, bool isTagalog) {
+  Future<Uint8List> _generateStyledPdfBytes(String moduleName, AccountService service) async {
+    final pdf = pw.Document();
+    final now = DateTime.now();
+    final dateStr = DateFormat('yyyy-MM-dd HH:mm').format(now);
+    final operatorName = service.activeUserName.isNotEmpty ? service.activeUserName : 'MAO Admin';
+    final mod = moduleName.toLowerCase();
+
+    pdf.addPage(
+      pw.MultiPage(
+        pageFormat: pdf_lib.PdfPageFormat.a4,
+        margin: const pw.EdgeInsets.all(32),
+        header: (context) => pw.Column(
+          crossAxisAlignment: pw.CrossAxisAlignment.start,
+          children: [
+            pw.Row(
+              mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+              children: [
+                pw.Column(
+                  crossAxisAlignment: pw.CrossAxisAlignment.start,
+                  children: [
+                    pw.Text('Pagsanjan Agricultural System', style: pw.TextStyle(fontSize: 20, fontWeight: pw.FontWeight.bold, color: pdf_lib.PdfColors.green800)),
+                    pw.Text('Smart Farming. Brighter Tomorrow.', style: pw.TextStyle(fontSize: 10, fontStyle: pw.FontStyle.italic, color: pdf_lib.PdfColors.grey700)),
+                  ],
+                ),
+                pw.Container(
+                  padding: const pw.EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: pw.BoxDecoration(
+                    color: pdf_lib.PdfColors.green100,
+                    borderRadius: pw.BorderRadius.circular(6),
+                  ),
+                  child: pw.Text('MAO OFFICIAL', style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold, color: pdf_lib.PdfColors.green800)),
+                ),
+              ],
+            ),
+            pw.SizedBox(height: 10),
+            pw.Divider(color: pdf_lib.PdfColors.green700, thickness: 2),
+            pw.SizedBox(height: 10),
+            pw.Center(
+              child: pw.Text('AGRICULTURAL REPORT', style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold, color: pdf_lib.PdfColors.green900, letterSpacing: 1.2)),
+            ),
+            pw.SizedBox(height: 10),
+          ],
+        ),
+        footer: (context) => pw.Row(
+          mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+          children: [
+            pw.Text('Pagsanjan Municipal Agriculture Office (MAO)', style: pw.TextStyle(fontSize: 9, color: pdf_lib.PdfColors.grey600)),
+            pw.Text('Page ${context.pageNumber} of ${context.pagesCount}', style: pw.TextStyle(fontSize: 9, color: pdf_lib.PdfColors.grey600)),
+          ],
+        ),
+        build: (context) {
+          List<List<String>> tableData = [];
+          List<String> headers = [];
+
+          if (mod.contains('farmer') && mod.contains('farm')) {
+            headers = ['No.', 'Farmer Name', 'Barangay', 'Crop Type', 'Area (ha)', 'Status'];
+            int i = 1;
+            for (final f in service.farmers) {
+              final farmerFarms = service.farms.where((farm) => farm.farmerId == f.id || farm.farmerName == f.profileName).toList();
+              if (farmerFarms.isEmpty) {
+                tableData.add(['$i', f.profileName, f.barangay, 'N/A', '0.0', f.status]);
+                i++;
+              } else {
+                for (final farm in farmerFarms) {
+                  tableData.add(['$i', f.profileName, farm.barangay, farm.cropType, farm.landAreaHectares.toStringAsFixed(1), f.status]);
+                  i++;
+                }
+              }
+            }
+          } else if (mod.contains('historical')) {
+            headers = ['No.', 'Crop', 'Year', 'Month', 'Production (MT)', 'Price/kg (PHP)'];
+            int i = 1;
+            for (final h in service.historicalRecords) {
+              tableData.add(['$i', h.crop, '${h.year}', h.month, h.productionMT.toString(), 'P${h.pricePerKg.toStringAsFixed(2)}']);
+              i++;
+            }
+          } else if (mod.contains('account')) {
+            if (mod.contains('admin')) {
+              headers = ['No.', 'Staff Name', 'Username', 'Email', 'Role', 'Status'];
+              int i = 1;
+              for (final s in service.adminStaffList) {
+                tableData.add(['$i', s.name, s.username, s.email, s.role, s.status]);
+                i++;
+              }
+            } else {
+              headers = ['No.', 'Farmer Name', 'Username', 'Barangay', 'Contact', 'Status'];
+              int i = 1;
+              for (final f in service.farmers) {
+                tableData.add(['$i', f.profileName, f.username, f.barangay, f.contactNumber, f.status]);
+                i++;
+              }
+            }
+          } else if (mod.contains('map')) {
+            headers = ['No.', 'Farmer Name', 'Barangay', 'Area (ha)', 'Crop Type'];
+            int i = 1;
+            for (final farm in service.farms) {
+              tableData.add(['$i', farm.farmerName, farm.barangay, farm.landAreaHectares.toStringAsFixed(1), farm.cropType]);
+              i++;
+            }
+          } else if (mod.contains('activity') || mod.contains('log')) {
+            headers = ['No.', 'Timestamp', 'Operator', 'Module', 'Action', 'Details'];
+            int i = 1;
+            for (final l in service.activityLogs) {
+              tableData.add(['$i', DateFormat('MM-dd HH:mm').format(l.timestamp), l.user, l.module, l.action, l.details]);
+              i++;
+            }
+          } else {
+            headers = ['No.', 'Metric Title', 'Value', 'Description'];
+            tableData.add(['1', 'Registered Farmers', service.farmers.length.toString(), 'Active Agricultural Directory']);
+            final totalArea = service.farms.fold(0.0, (sum, item) => sum + item.landAreaHectares);
+            tableData.add(['2', 'Total Farm Area (ha)', totalArea.toStringAsFixed(1), 'Pagsanjan Registered Farmlands']);
+          }
+
+          return [
+            pw.Container(
+              padding: const pw.EdgeInsets.all(12),
+              decoration: pw.BoxDecoration(
+                color: pdf_lib.PdfColors.grey100,
+                borderRadius: pw.BorderRadius.circular(8),
+                border: pw.Border.all(color: pdf_lib.PdfColors.grey300),
+              ),
+              child: pw.Column(
+                crossAxisAlignment: pw.CrossAxisAlignment.start,
+                children: [
+                  pw.Text('Report Type    : ${moduleName.toUpperCase()}', style: pw.TextStyle(fontSize: 11, fontWeight: pw.FontWeight.bold)),
+                  pw.SizedBox(height: 4),
+                  pw.Text('Generated Date : $dateStr', style: const pw.TextStyle(fontSize: 11)),
+                  pw.SizedBox(height: 4),
+                  pw.Text('Generated By   : $operatorName', style: const pw.TextStyle(fontSize: 11)),
+                ],
+              ),
+            ),
+            pw.SizedBox(height: 16),
+            pw.TableHelper.fromTextArray(
+              headers: headers,
+              data: tableData,
+              border: pw.TableBorder.all(color: pdf_lib.PdfColors.green700, width: 0.5),
+              headerStyle: pw.TextStyle(fontWeight: pw.FontWeight.bold, color: pdf_lib.PdfColors.white, fontSize: 10),
+              headerDecoration: const pw.BoxDecoration(color: pdf_lib.PdfColors.green800),
+              cellHeight: 24,
+              cellStyle: const pw.TextStyle(fontSize: 9),
+              cellAlignments: {
+                0: pw.Alignment.center,
+                1: pw.Alignment.centerLeft,
+              },
+              oddRowDecoration: const pw.BoxDecoration(color: pdf_lib.PdfColors.grey50),
+            ),
+          ];
+        },
+      ),
+    );
+
+    return await pdf.save();
+  }
+
+  void _triggerExport(BuildContext context, String fullType, bool isTagalog) async {
     final service = Provider.of<AccountService>(context, listen: false);
     final parts = fullType.split('(');
     final moduleName = parts[0].trim();
     final format = parts.length > 1 ? parts[1].replaceAll(')', '').trim() : 'CSV';
     final isPdf = format.toLowerCase().contains('pdf');
-    final content = _generateExportContent(moduleName, format, service);
     final ext = isPdf ? 'pdf' : 'csv';
     final fileName = 'PAGSANJAN_MAO_${moduleName.replaceAll(' ', '_')}_${DateTime.now().millisecondsSinceEpoch}.$ext';
 
+    if (isPdf) {
+      try {
+        final pdfBytes = await _generateStyledPdfBytes(moduleName, service);
+        String baseDir;
+        if (Platform.isWindows) {
+          final userProfile = Platform.environment['USERPROFILE'] ?? 'C:\\Users\\Public';
+          baseDir = '$userProfile\\Downloads';
+        } else {
+          baseDir = Directory.systemTemp.path;
+        }
+        final filePath = '$baseDir\\$fileName';
+        await File(filePath).writeAsBytes(pdfBytes);
+
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                isTagalog
+                    ? 'Matagumpay na nai-save ang styled PDF report sa Downloads: $fileName'
+                    : 'Successfully saved styled PDF report to Downloads: $fileName',
+              ),
+              backgroundColor: const Color(0xFF0056B3),
+              duration: const Duration(seconds: 5),
+            ),
+          );
+        }
+      } catch (e) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Error generating PDF: $e'),
+              backgroundColor: Colors.redAccent,
+            ),
+          );
+        }
+      }
+      return;
+    }
+
     String chosenFolder = 'Downloads';
+    final content = _generateExportContent(moduleName, format, service);
 
     showDialog(
       context: context,
@@ -405,7 +890,7 @@ $offsetXref
         const psScript = r'''
 Add-Type -AssemblyName System.Windows.Forms
 $dlg = New-Object System.Windows.Forms.OpenFileDialog
-$dlg.Filter = "Data Files (*.csv;*.txt;*.pdf)|*.csv;*.txt;*.pdf|All Files (*.*)|*.*"
+$dlg.Filter = "All Files (*.*)|*.*"
 $dlg.Title = "Pagsanjan MAO - Select File to Import"
 $dlg.InitialDirectory = [Environment]::GetFolderPath('MyDocuments')
 if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
@@ -435,11 +920,18 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
     return null;
   }
 
-  void _showImportDialog(BuildContext context, String moduleName, AccountService service, AdminLocale locale) {
+  void _showImportDialog(
+    BuildContext context,
+    String moduleName,
+    AccountService service,
+    AdminLocale locale, {
+    String? initialPath,
+    String? initialContent,
+  }) {
     final isTagalog = locale.isTagalog;
     String selectedSourceDir = 'Downloads';
-    final fileNameCtrl = TextEditingController(text: '');
-    final csvCtrl = TextEditingController(text: '');
+    final fileNameCtrl = TextEditingController(text: initialPath ?? '');
+    final csvCtrl = TextEditingController(text: initialContent ?? '');
 
     showDialog(
       context: context,
@@ -560,27 +1052,24 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
                       elevation: 2,
                     ),
                     onPressed: () async {
+                      Navigator.pop(ctx); // Close dialog first to avoid blur/freeze
                       final pickedPath = await _pickFileWithSystemExplorer();
                       if (pickedPath != null && pickedPath.isNotEmpty) {
                         final file = File(pickedPath);
                         if (await file.exists()) {
-                          final content = await file.readAsString();
-                          setDialogState(() {
-                            fileNameCtrl.text = pickedPath;
-                            csvCtrl.text = content;
-                          });
-                          if (ctx.mounted) {
-                            ScaffoldMessenger.of(ctx).showSnackBar(
-                              SnackBar(
-                                content: Text(
-                                  isTagalog
-                                      ? 'Matagumpay na na-load ang file: $pickedPath'
-                                      : 'Successfully loaded file: $pickedPath',
-                                ),
-                                backgroundColor: Colors.green,
-                              ),
-                            );
+                          String content;
+                          if (pickedPath.toLowerCase().endsWith('.pdf')) {
+                            content = await _extractTextFromPdfFile(file);
+                          } else {
+                            content = await _readFileSafely(file);
                           }
+                          if (context.mounted) {
+                            _showImportDialog(context, moduleName, service, locale, initialPath: pickedPath, initialContent: content);
+                          }
+                        }
+                      } else {
+                        if (context.mounted) {
+                          _showImportDialog(context, moduleName, service, locale);
                         }
                       }
                     },
@@ -681,7 +1170,7 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
                         }
                         final file = File(fullPath);
                         if (await file.exists()) {
-                          final textContent = await file.readAsString();
+                          final textContent = await _readFileSafely(file);
                           setDialogState(() {
                             fileNameCtrl.text = fullPath;
                             csvCtrl.text = textContent;
@@ -766,8 +1255,8 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
               child: Text(isTagalog ? 'Kanselahin' : 'Cancel'),
             ),
             FilledButton.icon(
-              style: FilledButton.styleFrom(backgroundColor: const Color(0xFF16A34A)),
-              onPressed: () {
+              style: FilledButton.styleFrom(backgroundColor: const Color(0xFF0056B3)),
+              onPressed: () async {
                 final rawText = csvCtrl.text.trim();
                 if (rawText.isEmpty) {
                   ScaffoldMessenger.of(context).showSnackBar(
@@ -786,84 +1275,145 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
                 final isHistorical = moduleName.toLowerCase().contains('historical');
                 final lines = rawText.split('\n');
                 int importedCount = 0;
+                int skippedCount = 0;
 
                 for (final line in lines) {
                   final trimmedLine = line.trim();
                   if (trimmedLine.isEmpty) continue;
-                  // Skip header line if present
-                  if (trimmedLine.toLowerCase().startsWith('crop') ||
-                      trimmedLine.toLowerCase().startsWith('full personal name')) {
+
+                  if (trimmedLine.contains('|')) {
+                    final success = _parsePdfRowAndImport(trimmedLine, isHistorical, service, importedCount);
+                    if (success) {
+                      importedCount++;
+                    } else {
+                      skippedCount++;
+                    }
                     continue;
                   }
 
-                  final parts = trimmedLine.split(',');
-                  if (isHistorical) {
-                    if (parts.length >= 4) {
-                      final crop = parts[0].trim();
-                      final year = int.tryParse(parts[1].trim()) ?? DateTime.now().year;
-                      final month = parts[2].trim();
-                      final prod = double.tryParse(parts[3].trim()) ?? 0.0;
-                      final price = parts.length > 4 ? (double.tryParse(parts[4].trim()) ?? 0.0) : 0.0;
+                  // Skip header lines or export report title lines
+                  if (trimmedLine.toLowerCase().startsWith('crop') ||
+                      trimmedLine.toLowerCase().startsWith('full personal name') ||
+                      trimmedLine.toLowerCase().startsWith('no.') ||
+                      trimmedLine.toLowerCase().contains('official export report') ||
+                      trimmedLine.toLowerCase().contains('agricultural report') ||
+                      trimmedLine.toLowerCase().contains('generated on') ||
+                      trimmedLine.toLowerCase().contains('pagsanjan') ||
+                      trimmedLine.toLowerCase().contains('smart farming') ||
+                      trimmedLine.toLowerCase().contains('pagsanjan agricultural')) {
+                    continue;
+                  }
 
-                      if (crop.isNotEmpty) {
-                        service.addHistoricalRecord(
-                          crop: crop,
-                          year: year,
-                          month: month,
-                          productionMT: prod,
-                          pricePerKg: price,
-                          uploadedBy: service.activeUserName,
-                        );
-                        importedCount++;
+                  final parts = _parseCsvLine(trimmedLine);
+
+                  if (isHistorical) {
+                    int offset = parts.length >= 5 && double.tryParse(parts[0]) != null && parts[0].length <= 3 ? 1 : 0;
+                    if (parts.length >= (4 + offset)) {
+                      final crop = parts[0 + offset].trim();
+                      final year = int.tryParse(parts[1 + offset].trim()) ?? 0;
+                      final month = parts[2 + offset].trim();
+                      final prod = double.tryParse(parts[3 + offset].trim()) ?? -1.0;
+                      final price = parts.length > (4 + offset) ? (double.tryParse(parts[4 + offset].trim()) ?? 0.0) : 0.0;
+
+                      // Validate incomplete data
+                      if (crop.isEmpty || year <= 0 || month.isEmpty || prod < 0) {
+                        skippedCount++;
+                        continue;
                       }
+
+                      // Check duplicate in historical records
+                      final isDuplicate = service.historicalRecords.any((h) =>
+                          h.crop.toLowerCase() == crop.toLowerCase() &&
+                          h.year == year &&
+                          h.month.toLowerCase() == month.toLowerCase());
+
+                      if (isDuplicate) {
+                        skippedCount++;
+                        continue;
+                      }
+
+                      service.addHistoricalRecord(
+                        crop: crop,
+                        year: year,
+                        month: month,
+                        productionMT: prod,
+                        pricePerKg: price,
+                        uploadedBy: service.activeUserName,
+                      );
+                      importedCount++;
+                    } else {
+                      skippedCount++;
                     }
                   } else {
-                    if (parts.length >= 2) {
-                      final name = parts[0].trim();
-                      final user = parts[1].trim();
-                      final barangay = parts.length > 2 && parts[2].trim().isNotEmpty ? parts[2].trim() : 'Biñan';
-                      final contact = parts.length > 3 && parts[3].trim().isNotEmpty ? parts[3].trim() : '09170000000';
-                      final org = parts.length > 4 && parts[4].trim().isNotEmpty ? parts[4].trim() : 'Pagsanjan Farmers Assoc';
-                      final crop = parts.length > 5 && parts[5].trim().isNotEmpty ? parts[5].trim() : 'Rice';
-                      final land = parts.length > 6 ? (double.tryParse(parts[6].trim()) ?? 2.0) : 2.0;
+                    int offset = parts.length >= 7 && double.tryParse(parts[0]) != null && parts[0].length <= 3 ? 1 : 0;
+                    if (parts.length >= (2 + offset)) {
+                      final name = parts[0 + offset].trim();
+                      final user = parts[1 + offset].trim();
+                      final barangay = parts.length > (2 + offset) && parts[2 + offset].trim().isNotEmpty ? parts[2 + offset].trim() : 'Biñan';
+                      final contact = parts.length > (3 + offset) && parts[3 + offset].trim().isNotEmpty ? parts[3 + offset].trim() : '';
+                      final org = parts.length > (4 + offset) && parts[4 + offset].trim().isNotEmpty ? parts[4 + offset].trim() : 'Independent';
+                      final crop = parts.length > (5 + offset) && parts[5 + offset].trim().isNotEmpty ? parts[5 + offset].trim() : 'Rice';
+                      final land = parts.length > (6 + offset) ? (double.tryParse(parts[6 + offset].trim()) ?? 2.0) : 2.0;
 
-                      if (name.isNotEmpty && user.isNotEmpty) {
-                        final farmerId = 'F${DateTime.now().millisecondsSinceEpoch}_$importedCount';
-                        service.addFarmer(
-                          username: user,
-                          password: 'password123',
-                          profileName: name,
-                          barangay: barangay,
-                          contactNumber: contact,
-                          organization: org,
-                        );
-                        service.addFarmRecord(
-                          farmerId: farmerId,
-                          farmerName: name,
-                          locationName: 'Sitio $barangay',
-                          latitude: 14.2717,
-                          longitude: 121.4553,
-                          landAreaHectares: land,
-                          tenureStatus: 'Owner',
-                          cropType: crop,
-                          barangay: barangay,
-                        );
-                        importedCount++;
+                      // Validate incomplete data (Name and Username strictly required)
+                      if (name.isEmpty || user.isEmpty) {
+                        skippedCount++;
+                        continue;
                       }
+
+                      final contactDigits = contact.replaceAll(RegExp(r'\D'), '');
+
+                      // Check duplicate: Name, Username, or Contact
+                      final existingFarmer = service.farmers.any((f) =>
+                          f.profileName.trim().toLowerCase() == name.toLowerCase() ||
+                          f.username.trim().toLowerCase() == user.toLowerCase() ||
+                          (contactDigits.isNotEmpty && f.contactNumber.replaceAll(RegExp(r'\D'), '') == contactDigits));
+
+                      if (existingFarmer) {
+                        skippedCount++;
+                        continue;
+                      }
+
+                      final farmerId = 'F${DateTime.now().millisecondsSinceEpoch}_$importedCount';
+                      await service.addFarmer(
+                        id: farmerId,
+                        username: user,
+                        password: 'password123',
+                        profileName: name,
+                        barangay: barangay,
+                        contactNumber: contactDigits.isEmpty ? '09171234567' : contactDigits,
+                        organization: org,
+                      );
+                      await service.addFarmRecord(
+                        farmerId: farmerId,
+                        farmerName: name,
+                        locationName: 'Sitio $barangay',
+                        latitude: 14.2717,
+                        longitude: 121.4553,
+                        landAreaHectares: land,
+                        tenureStatus: 'Owner',
+                        cropType: crop,
+                        barangay: barangay,
+                      );
+                      importedCount++;
+                    } else {
+                      skippedCount++;
                     }
                   }
                 }
 
+                if (!ctx.mounted) return;
                 Navigator.pop(ctx);
+                if (!context.mounted) return;
                 ScaffoldMessenger.of(context).showSnackBar(
                   SnackBar(
                     content: Text(
                       isTagalog
-                          ? 'Matagumpay na na-import ang $importedCount mga bagong magsasaka at sakahan mula sa iyong na-upload na file!'
-                          : 'Successfully imported $importedCount new farmers and farms from your uploaded file!',
+                          ? 'Matagumpay na na-import ang $importedCount bagong rekord! ($skippedCount na duplicate o kulang ang data ang na-filter out).'
+                          : 'Successfully imported $importedCount new records! ($skippedCount duplicate or incomplete records were skipped).',
                     ),
-                    backgroundColor: Colors.green,
-                    duration: const Duration(seconds: 4),
+                    backgroundColor: const Color(0xFF0056B3),
+                    duration: const Duration(seconds: 5),
                   ),
                 );
               },
@@ -875,7 +1425,6 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
       ),
     );
   }
-
   Widget _buildExportImportButtons(BuildContext context, String moduleName, AdminLocale locale, AccountService service, {bool showImport = true}) {
     final isTagalog = locale.isTagalog;
     return Wrap(
@@ -986,78 +1535,6 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
     );
   }
 
-  void _showSwitchStaffDialog(BuildContext context, AccountService service, AdminLocale locale) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Row(
-          children: [
-            const Icon(Icons.switch_account_rounded, color: Color(0xFF0056B3)),
-            const SizedBox(width: 8),
-            Text(locale.isTagalog ? 'Palitan ang Aktibong Staff' : 'Switch Active Staff Account'),
-          ],
-        ),
-        content: SizedBox(
-          width: 380,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                locale.isTagalog
-                    ? 'Pumili ng MAO staff member na kasalukuyang gumagamit ng portal. Lahat ng gagawing kilos (Add, Edit, Delete, Upload) ay mai-rerecord sa pangalan niya sa Activity Log.'
-                    : 'Select the MAO staff member currently operating the portal. All actions (Add, Edit, Delete, Upload) will be attributed to them in the Activity Log.',
-                style: const TextStyle(fontSize: 12, color: Colors.grey),
-              ),
-              const SizedBox(height: 16),
-              ...service.adminStaffList.map((staff) {
-                final isSelected = service.activeStaff.id == staff.id;
-                return Container(
-                  margin: const EdgeInsets.only(bottom: 8),
-                  decoration: BoxDecoration(
-                    color: isSelected ? Colors.blue.shade50 : Colors.white,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: isSelected ? const Color(0xFF0056B3) : Colors.grey.shade300, width: isSelected ? 2 : 1),
-                  ),
-                  child: ListTile(
-                    leading: CircleAvatar(
-                      backgroundColor: isSelected ? const Color(0xFF0056B3) : Colors.grey.shade200,
-                      foregroundColor: isSelected ? Colors.white : Colors.grey.shade700,
-                      child: Text(staff.name.isNotEmpty ? staff.name[0] : 'S'),
-                    ),
-                    title: Text(staff.name, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: isSelected ? const Color(0xFF0056B3) : Colors.black87)),
-                    subtitle: Text('${staff.role} • @${staff.username}', style: const TextStyle(fontSize: 11)),
-                    trailing: isSelected ? const Icon(Icons.check_circle_rounded, color: Color(0xFF0056B3)) : null,
-                    onTap: () {
-                      service.switchActiveStaff(staff);
-                      Navigator.pop(context);
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text(
-                            locale.isTagalog
-                                ? 'Pinalitan ang aktibong operator kay ${staff.name} (${staff.role})'
-                                : 'Active session switched to ${staff.name} (${staff.role})',
-                          ),
-                          backgroundColor: const Color(0xFF0056B3),
-                        ),
-                      );
-                    },
-                  ),
-                );
-              }),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: Text(locale.isTagalog ? 'Isara' : 'Close'),
-          ),
-        ],
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final service = Provider.of<AccountService>(context);
@@ -1140,48 +1617,44 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
               ),
 
               // ACTIVE STAFF OPERATOR CARD
-              InkWell(
-                onTap: () => _showSwitchStaffDialog(context, service, locale),
-                child: Container(
-                  margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                  decoration: BoxDecoration(
-                    color: isDark ? Colors.white.withValues(alpha: 0.08) : Colors.white,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: isDark ? Colors.white24 : const Color(0xFF90CAF9)),
-                  ),
-                  child: Row(
-                    children: [
-                      CircleAvatar(
-                        radius: 15,
-                        backgroundColor: const Color(0xFF60A5FA),
-                        foregroundColor: Colors.white,
-                        child: Text(
-                          service.activeStaff.name.isNotEmpty ? service.activeStaff.name[0] : 'S',
-                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
-                        ),
+              Container(
+                margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                decoration: BoxDecoration(
+                  color: isDark ? Colors.white.withValues(alpha: 0.08) : Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: isDark ? Colors.white24 : const Color(0xFF90CAF9)),
+                ),
+                child: Row(
+                  children: [
+                    CircleAvatar(
+                      radius: 15,
+                      backgroundColor: const Color(0xFF60A5FA),
+                      foregroundColor: Colors.white,
+                      child: Text(
+                        service.activeStaff.name.isNotEmpty ? service.activeStaff.name[0] : 'S',
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
                       ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              service.activeStaff.name,
-                              style: TextStyle(color: isDark ? Colors.white : const Color(0xFF0F172A), fontWeight: FontWeight.bold, fontSize: 12),
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            Text(
-                              service.activeStaff.role,
-                              style: TextStyle(color: isDark ? const Color(0xFF93C5FD) : const Color(0xFF0056B3), fontSize: 10),
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ],
-                        ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            service.activeStaff.name,
+                            style: TextStyle(color: isDark ? Colors.white : const Color(0xFF0F172A), fontWeight: FontWeight.bold, fontSize: 12),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          Text(
+                            service.activeStaff.role,
+                            style: TextStyle(color: isDark ? const Color(0xFF93C5FD) : const Color(0xFF0056B3), fontSize: 10),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
                       ),
-                      Icon(Icons.swap_vert_rounded, color: isDark ? const Color(0xFF93C5FD) : const Color(0xFF0056B3), size: 18),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
               ),
               const SizedBox(height: 8),
@@ -1269,29 +1742,23 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
           ),
           const Spacer(),
 
-          // SWITCH STAFF ACCOUNT BUTTON IN HEADER
-          InkWell(
-            onTap: () => _showSwitchStaffDialog(context, service, locale),
-            borderRadius: BorderRadius.circular(20),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-              decoration: BoxDecoration(
-                color: primaryAccent.withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: primaryAccent.withValues(alpha: 0.3)),
-              ),
-              child: Row(
-                children: [
-                  Icon(Icons.badge_rounded, size: 16, color: primaryAccent),
-                  const SizedBox(width: 6),
-                  Text(
-                    'Operator: ${service.activeStaff.name.split(" ").first}',
-                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: primaryAccent),
-                  ),
-                  const SizedBox(width: 4),
-                  Icon(Icons.arrow_drop_down_rounded, size: 18, color: primaryAccent),
-                ],
-              ),
+          // ACTIVE OPERATOR BADGE IN HEADER
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            decoration: BoxDecoration(
+              color: primaryAccent.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: primaryAccent.withValues(alpha: 0.3)),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.badge_rounded, size: 16, color: primaryAccent),
+                const SizedBox(width: 6),
+                Text(
+                  'Operator: ${service.activeStaff.name.split(" ").first}',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: primaryAccent),
+                ),
+              ],
             ),
           ),
           const SizedBox(width: 12),
@@ -1444,21 +1911,21 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
     final historical = service.historicalRecords;
 
     final filteredFarms = farms.where((f) {
-      final matchesBarangay = _selectedBarangayFilter == 'All' || f.barangay == _selectedBarangayFilter;
-      final matchesCrop = _selectedCropFilter == 'All' || f.cropType == _selectedCropFilter;
+      final matchesBarangay = _selectedBarangayFilter == 'All' || f.barangay.trim().toLowerCase() == _selectedBarangayFilter.trim().toLowerCase();
+      final matchesCrop = _matchesCrop(f.cropType, _selectedCropFilter);
       return matchesBarangay && matchesCrop;
     }).toList();
 
     final filteredFarmers = farmers.where((f) {
-      final matchesBarangay = _selectedBarangayFilter == 'All' || f.barangay == _selectedBarangayFilter;
+      final matchesBarangay = _selectedBarangayFilter == 'All' || f.barangay.trim().toLowerCase() == _selectedBarangayFilter.trim().toLowerCase();
       if (!matchesBarangay) return false;
       if (_selectedCropFilter == 'All') return true;
       final farmerFarms = farms.where((farm) => farm.farmerId == f.id || farm.farmerName == f.profileName);
-      return farmerFarms.any((farm) => farm.cropType == _selectedCropFilter);
+      return farmerFarms.any((farm) => _matchesCrop(farm.cropType, _selectedCropFilter));
     }).toList();
 
     final filteredHistorical = historical.where((h) {
-      final matchesCrop = _selectedCropFilter == 'All' || h.crop == _selectedCropFilter;
+      final matchesCrop = _matchesCrop(h.crop, _selectedCropFilter);
       if (!matchesCrop) return false;
       if (_selectedTimePeriodFilter == 'All') return true;
       if (_selectedTimePeriodFilter == '2026') return h.year == 2026;
@@ -1950,7 +2417,7 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
       final matchesQuery = f.profileName.toLowerCase().contains(query) ||
                            f.username.toLowerCase().contains(query) ||
                            f.organization.toLowerCase().contains(query);
-      final matchesBarangay = _selectedBarangayFilter == 'All' || f.barangay == _selectedBarangayFilter;
+      final matchesBarangay = _selectedBarangayFilter == 'All' || f.barangay.trim().toLowerCase() == _selectedBarangayFilter.trim().toLowerCase();
       return matchesQuery && matchesBarangay;
     }).toList();
 
@@ -2201,221 +2668,936 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
   }
 
   void _showAddFarmerDialog(BuildContext context, AccountService service) {
+    final isTagalog = service.isTagalog;
+    final scrollCtrl = ScrollController();
     final nameCtrl = TextEditingController();
     final userCtrl = TextEditingController();
     final passCtrl = TextEditingController();
     final contactCtrl = TextEditingController();
     final orgCtrl = TextEditingController();
-    final locationCtrl = TextEditingController();
-    final landAreaCtrl = TextEditingController(text: '2.5');
-    final latCtrl = TextEditingController(text: '14.2790');
-    final lonCtrl = TextEditingController(text: '121.4550');
+    final addressCtrl = TextEditingController(); // Complete Address
+    final landAreaCtrl = TextEditingController(); // Empty start
+    final latCtrl = TextEditingController(); // Empty start
+    final lonCtrl = TextEditingController(); // Empty start
+    final specificCropCtrl = TextEditingController();
+    final List<String> specificCropsList = [];
     String selectedBrgy = 'Biñan';
-    String selectedCrop = 'Rice';
     String selectedTenure = 'Owner';
+
+    // Field-level error messages
+    String? nameErrorText;
+    String? userErrorText;
+    String? contactErrorText;
+    String? addressErrorText;
+    String? cropsErrorText;
+    String? gpsErrorText;
+    String? dialogErrorBanner; // Visible top banner inside dialog!
+
+    final primaryCropOptions = isTagalog
+        ? [
+            {'key': 'Rice', 'label': '🌾 Palay (Rice)'},
+            {'key': 'Gulay', 'label': '🥬 Gulay (Vegetables)'},
+            {'key': 'Prutas', 'label': '🍎 Prutas (Fruits)'},
+          ]
+        : [
+            {'key': 'Rice', 'label': '🌾 Rice'},
+            {'key': 'Gulay', 'label': '🥬 Vegetables'},
+            {'key': 'Prutas', 'label': '🍎 Fruits'},
+          ];
+
+    final Set<String> selectedPrimaryCrops = <String>{}; // Empty start
 
     showDialog(
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          title: const Row(
-            children: [
-              Icon(Icons.person_add_rounded, color: Color(0xFF0056B3)),
-              SizedBox(width: 8),
-              Text('Add New Farmer & Farm Record', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-            ],
-          ),
-          content: SingleChildScrollView(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          contentPadding: EdgeInsets.zero,
+          backgroundColor: const Color(0xFFF8FAFC),
+          content: SizedBox(
+            width: 540,
             child: Column(
               mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                const Text('FARMER ACCOUNT INFORMATION', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF0056B3))),
-                const SizedBox(height: 8),
-                TextField(controller: nameCtrl, decoration: const InputDecoration(labelText: 'Full Personal Name', border: OutlineInputBorder())),
-                const SizedBox(height: 10),
-                TextField(controller: userCtrl, decoration: const InputDecoration(labelText: 'Username', border: OutlineInputBorder())),
-                const SizedBox(height: 10),
-                TextField(controller: passCtrl, decoration: const InputDecoration(labelText: 'Password', border: OutlineInputBorder()), obscureText: true),
-                const SizedBox(height: 10),
-                DropdownButtonFormField<String>(
-                  initialValue: selectedBrgy,
-                  decoration: const InputDecoration(labelText: 'Barangay', border: OutlineInputBorder()),
-                  items: AccountService.pagsanjanBarangays.map((b) => DropdownMenuItem(value: b, child: Text(b))).toList(),
-                  onChanged: (val) => selectedBrgy = val ?? 'Biñan',
+                // BLUE HEADER BANNER
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                  decoration: const BoxDecoration(
+                    color: Color(0xFF0056B3),
+                    borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.2),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(Icons.person_add_rounded, color: Colors.white, size: 24),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          isTagalog ? 'Magdagdag ng Magsasaka at Sakahan' : 'Add New Farmer & Farm Record',
+                          style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold, color: Colors.white),
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.close_rounded, color: Colors.white),
+                        onPressed: () => Navigator.pop(context),
+                      ),
+                    ],
+                  ),
                 ),
-                const SizedBox(height: 10),
-                TextField(controller: contactCtrl, decoration: const InputDecoration(labelText: 'Contact Details', border: OutlineInputBorder())),
-                const SizedBox(height: 10),
-                TextField(controller: orgCtrl, decoration: const InputDecoration(labelText: 'Association / Org Membership', border: OutlineInputBorder())),
 
-                const Divider(height: 24),
-                const Text('FARM INFORMATION (AUTO-SYNCS TO RECORDS & MAP)', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF16A34A))),
-                const SizedBox(height: 8),
-                DropdownButtonFormField<String>(
-                  initialValue: selectedCrop,
-                  decoration: const InputDecoration(labelText: 'Primary Crop Type', border: OutlineInputBorder()),
-                  items: ['Rice', 'Prutas', 'Gulay', 'Corn', 'Coconut'].map((c) => DropdownMenuItem(value: c, child: Text(c))).toList(),
-                  onChanged: (val) => selectedCrop = val ?? 'Rice',
-                ),
-                const SizedBox(height: 10),
-                Row(
-                  children: [
-                    Expanded(
-                      child: TextField(
-                        controller: landAreaCtrl,
-                        keyboardType: TextInputType.number,
-                        decoration: const InputDecoration(labelText: 'Land Area (ha)', border: OutlineInputBorder()),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: DropdownButtonFormField<String>(
-                        initialValue: selectedTenure,
-                        decoration: const InputDecoration(labelText: 'Tenure Status', border: OutlineInputBorder()),
-                        items: ['Owner', 'Tenant', 'Lease', 'CLT'].map((t) => DropdownMenuItem(value: t, child: Text(t))).toList(),
-                        onChanged: (val) => selectedTenure = val ?? 'Owner',
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 10),
-                TextField(controller: locationCtrl, decoration: const InputDecoration(labelText: 'Farm Sitio / Location Name', border: OutlineInputBorder())),
-                const SizedBox(height: 12),
-
-                // LATITUDE & LONGITUDE INPUTS + MAP PICKER BUTTON
-                const Text('FARM CO-ORDINATES (GPS LOCATION)', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF0056B3))),
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    Expanded(
-                      child: TextField(
-                        controller: latCtrl,
-                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                        decoration: const InputDecoration(labelText: 'Latitude (°N)', border: OutlineInputBorder()),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: TextField(
-                        controller: lonCtrl,
-                        keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                        decoration: const InputDecoration(labelText: 'Longitude (°E)', border: OutlineInputBorder()),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 10),
-                SizedBox(
-                  width: double.infinity,
-                  child: OutlinedButton.icon(
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: const Color(0xFF16A34A),
-                      side: const BorderSide(color: Color(0xFF16A34A)),
-                    ),
-                    onPressed: () {
-                      final currentLat = double.tryParse(latCtrl.text) ?? 14.2790;
-                      final currentLon = double.tryParse(lonCtrl.text) ?? 121.4550;
-
-                      showDialog(
-                        context: context,
-                        builder: (mapCtx) => AlertDialog(
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                          title: const Row(
-                            children: [
-                              Icon(Icons.touch_app_rounded, color: Color(0xFF16A34A)),
-                              SizedBox(width: 8),
-                              Expanded(child: Text('Tap on Map to Pick Farm Location', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold))),
-                            ],
-                          ),
-                          content: SizedBox(
-                            width: 500,
-                            height: 380,
-                            child: ClipRRect(
+                // SCROLLABLE FORM BODY
+                Flexible(
+                  child: SingleChildScrollView(
+                    controller: scrollCtrl,
+                    padding: const EdgeInsets.all(20),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // PROMINENT RED ERROR ALERT BANNER AT TOP OF DIALOG FORM
+                        if (dialogErrorBanner != null) ...[
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                            margin: const EdgeInsets.only(bottom: 16),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFFEF2F2),
                               borderRadius: BorderRadius.circular(12),
-                              child: PagsanjanMapWidget(
-                                initialCenter: LatLng(currentLat, currentLon),
-                                initialZoom: 14,
-                                markers: [
-                                  Marker(
-                                    point: LatLng(currentLat, currentLon),
-                                    width: 40,
-                                    height: 40,
-                                    child: const Icon(Icons.location_pin, color: Colors.red, size: 36),
+                              border: Border.all(color: const Color(0xFFFCA5A5), width: 1.5),
+                            ),
+                            child: Row(
+                              children: [
+                                const Icon(Icons.error_outline_rounded, color: Color(0xFFDC2626), size: 22),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: Text(
+                                    dialogErrorBanner!,
+                                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF991B1B)),
                                   ),
-                                ],
-                                onTap: (point) {
-                                  final detectedBrgy = BarangayResolver.resolveBarangay(point);
-                                  setDialogState(() {
-                                    latCtrl.text = point.latitude.toStringAsFixed(5);
-                                    lonCtrl.text = point.longitude.toStringAsFixed(5);
-                                    selectedBrgy = detectedBrgy;
-                                  });
-                                  Navigator.pop(mapCtx);
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    SnackBar(
-                                      content: Text('Selected location in Barangay $detectedBrgy (${point.latitude.toStringAsFixed(4)}, ${point.longitude.toStringAsFixed(4)})'),
-                                      backgroundColor: Colors.green,
-                                    ),
-                                  );
+                                ),
+                                IconButton(
+                                  padding: EdgeInsets.zero,
+                                  constraints: const BoxConstraints(),
+                                  icon: const Icon(Icons.close_rounded, size: 18, color: Color(0xFF991B1B)),
+                                  onPressed: () {
+                                    setDialogState(() {
+                                      dialogErrorBanner = null;
+                                    });
+                                  },
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+
+                        // SECTION 1: FARMER ACCOUNT INFO
+                        Row(
+                          children: [
+                            const Icon(Icons.badge_rounded, size: 18, color: Color(0xFF0056B3)),
+                            const SizedBox(width: 6),
+                            Text(
+                              isTagalog ? 'IMPORMASYON NG AKAWNT NG MAGSASAKA' : 'FARMER ACCOUNT INFORMATION',
+                              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF0056B3), letterSpacing: 0.5),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 10),
+                        TextField(
+                          controller: nameCtrl,
+                          decoration: InputDecoration(
+                            labelText: isTagalog ? 'Buong Pangalan' : 'Full Personal Name',
+                            errorText: nameErrorText,
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                            filled: true,
+                            fillColor: Colors.white,
+                          ),
+                          onChanged: (_) {
+                            if (nameErrorText != null) {
+                              setDialogState(() {
+                                nameErrorText = null;
+                                dialogErrorBanner = null;
+                              });
+                            }
+                          },
+                        ),
+                        const SizedBox(height: 10),
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(
+                              child: TextField(
+                                controller: userCtrl,
+                                decoration: InputDecoration(
+                                  labelText: 'Username',
+                                  errorText: userErrorText,
+                                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                                  filled: true,
+                                  fillColor: Colors.white,
+                                ),
+                                onChanged: (_) {
+                                  if (userErrorText != null) {
+                                    setDialogState(() {
+                                      userErrorText = null;
+                                      dialogErrorBanner = null;
+                                    });
+                                  }
                                 },
                               ),
                             ),
-                          ),
-                          actions: [
-                            TextButton(onPressed: () => Navigator.pop(mapCtx), child: const Text('Cancel')),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: TextField(
+                                controller: passCtrl,
+                                decoration: InputDecoration(
+                                  labelText: 'Password',
+                                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                                  filled: true,
+                                  fillColor: Colors.white,
+                                ),
+                                obscureText: true,
+                              ),
+                            ),
                           ],
                         ),
-                      );
-                    },
-                    icon: const Icon(Icons.map_rounded),
-                    label: const Text('Pick Location on Pagsanjan Map'),
+                        const SizedBox(height: 10),
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(
+                              child: DropdownButtonFormField<String>(
+                                initialValue: selectedBrgy,
+                                decoration: InputDecoration(
+                                  labelText: 'Barangay',
+                                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                                  filled: true,
+                                  fillColor: Colors.white,
+                                ),
+                                items: AccountService.pagsanjanBarangays.map((b) => DropdownMenuItem(value: b, child: Text(b))).toList(),
+                                onChanged: (val) => selectedBrgy = val ?? 'Biñan',
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: TextField(
+                                controller: contactCtrl,
+                                keyboardType: TextInputType.phone,
+                                inputFormatters: [
+                                  FilteringTextInputFormatter.digitsOnly,
+                                  LengthLimitingTextInputFormatter(11),
+                                ],
+                                decoration: InputDecoration(
+                                  labelText: isTagalog ? 'Numero ng Kontak (11 Digits)' : 'Contact Number (11 Digits)',
+                                  hintText: '09123456789',
+                                  errorText: contactErrorText,
+                                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                                  filled: true,
+                                  fillColor: Colors.white,
+                                  helperText: isTagalog ? 'Dapat saktong 11 numero (hal. 09123456789)' : 'Must be exactly 11 digits (e.g. 09123456789)',
+                                ),
+                                onChanged: (val) {
+                                  final digitsOnly = val.replaceAll(RegExp(r'\D'), '');
+                                  setDialogState(() {
+                                    if (digitsOnly.isNotEmpty && digitsOnly.length != 11) {
+                                      contactErrorText = isTagalog
+                                          ? 'Dapat 11 numero (${digitsOnly.length}/11)'
+                                          : 'Must be 11 digits (${digitsOnly.length}/11)';
+                                    } else {
+                                      contactErrorText = null;
+                                    }
+                                    dialogErrorBanner = null;
+                                  });
+                                },
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 10),
+                        TextField(
+                          controller: orgCtrl,
+                          decoration: InputDecoration(
+                            labelText: isTagalog ? 'Samahan / Organisasyon' : 'Association / Org Membership',
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                            filled: true,
+                            fillColor: Colors.white,
+                          ),
+                        ),
+
+                        const Divider(height: 28, thickness: 1.2),
+
+                        // SECTION 2: FARM INFORMATION
+                        Row(
+                          children: [
+                            const Icon(Icons.agriculture_rounded, size: 18, color: Color(0xFF2563EB)),
+                            const SizedBox(width: 6),
+                            Text(
+                              isTagalog ? 'IMPORMASYON NG SAKAHAN AT TANIM' : 'FARM LAND & CROP INFORMATION',
+                              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF2563EB), letterSpacing: 0.5),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 10),
+
+                        // MULTI-SELECT PRIMARY CROP TYPES (BLUE CHIPS)
+                        Text(
+                          isTagalog
+                              ? 'Mga Pangunahing Tanim (Pumili ng isa o higit pa):'
+                              : 'Primary Crop Types (Select all that apply):',
+                          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.black87),
+                        ),
+                        const SizedBox(height: 6),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 6,
+                          children: primaryCropOptions.map((cropOpt) {
+                            final key = cropOpt['key']!;
+                            final label = cropOpt['label']!;
+                            final isSelected = selectedPrimaryCrops.contains(key);
+                            return FilterChip(
+                              selected: isSelected,
+                              label: Text(label, style: TextStyle(fontWeight: isSelected ? FontWeight.bold : FontWeight.normal)),
+                              selectedColor: const Color(0xFFDBEAFE),
+                              checkmarkColor: const Color(0xFF1E40AF),
+                              labelStyle: TextStyle(color: isSelected ? const Color(0xFF1E40AF) : Colors.black87),
+                              side: BorderSide(color: isSelected ? const Color(0xFF2563EB) : Colors.grey.shade300),
+                              onSelected: (bool selected) {
+                                setDialogState(() {
+                                  if (selected) {
+                                    selectedPrimaryCrops.add(key);
+                                  } else {
+                                    selectedPrimaryCrops.remove(key);
+                                  }
+                                  cropsErrorText = null;
+                                  dialogErrorBanner = null;
+                                });
+                              },
+                            );
+                          }).toList(),
+                        ),
+                        if (cropsErrorText != null) ...[
+                          const SizedBox(height: 4),
+                          Text(cropsErrorText!, style: const TextStyle(color: Color(0xFFDC2626), fontSize: 12, fontWeight: FontWeight.bold)),
+                        ],
+                        const SizedBox(height: 12),
+
+                        // SPECIFIC CROP VARIETIES INPUT
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              isTagalog
+                                  ? 'TIYAK NA URI O VARIETY NG TANIM (SPECIFIC TYPES)'
+                                  : 'SPECIFIC CROP TYPES & VARIETIES (OPTIONAL)',
+                              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF2563EB)),
+                            ),
+                            const SizedBox(height: 6),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: TextField(
+                                    controller: specificCropCtrl,
+                                    decoration: InputDecoration(
+                                      labelText: isTagalog
+                                          ? 'I-type ang tanim (hal. Mangga, Saging, Talong, NSIC Rc 222)'
+                                          : 'Type specific crop (e.g. Mango, Banana, Eggplant, NSIC Rc 222)',
+                                      hintText: isTagalog ? 'I-type at i-press ang (+)' : 'Type and press (+)',
+                                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                                      filled: true,
+                                      fillColor: Colors.white,
+                                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                    ),
+                                    onSubmitted: (val) {
+                                      final trimmed = val.trim();
+                                      if (trimmed.isNotEmpty && !specificCropsList.contains(trimmed)) {
+                                        setDialogState(() {
+                                          specificCropsList.add(trimmed);
+                                          specificCropCtrl.clear();
+                                        });
+                                      }
+                                    },
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                IconButton.filled(
+                                  style: IconButton.styleFrom(backgroundColor: const Color(0xFF0056B3)),
+                                  onPressed: () {
+                                    final trimmed = specificCropCtrl.text.trim();
+                                    if (trimmed.isNotEmpty && !specificCropsList.contains(trimmed)) {
+                                      setDialogState(() {
+                                        specificCropsList.add(trimmed);
+                                        specificCropCtrl.clear();
+                                      });
+                                    }
+                                  },
+                                  icon: const Icon(Icons.add_rounded, color: Colors.white),
+                                  tooltip: isTagalog ? 'Idagdag' : 'Add',
+                                ),
+                              ],
+                            ),
+                            if (specificCropsList.isNotEmpty) ...[
+                              const SizedBox(height: 8),
+                              Wrap(
+                                spacing: 6,
+                                runSpacing: 6,
+                                children: specificCropsList.map((item) {
+                                  return Chip(
+                                    avatar: const Icon(Icons.eco_rounded, size: 14, color: Color(0xFF1E40AF)),
+                                    label: Text(
+                                      item,
+                                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF1E40AF)),
+                                    ),
+                                    backgroundColor: const Color(0xFFEFF6FF),
+                                    deleteIcon: const Icon(Icons.cancel, size: 16, color: Color(0xFF1E40AF)),
+                                    onDeleted: () {
+                                      setDialogState(() {
+                                        specificCropsList.remove(item);
+                                      });
+                                    },
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(16),
+                                      side: const BorderSide(color: Color(0xFFBFDBFE)),
+                                    ),
+                                  );
+                                }).toList(),
+                              ),
+                            ],
+                          ],
+                        ),
+                        const SizedBox(height: 10),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: TextField(
+                                controller: landAreaCtrl,
+                                keyboardType: TextInputType.number,
+                                decoration: InputDecoration(
+                                  labelText: isTagalog ? 'Laki ng Lupa (hektarya)' : 'Land Area (ha)',
+                                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                                  filled: true,
+                                  fillColor: Colors.white,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: DropdownButtonFormField<String>(
+                                initialValue: selectedTenure,
+                                decoration: InputDecoration(
+                                  labelText: isTagalog ? 'Katayuan sa Lupa' : 'Tenure Status',
+                                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                                  filled: true,
+                                  fillColor: Colors.white,
+                                ),
+                                items: ['Owner', 'Tenant', 'Lease', 'CLT'].map((t) => DropdownMenuItem(value: t, child: Text(t))).toList(),
+                                onChanged: (val) => selectedTenure = val ?? 'Owner',
+                              ),
+                            ),
+                          ],
+                        ),
+
+                        const SizedBox(height: 10),
+                        // COMPLETE ADDRESS INPUT FIELD
+                        TextField(
+                          controller: addressCtrl,
+                          decoration: InputDecoration(
+                            labelText: isTagalog ? 'Kumpletong Address / Lokasyon ng Sakahan' : 'Complete Address / Farm Location',
+                            hintText: isTagalog ? 'hal. House #12, Sitio Layugan, Brgy. Biñan, Pagsanjan' : 'e.g. House #12, Sitio Layugan, Brgy. Biñan, Pagsanjan',
+                            errorText: addressErrorText,
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                            filled: true,
+                            fillColor: Colors.white,
+                            prefixIcon: const Icon(Icons.home_work_rounded, color: Color(0xFF0056B3)),
+                          ),
+                          onChanged: (_) {
+                            if (addressErrorText != null) {
+                              setDialogState(() {
+                                addressErrorText = null;
+                                dialogErrorBanner = null;
+                              });
+                            }
+                          },
+                        ),
+
+                        const Divider(height: 28, thickness: 1.2),
+
+                        // SECTION 3: GPS COORDINATES & MAP PICKER (READ ONLY LAT/LON)
+                        Row(
+                          children: [
+                            const Icon(Icons.map_rounded, size: 18, color: Color(0xFF0056B3)),
+                            const SizedBox(width: 6),
+                            Text(
+                              isTagalog ? 'GPS KOORDINADA NG SAKAHAN (MULA SA MAPA)' : 'FARM GPS COORDINATES (FROM MAP)',
+                              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF0056B3), letterSpacing: 0.5),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: TextField(
+                                controller: latCtrl,
+                                readOnly: true,
+                                decoration: InputDecoration(
+                                  labelText: 'Latitude (°N)',
+                                  hintText: isTagalog ? 'Lalabas kapag pumili sa mapa' : 'Auto-filled on map pick',
+                                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                                  filled: true,
+                                  fillColor: Colors.grey.shade100,
+                                  prefixIcon: const Icon(Icons.my_location_rounded, size: 18, color: Color(0xFF0056B3)),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: TextField(
+                                controller: lonCtrl,
+                                readOnly: true,
+                                decoration: InputDecoration(
+                                  labelText: 'Longitude (°E)',
+                                  hintText: isTagalog ? 'Lalabas kapag pumili sa mapa' : 'Auto-filled on map pick',
+                                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                                  filled: true,
+                                  fillColor: Colors.grey.shade100,
+                                  prefixIcon: const Icon(Icons.my_location_rounded, size: 18, color: Color(0xFF0056B3)),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        if (gpsErrorText != null) ...[
+                          const SizedBox(height: 4),
+                          Text(gpsErrorText!, style: const TextStyle(color: Color(0xFFDC2626), fontSize: 12, fontWeight: FontWeight.bold)),
+                        ],
+                        const SizedBox(height: 12),
+                        SizedBox(
+                          width: double.infinity,
+                          child: OutlinedButton.icon(
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: const Color(0xFF0056B3),
+                              side: const BorderSide(color: Color(0xFF0056B3), width: 1.5),
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                            ),
+                            onPressed: () {
+                              final currentLat = double.tryParse(latCtrl.text) ?? 14.2790;
+                              final currentLon = double.tryParse(lonCtrl.text) ?? 121.4550;
+
+                              showDialog(
+                                context: context,
+                                builder: (mapCtx) => AlertDialog(
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                                  title: Row(
+                                    children: [
+                                      const Icon(Icons.touch_app_rounded, color: Color(0xFF0056B3)),
+                                      const SizedBox(width: 8),
+                                      Expanded(
+                                        child: Text(
+                                          isTagalog ? 'I-tap sa Mapa ang Lokasyon ng Sakahan' : 'Tap on Map to Pick Farm Location',
+                                          style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  content: SizedBox(
+                                    width: 500,
+                                    height: 380,
+                                    child: ClipRRect(
+                                      borderRadius: BorderRadius.circular(12),
+                                      child: PagsanjanMapWidget(
+                                        initialCenter: LatLng(currentLat, currentLon),
+                                        initialZoom: 14,
+                                        markers: latCtrl.text.isNotEmpty && lonCtrl.text.isNotEmpty
+                                            ? [
+                                                Marker(
+                                                  point: LatLng(currentLat, currentLon),
+                                                  width: 40,
+                                                  height: 40,
+                                                  child: const Icon(Icons.location_pin, color: Colors.red, size: 36),
+                                                ),
+                                              ]
+                                            : [],
+                                        onTap: (point) {
+                                          final detectedBrgy = BarangayResolver.resolveBarangay(point);
+                                          setDialogState(() {
+                                            latCtrl.text = point.latitude.toStringAsFixed(5);
+                                            lonCtrl.text = point.longitude.toStringAsFixed(5);
+                                            selectedBrgy = detectedBrgy;
+                                            gpsErrorText = null;
+                                            dialogErrorBanner = null;
+                                            if (addressCtrl.text.trim().isEmpty) {
+                                              addressCtrl.text = 'Sitio $detectedBrgy, Brgy. $detectedBrgy, Pagsanjan';
+                                            }
+                                          });
+                                          Navigator.pop(mapCtx);
+                                        },
+                                      ),
+                                    ),
+                                  ),
+                                  actions: [
+                                    TextButton(
+                                      onPressed: () => Navigator.pop(mapCtx),
+                                      child: Text(isTagalog ? 'Kanselahin' : 'Cancel'),
+                                    ),
+                                  ],
+                                ),
+                              );
+                            },
+                            icon: const Icon(Icons.map_rounded),
+                            label: Text(
+                              isTagalog ? 'Pumili ng Lokasyon sa Mapa ng Pagsanjan' : 'Pick Location on Pagsanjan Map',
+                              style: const TextStyle(fontWeight: FontWeight.bold),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+
+                // BOTTOM ACTION BUTTONS
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: const BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.vertical(bottom: Radius.circular(20)),
+                    border: Border(top: BorderSide(color: Color(0xFFE2E8F0))),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(context),
+                        child: Text(isTagalog ? 'Kanselahin' : 'Cancel'),
+                      ),
+                      const SizedBox(width: 12),
+                      FilledButton.icon(
+                        style: FilledButton.styleFrom(
+                          backgroundColor: const Color(0xFF0056B3),
+                          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        ),
+                        onPressed: () async {
+                          setDialogState(() {
+                            dialogErrorBanner = null;
+                            nameErrorText = null;
+                            userErrorText = null;
+                            contactErrorText = null;
+                            addressErrorText = null;
+                            cropsErrorText = null;
+                            gpsErrorText = null;
+                          });
+
+                          final nameVal = nameCtrl.text.trim();
+                          final userVal = userCtrl.text.trim();
+
+                          // 1. Basic empty check for Name
+                          if (nameVal.isEmpty) {
+                            setDialogState(() {
+                              nameErrorText = isTagalog ? 'Kailangang lagyan ang Buong Pangalan!' : 'Full Personal Name is required!';
+                              dialogErrorBanner = isTagalog
+                                  ? '⚠️ MALI SA FORM: Pakilagay ang Buong Pangalan sa pulang field!'
+                                  : '⚠️ FORM ERROR: Please enter Full Personal Name in the highlighted field!';
+                            });
+                            scrollCtrl.animateTo(0, duration: const Duration(milliseconds: 300), curve: Curves.easeOut);
+                            return;
+                          }
+
+                          // 2. Basic empty check for Username
+                          if (userVal.isEmpty) {
+                            setDialogState(() {
+                              userErrorText = isTagalog ? 'Kailangang lagyan ang Username!' : 'Username is required!';
+                              dialogErrorBanner = isTagalog
+                                  ? '⚠️ MALI SA FORM: Pakilagay ang Username sa pulang field!'
+                                  : '⚠️ FORM ERROR: Please enter Username in the highlighted field!';
+                            });
+                            scrollCtrl.animateTo(0, duration: const Duration(milliseconds: 300), curve: Curves.easeOut);
+                            return;
+                          }
+
+                          // 3. Validate Contact Number (MUST be 11 digits)
+                          final contactDigits = contactCtrl.text.replaceAll(RegExp(r'\D'), '');
+                          if (contactDigits.length != 11) {
+                            setDialogState(() {
+                              contactErrorText = isTagalog
+                                  ? 'Kailangang saktong 11 numero (hal. 09123456789)!'
+                                  : 'Must be exactly 11 digits (e.g. 09123456789)!';
+                              dialogErrorBanner = isTagalog
+                                  ? '⚠️ MALI SA CONTACT NUMBER: Kailangang saktong 11 numero (halimbawa: 09123456789)!'
+                                  : '⚠️ CONTACT NUMBER ERROR: Must be exactly 11 digits (e.g. 09123456789)!';
+                            });
+                            scrollCtrl.animateTo(0, duration: const Duration(milliseconds: 300), curve: Curves.easeOut);
+                            return;
+                          }
+
+                          // 4. DUPLICATE CHECK: Name
+                          final existingName = service.farmers.any((f) => f.profileName.trim().toLowerCase() == nameVal.toLowerCase());
+                          if (existingName) {
+                            setDialogState(() {
+                              nameErrorText = isTagalog
+                                  ? 'May umiiral nang magsasaka na may ganitong pangalan!'
+                                  : 'A farmer with this name already exists!';
+                              dialogErrorBanner = isTagalog
+                                  ? '⚠️ HINDI MAIPAGPATULOY: May umiiral nang magsasaka na may pangalang "$nameVal"!'
+                                  : '⚠️ CANNOT PROCEED: A farmer with the name "$nameVal" already exists!';
+                            });
+                            scrollCtrl.animateTo(0, duration: const Duration(milliseconds: 300), curve: Curves.easeOut);
+                            return;
+                          }
+
+                          // 5. DUPLICATE CHECK: Username
+                          final existingUser = service.farmers.any((f) => f.username.trim().toLowerCase() == userVal.toLowerCase());
+                          if (existingUser) {
+                            setDialogState(() {
+                              userErrorText = isTagalog
+                                  ? 'Ang username na ito ay nakarehistro na sa ibang magsasaka!'
+                                  : 'Username is already taken by an existing farmer!';
+                              dialogErrorBanner = isTagalog
+                                  ? '⚠️ HINDI MAIPAGPATULOY: Ang username na "@$userVal" ay nakarehistro na!'
+                                  : '⚠️ CANNOT PROCEED: Username "@$userVal" is already taken!';
+                            });
+                            scrollCtrl.animateTo(0, duration: const Duration(milliseconds: 300), curve: Curves.easeOut);
+                            return;
+                          }
+
+                          // 6. DUPLICATE CHECK: Contact Number
+                          final existingContact = service.farmers.any((f) => f.contactNumber.replaceAll(RegExp(r'\D'), '') == contactDigits);
+                          if (existingContact) {
+                            setDialogState(() {
+                              contactErrorText = isTagalog
+                                  ? 'May umiiral nang magsasaka na may ganitong numero!'
+                                  : 'A farmer with this contact number already exists!';
+                              dialogErrorBanner = isTagalog
+                                  ? '⚠️ HINDI MAIPAGPATULOY: May umiiral nang magsasaka na may Contact Number ($contactDigits)!'
+                                  : '⚠️ CANNOT PROCEED: A farmer with this contact number ($contactDigits) already exists!';
+                            });
+                            scrollCtrl.animateTo(0, duration: const Duration(milliseconds: 300), curve: Curves.easeOut);
+                            return;
+                          }
+
+                          // 7. DUPLICATE CHECK: Address / Location
+                          final locInput = addressCtrl.text.trim().toLowerCase();
+                          if (locInput.isNotEmpty) {
+                            final existingAddress = service.farmers.any((f) =>
+                                f.barangay.toLowerCase() == selectedBrgy.toLowerCase() &&
+                                service.farms.any((farm) => (farm.farmerId == f.id || farm.farmerName == f.profileName) && farm.locationName.trim().toLowerCase() == locInput));
+                            if (existingAddress) {
+                              setDialogState(() {
+                                addressErrorText = isTagalog
+                                    ? 'May rehistradong magsasaka na sa parehong address!'
+                                    : 'A farmer is already registered at this same address!';
+                                dialogErrorBanner = isTagalog
+                                    ? '⚠️ HINDI MAIPAGPATULOY: May umiiral nang magsasaka sa parehong address ($locInput, Brgy. $selectedBrgy)!'
+                                    : '⚠️ CANNOT PROCEED: A farmer is already registered at this address ($locInput, Brgy. $selectedBrgy)!';
+                              });
+                              scrollCtrl.animateTo(250, duration: const Duration(milliseconds: 300), curve: Curves.easeOut);
+                              return;
+                            }
+                          }
+
+                          // 8. PRIMARY CROPS CHECK
+                          if (selectedPrimaryCrops.isEmpty) {
+                            setDialogState(() {
+                              cropsErrorText = isTagalog
+                                  ? 'Pumili ng kahit isang Primary Crop Type!'
+                                  : 'Please select at least one Primary Crop Type!';
+                              dialogErrorBanner = isTagalog
+                                  ? '⚠️ MALI SA CROPS: Pumili ng kahit isang Primary Crop Type sa mga pagpipilian sa ibaba!'
+                                  : '⚠️ CROP SELECTION ERROR: Please select at least one Primary Crop Type below!';
+                            });
+                            scrollCtrl.animateTo(200, duration: const Duration(milliseconds: 300), curve: Curves.easeOut);
+                            return;
+                          }
+
+                          // 9. GPS COORDINATES CHECK
+                          if (latCtrl.text.trim().isEmpty || lonCtrl.text.trim().isEmpty) {
+                            setDialogState(() {
+                              gpsErrorText = isTagalog
+                                  ? 'Pumili ng lokasyon sa mapa para makuha ang GPS Coordinates!'
+                                  : 'Please pick a location on the map!';
+                              dialogErrorBanner = isTagalog
+                                  ? '⚠️ MALI SA MAPA: Pumili ng lokasyon sa mapa para makuha ang GPS Coordinates!'
+                                  : '⚠️ MAP ERROR: Please pick a location on the map to set GPS coordinates!';
+                            });
+                            scrollCtrl.animateTo(400, duration: const Duration(milliseconds: 300), curve: Curves.easeOut);
+                            return;
+                          }
+
+                          // Auto-add any pending text in specificCropCtrl
+                          final pendingSpecific = specificCropCtrl.text.trim();
+                          if (pendingSpecific.isNotEmpty && !specificCropsList.contains(pendingSpecific)) {
+                            specificCropsList.add(pendingSpecific);
+                          }
+
+                          final primaryCropsStr = selectedPrimaryCrops.join(', ');
+                          final finalCropType = specificCropsList.isNotEmpty
+                              ? '$primaryCropsStr (${specificCropsList.join(', ')})'
+                              : primaryCropsStr;
+
+                          final farmerId = await service.addFarmer(
+                            username: userVal,
+                            password: passCtrl.text.isEmpty ? 'password123' : passCtrl.text,
+                            profileName: nameVal,
+                            barangay: selectedBrgy,
+                            contactNumber: contactDigits,
+                            organization: orgCtrl.text.isEmpty ? 'Independent' : orgCtrl.text.trim(),
+                          );
+
+                          // Add associated Farm Record so it syncs automatically to Farmer & Farm Records & Supabase!
+                          await service.addFarmRecord(
+                            farmerId: farmerId,
+                            farmerName: nameVal,
+                            locationName: locInput.isEmpty ? 'Sitio $selectedBrgy' : addressCtrl.text.trim(),
+                            latitude: double.tryParse(latCtrl.text) ?? 14.2790,
+                            longitude: double.tryParse(lonCtrl.text) ?? 121.4550,
+                            landAreaHectares: double.tryParse(landAreaCtrl.text) ?? 1.0,
+                            tenureStatus: selectedTenure,
+                            cropType: finalCropType,
+                            barangay: selectedBrgy,
+                          );
+
+                          if (!context.mounted) return;
+                          Navigator.pop(context);
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(
+                                isTagalog
+                                    ? 'Matagumpay na naidagdag ang magsasaka at ang kaniyang sakahan sa Supabase!'
+                                    : 'Successfully added farmer and farm record to Supabase!',
+                              ),
+                              backgroundColor: const Color(0xFF0056B3),
+                            ),
+                          );
+                        },
+                        icon: const Icon(Icons.check_circle_rounded, size: 18),
+                        label: Text(isTagalog ? 'I-save ang Magsasaka' : 'Save Farmer Record'),
+                      ),
+                    ],
                   ),
                 ),
               ],
             ),
           ),
+        ),
+      ),
+    );
+  }
+
+  void _showEditFarmerDialog(BuildContext context, AccountService service, Farmer farmer) {
+    final isTagalog = service.isTagalog;
+    final nameCtrl = TextEditingController(text: farmer.profileName);
+    final contactCtrl = TextEditingController(text: farmer.contactNumber);
+    final orgCtrl = TextEditingController(text: farmer.organization);
+    String selectedBrgy = farmer.barangay;
+    String selectedStatus = farmer.status;
+    String? contactErrorText;
+
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: Text(
+            isTagalog
+                ? 'Baguhin ang Rekord ng Magsasaka (${farmer.username})'
+                : 'Edit Farmer Record (${farmer.username})',
+          ),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: nameCtrl,
+                  decoration: InputDecoration(labelText: isTagalog ? 'Buong Pangalan' : 'Full Name'),
+                ),
+                DropdownButtonFormField<String>(
+                  initialValue: selectedBrgy,
+                  decoration: const InputDecoration(labelText: 'Barangay'),
+                  items: AccountService.pagsanjanBarangays.map((b) => DropdownMenuItem(value: b, child: Text(b))).toList(),
+                  onChanged: (val) => selectedBrgy = val ?? farmer.barangay,
+                ),
+                TextField(
+                  controller: contactCtrl,
+                  keyboardType: TextInputType.phone,
+                  inputFormatters: [
+                    FilteringTextInputFormatter.digitsOnly,
+                    LengthLimitingTextInputFormatter(11),
+                  ],
+                  decoration: InputDecoration(
+                    labelText: isTagalog ? 'Numero ng Kontak (11 Numero)' : 'Contact Details (11 Digits)',
+                    errorText: contactErrorText,
+                    helperText: isTagalog ? 'Dapat saktong 11 numero (hal. 09123456789)' : 'Must be exactly 11 digits (e.g. 09123456789)',
+                  ),
+                  onChanged: (val) {
+                    final digitsOnly = val.replaceAll(RegExp(r'\D'), '');
+                    setDialogState(() {
+                      if (digitsOnly.isNotEmpty && digitsOnly.length != 11) {
+                        contactErrorText = isTagalog
+                            ? 'Dapat saktong 11 numero (${digitsOnly.length}/11)'
+                            : 'Must be exactly 11 digits (${digitsOnly.length}/11)';
+                      } else {
+                        contactErrorText = null;
+                      }
+                    });
+                  },
+                ),
+                TextField(
+                  controller: orgCtrl,
+                  decoration: InputDecoration(
+                    labelText: isTagalog ? 'Samahan / Organisasyon' : 'Association Membership',
+                  ),
+                ),
+                DropdownButtonFormField<String>(
+                  initialValue: selectedStatus,
+                  decoration: InputDecoration(labelText: isTagalog ? 'Katayuan (Status)' : 'Status'),
+                  items: ['Active', 'Pending', 'Deactivated'].map((s) => DropdownMenuItem(value: s, child: Text(s))).toList(),
+                  onChanged: (val) => selectedStatus = val ?? farmer.status,
+                ),
+              ],
+            ),
+          ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
-            FilledButton.icon(
-              style: FilledButton.styleFrom(backgroundColor: const Color(0xFF0056B3)),
-              onPressed: () async {
-                if (nameCtrl.text.isNotEmpty && userCtrl.text.isNotEmpty) {
-                  final farmerId = await service.addFarmer(
-                    username: userCtrl.text,
-                    password: passCtrl.text.isEmpty ? 'password123' : passCtrl.text,
-                    profileName: nameCtrl.text,
-                    barangay: selectedBrgy,
-                    contactNumber: contactCtrl.text.isEmpty ? 'N/A' : contactCtrl.text,
-                    organization: orgCtrl.text.isEmpty ? 'Independent' : orgCtrl.text,
-                  );
-
-                  // Add associated Farm Record so it syncs automatically to Farmer & Farm Records & Supabase!
-                  await service.addFarmRecord(
-                    farmerId: farmerId,
-                    farmerName: nameCtrl.text,
-                    locationName: locationCtrl.text.isEmpty ? 'Sitio $selectedBrgy' : locationCtrl.text,
-                    latitude: double.tryParse(latCtrl.text) ?? 14.2790,
-                    longitude: double.tryParse(lonCtrl.text) ?? 121.4550,
-                    landAreaHectares: double.tryParse(landAreaCtrl.text) ?? 2.0,
-                    tenureStatus: selectedTenure,
-                    cropType: selectedCrop,
-                    barangay: selectedBrgy,
-                  );
-
-                  if (!context.mounted) return;
-                  Navigator.pop(context);
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: Text(isTagalog ? 'Kanselahin' : 'Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                final contactDigits = contactCtrl.text.replaceAll(RegExp(r'\D'), '');
+                if (contactDigits.length != 11) {
+                  setDialogState(() {
+                    contactErrorText = isTagalog
+                        ? 'Kailangang saktong 11 numero!'
+                        : 'Must be exactly 11 digits!';
+                  });
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Matagumpay na naidagdag ang magsasaka at ang kaniyang sakahan sa Supabase!'),
-                      backgroundColor: Colors.green,
+                    SnackBar(
+                      content: Text(
+                        isTagalog
+                            ? '⚠️ Hindi maipagpatuloy: Ang Contact Number ay kailangang saktong 11 numero (halimbawa: 09123456789).'
+                            : '⚠️ Cannot proceed: Contact Number must be exactly 11 digits (e.g. 09123456789).',
+                      ),
+                      backgroundColor: Colors.red,
                     ),
                   );
+                  return;
                 }
+
+                service.updateFarmer(
+                  farmer.id,
+                  profileName: nameCtrl.text.trim(),
+                  barangay: selectedBrgy,
+                  contactNumber: contactDigits,
+                  organization: orgCtrl.text.trim(),
+                  status: selectedStatus,
+                );
+                Navigator.pop(context);
               },
-              icon: const Icon(Icons.check_circle_rounded, size: 16),
-              label: const Text('Save Farmer & Farm'),
+              child: Text(isTagalog ? 'I-update' : 'Update'),
             ),
           ],
         ),
@@ -2423,127 +3605,500 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
     );
   }
 
-  void _showEditFarmerDialog(BuildContext context, AccountService service, Farmer farmer) {
-    final nameCtrl = TextEditingController(text: farmer.profileName);
-    final contactCtrl = TextEditingController(text: farmer.contactNumber);
-    final orgCtrl = TextEditingController(text: farmer.organization);
-    String selectedBrgy = farmer.barangay;
-    String selectedStatus = farmer.status;
-
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text('Edit Farmer Record (${farmer.username})'),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(controller: nameCtrl, decoration: const InputDecoration(labelText: 'Full Name')),
-              DropdownButtonFormField<String>(
-                initialValue: selectedBrgy,
-                decoration: const InputDecoration(labelText: 'Barangay'),
-                items: AccountService.pagsanjanBarangays.map((b) => DropdownMenuItem(value: b, child: Text(b))).toList(),
-                onChanged: (val) => selectedBrgy = val ?? farmer.barangay,
-              ),
-              TextField(controller: contactCtrl, decoration: const InputDecoration(labelText: 'Contact Details')),
-              TextField(controller: orgCtrl, decoration: const InputDecoration(labelText: 'Association Membership')),
-              DropdownButtonFormField<String>(
-                initialValue: selectedStatus,
-                decoration: const InputDecoration(labelText: 'Status'),
-                items: ['Active', 'Pending', 'Deactivated'].map((s) => DropdownMenuItem(value: s, child: Text(s))).toList(),
-                onChanged: (val) => selectedStatus = val ?? farmer.status,
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
-          ElevatedButton(
-            onPressed: () {
-              service.updateFarmer(
-                farmer.id,
-                profileName: nameCtrl.text,
-                barangay: selectedBrgy,
-                contactNumber: contactCtrl.text,
-                organization: orgCtrl.text,
-                status: selectedStatus,
-              );
-              Navigator.pop(context);
-            },
-            child: const Text('Update'),
-          ),
-        ],
-      ),
-    );
-  }
-
   void _showAddFarmForFarmerDialog(BuildContext context, AccountService service, Farmer farmer) {
-    final locationCtrl = TextEditingController();
-    final areaCtrl = TextEditingController();
-    final latCtrl = TextEditingController(text: '14.2717');
-    final lonCtrl = TextEditingController(text: '121.4553');
+    final isTagalog = service.isTagalog;
+    final addressCtrl = TextEditingController(); // Complete Address
+    final areaCtrl = TextEditingController(); // Empty start
+    final latCtrl = TextEditingController(); // Empty start
+    final lonCtrl = TextEditingController(); // Empty start
+    final specificCropCtrl = TextEditingController();
+    final List<String> specificCropsList = [];
     String selectedTenure = 'Owner';
-    String selectedCrop = 'Rice';
     String selectedBrgy = farmer.barangay;
+    String? dialogErrorBanner;
+
+    final primaryCropOptions = isTagalog
+        ? [
+            {'key': 'Rice', 'label': '🌾 Palay (Rice)'},
+            {'key': 'Gulay', 'label': '🥬 Gulay (Vegetables)'},
+            {'key': 'Prutas', 'label': '🍎 Prutas (Fruits)'},
+          ]
+        : [
+            {'key': 'Rice', 'label': '🌾 Rice'},
+            {'key': 'Gulay', 'label': '🥬 Vegetables'},
+            {'key': 'Prutas', 'label': '🍎 Fruits'},
+          ];
+
+    final Set<String> selectedPrimaryCrops = <String>{}; // Empty start
 
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Text('Add Farm Record for ${farmer.profileName}'),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(controller: locationCtrl, decoration: const InputDecoration(labelText: 'Farm Location / Sitio')),
-              DropdownButtonFormField<String>(
-                initialValue: selectedBrgy,
-                decoration: const InputDecoration(labelText: 'Barangay'),
-                items: AccountService.pagsanjanBarangays.map((b) => DropdownMenuItem(value: b, child: Text(b))).toList(),
-                onChanged: (val) => selectedBrgy = val ?? farmer.barangay,
-              ),
-              TextField(controller: areaCtrl, decoration: const InputDecoration(labelText: 'Land Area (Hectares)'), keyboardType: TextInputType.number),
-              DropdownButtonFormField<String>(
-                initialValue: selectedTenure,
-                decoration: const InputDecoration(labelText: 'Land Tenure Status'),
-                items: ['Owner', 'Tenant', 'Lease', 'CLT'].map((t) => DropdownMenuItem(value: t, child: Text(t))).toList(),
-                onChanged: (val) => selectedTenure = val ?? 'Owner',
-              ),
-              DropdownButtonFormField<String>(
-                initialValue: selectedCrop,
-                decoration: const InputDecoration(labelText: 'Crop Type'),
-                items: ['Rice', 'Prutas', 'Gulay'].map((c) => DropdownMenuItem(value: c, child: Text(c))).toList(),
-                onChanged: (val) => selectedCrop = val ?? 'Rice',
-              ),
-              Row(
-                children: [
-                  Expanded(child: TextField(controller: latCtrl, decoration: const InputDecoration(labelText: 'Latitude'))),
-                  const SizedBox(width: 8),
-                  Expanded(child: TextField(controller: lonCtrl, decoration: const InputDecoration(labelText: 'Longitude'))),
-                ],
-              ),
-            ],
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          contentPadding: EdgeInsets.zero,
+          backgroundColor: const Color(0xFFF8FAFC),
+          content: SizedBox(
+            width: 520,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                // BLUE HEADER BANNER
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                  decoration: const BoxDecoration(
+                    color: Color(0xFF0056B3),
+                    borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.2),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(Icons.agriculture_rounded, color: Colors.white, size: 24),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          isTagalog
+                              ? 'Magdagdag ng Sakahan para kay ${farmer.profileName}'
+                              : 'Add Farm Record for ${farmer.profileName}',
+                          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.close_rounded, color: Colors.white),
+                        onPressed: () => Navigator.pop(context),
+                      ),
+                    ],
+                  ),
+                ),
+
+                // SCROLLABLE FORM BODY
+                Flexible(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.all(20),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        if (dialogErrorBanner != null) ...[
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                            margin: const EdgeInsets.only(bottom: 16),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFFEF2F2),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: const Color(0xFFFCA5A5), width: 1.5),
+                            ),
+                            child: Row(
+                              children: [
+                                const Icon(Icons.error_outline_rounded, color: Color(0xFFDC2626), size: 22),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: Text(
+                                    dialogErrorBanner!,
+                                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF991B1B)),
+                                  ),
+                                ),
+                                IconButton(
+                                  padding: EdgeInsets.zero,
+                                  constraints: const BoxConstraints(),
+                                  icon: const Icon(Icons.close_rounded, size: 18, color: Color(0xFF991B1B)),
+                                  onPressed: () {
+                                    setDialogState(() {
+                                      dialogErrorBanner = null;
+                                    });
+                                  },
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+
+                        // COMPLETE ADDRESS FIELD
+                        TextField(
+                          controller: addressCtrl,
+                          decoration: InputDecoration(
+                            labelText: isTagalog ? 'Kumpletong Address / Lokasyon ng Sakahan' : 'Complete Address / Farm Location',
+                            hintText: isTagalog ? 'hal. House #12, Sitio Layugan, Brgy. Biñan, Pagsanjan' : 'e.g. House #12, Sitio Layugan, Brgy. Biñan, Pagsanjan',
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                            filled: true,
+                            fillColor: Colors.white,
+                            prefixIcon: const Icon(Icons.home_work_rounded, color: Color(0xFF0056B3)),
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: DropdownButtonFormField<String>(
+                                initialValue: selectedBrgy,
+                                decoration: InputDecoration(
+                                  labelText: 'Barangay',
+                                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                                  filled: true,
+                                  fillColor: Colors.white,
+                                ),
+                                items: AccountService.pagsanjanBarangays.map((b) => DropdownMenuItem(value: b, child: Text(b))).toList(),
+                                onChanged: (val) => selectedBrgy = val ?? farmer.barangay,
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: TextField(
+                                controller: areaCtrl,
+                                keyboardType: TextInputType.number,
+                                decoration: InputDecoration(
+                                  labelText: isTagalog ? 'Laki ng Lupa (hektarya)' : 'Land Area (ha)',
+                                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                                  filled: true,
+                                  fillColor: Colors.white,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 10),
+                        DropdownButtonFormField<String>(
+                          initialValue: selectedTenure,
+                          decoration: InputDecoration(
+                            labelText: isTagalog ? 'Katayuan sa Lupa' : 'Land Tenure Status',
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                            filled: true,
+                            fillColor: Colors.white,
+                          ),
+                          items: ['Owner', 'Tenant', 'Lease', 'CLT'].map((t) => DropdownMenuItem(value: t, child: Text(t))).toList(),
+                          onChanged: (val) => selectedTenure = val ?? 'Owner',
+                        ),
+                        const SizedBox(height: 14),
+
+                        // MULTI-SELECT PRIMARY CROP TYPES
+                        Text(
+                          isTagalog
+                              ? 'Mga Pangunahing Tanim (Pumili ng isa o higit pa):'
+                              : 'Primary Crop Types (Select all that apply):',
+                          style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Colors.black87),
+                        ),
+                        const SizedBox(height: 6),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 6,
+                          children: primaryCropOptions.map((cropOpt) {
+                            final key = cropOpt['key']!;
+                            final label = cropOpt['label']!;
+                            final isSelected = selectedPrimaryCrops.contains(key);
+                            return FilterChip(
+                              selected: isSelected,
+                              label: Text(label, style: TextStyle(fontWeight: isSelected ? FontWeight.bold : FontWeight.normal)),
+                              selectedColor: const Color(0xFFDBEAFE),
+                              checkmarkColor: const Color(0xFF1E40AF),
+                              labelStyle: TextStyle(color: isSelected ? const Color(0xFF1E40AF) : Colors.black87),
+                              side: BorderSide(color: isSelected ? const Color(0xFF2563EB) : Colors.grey.shade300),
+                              onSelected: (bool selected) {
+                                setDialogState(() {
+                                  if (selected) {
+                                    selectedPrimaryCrops.add(key);
+                                  } else {
+                                    selectedPrimaryCrops.remove(key);
+                                  }
+                                });
+                              },
+                            );
+                          }).toList(),
+                        ),
+                        const SizedBox(height: 12),
+
+                        // SPECIFIC CROP VARIETIES INPUT
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              isTagalog
+                                  ? 'TIYAK NA URI O VARIETY NG TANIM (SPECIFIC TYPES)'
+                                  : 'SPECIFIC CROP TYPES & VARIETIES (OPTIONAL)',
+                              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF2563EB)),
+                            ),
+                            const SizedBox(height: 6),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: TextField(
+                                    controller: specificCropCtrl,
+                                    decoration: InputDecoration(
+                                      labelText: isTagalog
+                                          ? 'I-type ang tanim (hal. Mangga, Saging, Talong)'
+                                          : 'Type specific crop (e.g. Mango, Banana, Eggplant)',
+                                      hintText: isTagalog ? 'I-type at i-press (+)' : 'Type and press (+)',
+                                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                                      filled: true,
+                                      fillColor: Colors.white,
+                                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                    ),
+                                    onSubmitted: (val) {
+                                      final trimmed = val.trim();
+                                      if (trimmed.isNotEmpty && !specificCropsList.contains(trimmed)) {
+                                        setDialogState(() {
+                                          specificCropsList.add(trimmed);
+                                          specificCropCtrl.clear();
+                                        });
+                                      }
+                                    },
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                IconButton.filled(
+                                  style: IconButton.styleFrom(backgroundColor: const Color(0xFF0056B3)),
+                                  onPressed: () {
+                                    final trimmed = specificCropCtrl.text.trim();
+                                    if (trimmed.isNotEmpty && !specificCropsList.contains(trimmed)) {
+                                      setDialogState(() {
+                                        specificCropsList.add(trimmed);
+                                        specificCropCtrl.clear();
+                                      });
+                                    }
+                                  },
+                                  icon: const Icon(Icons.add_rounded, color: Colors.white),
+                                ),
+                              ],
+                            ),
+                            if (specificCropsList.isNotEmpty) ...[
+                              const SizedBox(height: 8),
+                              Wrap(
+                                spacing: 6,
+                                runSpacing: 6,
+                                children: specificCropsList.map((item) {
+                                  return Chip(
+                                    avatar: const Icon(Icons.eco_rounded, size: 14, color: Color(0xFF1E40AF)),
+                                    label: Text(
+                                      item,
+                                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF1E40AF)),
+                                    ),
+                                    backgroundColor: const Color(0xFFEFF6FF),
+                                    deleteIcon: const Icon(Icons.cancel, size: 16, color: Color(0xFF1E40AF)),
+                                    onDeleted: () {
+                                      setDialogState(() {
+                                        specificCropsList.remove(item);
+                                      });
+                                    },
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(16),
+                                      side: const BorderSide(color: Color(0xFFBFDBFE)),
+                                    ),
+                                  );
+                                }).toList(),
+                              ),
+                            ],
+                          ],
+                        ),
+
+                        const Divider(height: 28, thickness: 1.2),
+
+                        // READ-ONLY GPS COORDINATES + MAP PICKER
+                        Text(
+                          isTagalog ? 'GPS KOORDINADA NG SAKAHAN (MULA SA MAPA)' : 'FARM GPS COORDINATES (FROM MAP)',
+                          style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF0056B3), letterSpacing: 0.5),
+                        ),
+                        const SizedBox(height: 8),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: TextField(
+                                controller: latCtrl,
+                                readOnly: true,
+                                decoration: InputDecoration(
+                                  labelText: 'Latitude (°N)',
+                                  hintText: isTagalog ? 'Lalabas sa mapa' : 'Auto-filled on map pick',
+                                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                                  filled: true,
+                                  fillColor: Colors.grey.shade100,
+                                  prefixIcon: const Icon(Icons.my_location_rounded, size: 18, color: Color(0xFF0056B3)),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: TextField(
+                                controller: lonCtrl,
+                                readOnly: true,
+                                decoration: InputDecoration(
+                                  labelText: 'Longitude (°E)',
+                                  hintText: isTagalog ? 'Lalabas sa mapa' : 'Auto-filled on map pick',
+                                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                                  filled: true,
+                                  fillColor: Colors.grey.shade100,
+                                  prefixIcon: const Icon(Icons.my_location_rounded, size: 18, color: Color(0xFF0056B3)),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        SizedBox(
+                          width: double.infinity,
+                          child: OutlinedButton.icon(
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: const Color(0xFF0056B3),
+                              side: const BorderSide(color: Color(0xFF0056B3), width: 1.5),
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                            ),
+                            onPressed: () {
+                              final currentLat = double.tryParse(latCtrl.text) ?? 14.2790;
+                              final currentLon = double.tryParse(lonCtrl.text) ?? 121.4550;
+
+                              showDialog(
+                                context: context,
+                                builder: (mapCtx) => AlertDialog(
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                                  title: Row(
+                                    children: [
+                                      const Icon(Icons.touch_app_rounded, color: Color(0xFF0056B3)),
+                                      const SizedBox(width: 8),
+                                      Expanded(
+                                        child: Text(
+                                          isTagalog ? 'I-tap sa Mapa ang Lokasyon ng Sakahan' : 'Tap on Map to Pick Farm Location',
+                                          style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  content: SizedBox(
+                                    width: 500,
+                                    height: 380,
+                                    child: ClipRRect(
+                                      borderRadius: BorderRadius.circular(12),
+                                      child: PagsanjanMapWidget(
+                                        initialCenter: LatLng(currentLat, currentLon),
+                                        initialZoom: 14,
+                                        markers: latCtrl.text.isNotEmpty && lonCtrl.text.isNotEmpty
+                                            ? [
+                                                Marker(
+                                                  point: LatLng(currentLat, currentLon),
+                                                  width: 40,
+                                                  height: 40,
+                                                  child: const Icon(Icons.location_pin, color: Colors.red, size: 36),
+                                                ),
+                                              ]
+                                            : [],
+                                        onTap: (point) {
+                                          final detectedBrgy = BarangayResolver.resolveBarangay(point);
+                                          setDialogState(() {
+                                            latCtrl.text = point.latitude.toStringAsFixed(5);
+                                            lonCtrl.text = point.longitude.toStringAsFixed(5);
+                                            selectedBrgy = detectedBrgy;
+                                            if (addressCtrl.text.trim().isEmpty) {
+                                              addressCtrl.text = 'Sitio $detectedBrgy, Brgy. $detectedBrgy, Pagsanjan';
+                                            }
+                                          });
+                                          Navigator.pop(mapCtx);
+                                        },
+                                      ),
+                                    ),
+                                  ),
+                                  actions: [
+                                    TextButton(
+                                      onPressed: () => Navigator.pop(mapCtx),
+                                      child: Text(isTagalog ? 'Kanselahin' : 'Cancel'),
+                                    ),
+                                  ],
+                                ),
+                              );
+                            },
+                            icon: const Icon(Icons.map_rounded),
+                            label: Text(
+                              isTagalog ? 'Pumili ng Lokasyon sa Mapa ng Pagsanjan' : 'Pick Location on Pagsanjan Map',
+                              style: const TextStyle(fontWeight: FontWeight.bold),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+
+                // BOTTOM ACTION BUTTONS
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: const BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.vertical(bottom: Radius.circular(20)),
+                    border: Border(top: BorderSide(color: Color(0xFFE2E8F0))),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(context),
+                        child: Text(isTagalog ? 'Kanselahin' : 'Cancel'),
+                      ),
+                      const SizedBox(width: 12),
+                      FilledButton.icon(
+                        style: FilledButton.styleFrom(
+                          backgroundColor: const Color(0xFF0056B3),
+                          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        ),
+                        onPressed: () {
+                          setDialogState(() {
+                            dialogErrorBanner = null;
+                          });
+
+                          if (selectedPrimaryCrops.isEmpty) {
+                            setDialogState(() {
+                              dialogErrorBanner = isTagalog
+                                  ? '⚠️ Pumili ng kahit isang Primary Crop Type!'
+                                  : '⚠️ Please select at least one Primary Crop Type!';
+                            });
+                            return;
+                          }
+
+                          if (latCtrl.text.trim().isEmpty || lonCtrl.text.trim().isEmpty) {
+                            setDialogState(() {
+                              dialogErrorBanner = isTagalog
+                                  ? '⚠️ Pumili ng lokasyon sa mapa para makuha ang GPS Coordinates!'
+                                  : '⚠️ Please pick a location on the map to set GPS coordinates!';
+                            });
+                            return;
+                          }
+
+                          final pendingSpecific = specificCropCtrl.text.trim();
+                          if (pendingSpecific.isNotEmpty && !specificCropsList.contains(pendingSpecific)) {
+                            specificCropsList.add(pendingSpecific);
+                          }
+
+                          final primaryCropsStr = selectedPrimaryCrops.join(', ');
+                          final finalCropType = specificCropsList.isNotEmpty
+                              ? '$primaryCropsStr (${specificCropsList.join(', ')})'
+                              : primaryCropsStr;
+
+                          service.addFarmRecord(
+                            farmerId: farmer.id,
+                            farmerName: farmer.profileName,
+                            locationName: addressCtrl.text.trim().isEmpty ? 'Sitio $selectedBrgy' : addressCtrl.text.trim(),
+                            latitude: double.tryParse(latCtrl.text) ?? 14.2717,
+                            longitude: double.tryParse(lonCtrl.text) ?? 121.4553,
+                            landAreaHectares: double.tryParse(areaCtrl.text) ?? 1.0,
+                            tenureStatus: selectedTenure,
+                            cropType: finalCropType,
+                            barangay: selectedBrgy,
+                          );
+                          Navigator.pop(context);
+                        },
+                        icon: const Icon(Icons.check_circle_rounded, size: 18),
+                        label: Text(isTagalog ? 'I-save ang Sakahan' : 'Save Farm Record'),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
-          ElevatedButton(
-            onPressed: () {
-              service.addFarmRecord(
-                farmerId: farmer.id,
-                farmerName: farmer.profileName,
-                locationName: locationCtrl.text,
-                latitude: double.tryParse(latCtrl.text) ?? 14.2717,
-                longitude: double.tryParse(lonCtrl.text) ?? 121.4553,
-                landAreaHectares: double.tryParse(areaCtrl.text) ?? 1.0,
-                tenureStatus: selectedTenure,
-                cropType: selectedCrop,
-                barangay: selectedBrgy,
-              );
-              Navigator.pop(context);
-            },
-            child: const Text('Save'),
-          ),
-        ],
       ),
     );
   }
@@ -2997,56 +4552,7 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
     );
   }
 
-  void _showFarmInfoDialog(BuildContext context, FarmRecord farm) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Row(
-          children: [
-            const CircleAvatar(
-              backgroundColor: Color(0xFF16A34A),
-              foregroundColor: Colors.white,
-              radius: 18,
-              child: Icon(Icons.agriculture_rounded, size: 20),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(farm.farmerName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                  Text('Barangay ${farm.barangay}, Pagsanjan', style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
-                ],
-              ),
-            ),
-          ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Divider(height: 12),
-            _infoRow(Icons.location_on_rounded, 'Farm Sitio / Location', farm.locationName),
-            const SizedBox(height: 8),
-            _infoRow(Icons.eco_rounded, 'Primary Crop Type', farm.cropType),
-            const SizedBox(height: 8),
-            _infoRow(Icons.square_foot_rounded, 'Land Size', '${farm.landAreaHectares} Hectares (${(farm.landAreaHectares * 10000).round()} m²)'),
-            const SizedBox(height: 8),
-            _infoRow(Icons.badge_rounded, 'Tenure Status', farm.tenureStatus),
-            const SizedBox(height: 8),
-            _infoRow(Icons.my_location_rounded, 'GPS Coordinates', '${farm.latitude.toStringAsFixed(5)}° N, ${farm.longitude.toStringAsFixed(5)}° E'),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Close'),
-          ),
-        ],
-      ),
-    );
-  }
+
 
   Widget _infoRow(IconData icon, String label, String value) {
     return Row(
@@ -3088,7 +4594,7 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
                            farm.farmerName.toLowerCase().contains(query) ||
                            farm.locationName.toLowerCase().contains(query) ||
                            farm.cropType.toLowerCase().contains(query);
-      final matchesBarangay = _selectedBarangayFilter == 'All' || farm.barangay == _selectedBarangayFilter;
+      final matchesBarangay = _selectedBarangayFilter == 'All' || farm.barangay.trim().toLowerCase() == _selectedBarangayFilter.trim().toLowerCase();
       return matchesQuery && matchesBarangay;
     }).toList();
 
@@ -3122,23 +4628,23 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
               ),
               child: Stack(
                 children: [
+                  // MAIN MAP DISPLAY WITH BLUE SHADE MARKERS & AUTO-ZOOM TO BARANGAY
                   Positioned.fill(
                     child: ClipRRect(
                       borderRadius: BorderRadius.circular(18),
                       child: PagsanjanMapWidget(
-                        initialZoom: 13.5,
-                        markers: farms.map((f) => Marker(
-                          point: LatLng(f.latitude, f.longitude),
-                          width: 40,
-                          height: 40,
-                          child: GestureDetector(
-                            onTap: () => _showFarmInfoDialog(context, f),
-                            child: const Icon(Icons.location_pin, color: Colors.red, size: 38),
-                          ),
-                        )).toList(),
+                        initialCenter: _mapCenter,
+                        initialZoom: _mapZoom,
+                        markers: _showRegisteredPins
+                            ? farms.map((f) => _buildBlueFarmMarker(f, () {
+                                _showFarmWeatherModal(context, f, locale, cardBg, textColor);
+                              })).toList()
+                            : [],
                       ),
                     ),
                   ),
+
+                  // FULL SCREEN BUTTON
                   Positioned(
                     right: 16,
                     top: 16,
@@ -3147,15 +4653,11 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
                         context,
                         MaterialPageRoute(
                           builder: (_) => PagsanjanMapScreen(
-                            markers: farms.map((f) => Marker(
-                              point: LatLng(f.latitude, f.longitude),
-                              width: 40,
-                              height: 40,
-                              child: GestureDetector(
-                                onTap: () => _showFarmInfoDialog(context, f),
-                                child: const Icon(Icons.location_pin, color: Colors.red, size: 38),
-                              ),
-                            )).toList(),
+                            markers: _showRegisteredPins
+                                ? farms.map((f) => _buildBlueFarmMarker(f, () {
+                                    _showFarmWeatherModal(context, f, locale, cardBg, textColor);
+                                  })).toList()
+                                : [],
                           ),
                         ),
                       ),
@@ -3167,11 +4669,13 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
                       label: const Text('Full Screen'),
                     ),
                   ),
+
+                  // SIDE OVERLAY PANEL FOR FARMERS & MAP FILTERS
                   Positioned(
                     left: 20,
                     top: 20,
                     bottom: 20,
-                    width: 300,
+                    width: 320,
                     child: Container(
                       padding: const EdgeInsets.all(14),
                       decoration: BoxDecoration(
@@ -3183,8 +4687,27 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(locale.registeredPins, style: TextStyle(fontWeight: FontWeight.bold, color: primaryAccent)),
-                          const SizedBox(height: 8),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text(locale.registeredPins, style: TextStyle(fontWeight: FontWeight.bold, color: primaryAccent, fontSize: 13)),
+                              Row(
+                                children: [
+                                  Text(
+                                    locale.isTagalog ? 'Ipakita ang Pin' : 'Show Pins',
+                                    style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: subtextColor),
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Switch(
+                                    value: _showRegisteredPins,
+                                    activeThumbColor: const Color(0xFF0056B3),
+                                    onChanged: (val) => setState(() => _showRegisteredPins = val),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 6),
                           TextField(
                             controller: _searchController,
                             onChanged: (val) => setState(() => _searchQuery = val),
@@ -3201,12 +4724,14 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
                             ),
                           ),
                           const SizedBox(height: 8),
+
+                          // BARANGAY DROPDOWN FILTER WITH AUTO-ZOOM TO SELECTED BARANGAY
                           DropdownButtonFormField<String>(
                             initialValue: _selectedBarangayFilter,
                             dropdownColor: cardBg,
                             style: TextStyle(color: textColor, fontSize: 12),
                             decoration: InputDecoration(
-                              labelText: locale.isTagalog ? 'Barangay' : 'Barangay',
+                              labelText: locale.isTagalog ? 'Filter Barangay (Auto-Zoom)' : 'Filter Barangay (Auto-Zoom)',
                               labelStyle: TextStyle(color: subtextColor, fontSize: 11),
                               isDense: true,
                               filled: true,
@@ -3214,28 +4739,60 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
                               border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: cardBorder)),
                               contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                             ),
-                            items: ['All', ...AccountService.pagsanjanBarangays].map((b) => DropdownMenuItem(value: b, child: Text(b, style: TextStyle(fontSize: 12)))).toList(),
-                            onChanged: (val) => setState(() => _selectedBarangayFilter = val ?? 'All'),
+                            items: ['All', ...AccountService.pagsanjanBarangays].map((b) => DropdownMenuItem(value: b, child: Text(b, style: const TextStyle(fontSize: 12)))).toList(),
+                            onChanged: (val) {
+                              final brgy = val ?? 'All';
+                              setState(() {
+                                _selectedBarangayFilter = brgy;
+                                if (brgy == 'All') {
+                                  _mapCenter = const LatLng(14.2790, 121.4550);
+                                  _mapZoom = 13.5;
+                                } else {
+                                  _mapCenter = _getBarangayCenter(brgy, service.farms);
+                                  _mapZoom = 15.8; // Auto zoom in directly to the barangay!
+                                }
+                              });
+                            },
                           ),
-                          const SizedBox(height: 8),
+                          const SizedBox(height: 10),
+
+                          // FARMER LIST ITEMS
                           Expanded(
-                            child: ListView.builder(
-                              itemCount: farms.length,
-                              itemBuilder: (context, index) {
-                                final farm = farms[index];
-                                return Card(
-                                  color: isDark ? const Color(0xFF1E2E4A) : Colors.white,
-                                  margin: const EdgeInsets.only(bottom: 8),
-                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                                  child: ListTile(
-                                    leading: const Icon(Icons.location_on_rounded, color: Colors.redAccent),
-                                    title: Text(farm.farmerName, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: textColor)),
-                                    subtitle: Text('${farm.cropType} • ${farm.barangay}', style: TextStyle(color: subtextColor)),
-                                    onTap: () => _showFarmWeatherModal(context, farm, locale, cardBg, textColor),
+                            child: farms.isEmpty
+                                ? Center(
+                                    child: Text(
+                                      locale.isTagalog ? 'Walang sakahang nahanap' : 'No farms found',
+                                      style: TextStyle(fontSize: 12, color: subtextColor),
+                                    ),
+                                  )
+                                : ListView.builder(
+                                    itemCount: farms.length,
+                                    itemBuilder: (context, index) {
+                                      final farm = farms[index];
+                                      return Card(
+                                        color: isDark ? const Color(0xFF1E2E4A) : Colors.white,
+                                        margin: const EdgeInsets.only(bottom: 8),
+                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                        child: ListTile(
+                                          leading: Container(
+                                            padding: const EdgeInsets.all(6),
+                                            decoration: const BoxDecoration(color: Color(0xFFDBEAFE), shape: BoxShape.circle),
+                                            child: const Icon(Icons.location_on_rounded, color: Color(0xFF0056B3), size: 18),
+                                          ),
+                                          title: Text(farm.farmerName, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: textColor)),
+                                          subtitle: Text('${farm.cropType} • Brgy. ${farm.barangay}', style: TextStyle(color: subtextColor, fontSize: 11)),
+                                          onTap: () {
+                                            // Auto zoom map to the selected farmer's farm area
+                                            setState(() {
+                                              _mapCenter = LatLng(farm.latitude, farm.longitude);
+                                              _mapZoom = 16.0;
+                                            });
+                                            _showFarmWeatherModal(context, farm, locale, cardBg, textColor);
+                                          },
+                                        ),
+                                      );
+                                    },
                                   ),
-                                );
-                              },
-                            ),
                           ),
                         ],
                       ),
@@ -3250,50 +4807,215 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
     );
   }
 
-  void _showFarmWeatherModal(BuildContext context, FarmRecord farm, AdminLocale locale, Color cardBg, Color textColor) {
+  void _showFarmWeatherModal(
+    BuildContext context,
+    FarmRecord farm,
+    AdminLocale locale,
+    Color cardBg,
+    Color textColor,
+  ) {
+    final isTagalog = locale.isTagalog;
+
     showModalBottomSheet(
       context: context,
-      backgroundColor: cardBg,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-      builder: (context) => Padding(
-        padding: const EdgeInsets.all(22),
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        height: MediaQuery.of(context).size.height * 0.85,
+        decoration: BoxDecoration(
+          color: cardBg,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+          boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 16)],
+        ),
         child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              children: [
-                const Icon(Icons.location_pin, color: Colors.redAccent, size: 28),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    '${farm.farmerName}\'s Farm (${farm.locationName})',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: textColor),
-                  ),
+            // MODAL DRAG HANDLE
+            Center(
+              child: Container(
+                margin: const EdgeInsets.only(top: 10, bottom: 6),
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade400,
+                  borderRadius: BorderRadius.circular(2),
                 ),
-              ],
+              ),
             ),
-            const Divider(height: 20),
-            Text('Barangay: ${farm.barangay}', style: TextStyle(color: textColor)),
-            Text('Crop Type: ${farm.cropType}', style: TextStyle(color: textColor)),
-            Text('Land Area: ${farm.landAreaHectares} Hectares', style: TextStyle(color: textColor)),
-            Text('Tenure Status: ${farm.tenureStatus}', style: TextStyle(color: textColor)),
-            const SizedBox(height: 16),
+
+            // BLUE HEADER BANNER
             Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(color: Colors.blue.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(12)),
-              child: const Row(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+              decoration: const BoxDecoration(
+                color: Color(0xFF0056B3),
+                borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+              ),
+              child: Row(
                 children: [
-                  Icon(Icons.wb_sunny_rounded, color: Colors.amber, size: 32),
-                  SizedBox(width: 12),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('Pagsanjan Real-Time Weather', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.blueAccent)),
-                      Text('Temp: 29°C • Humidity: 78% • Partly Cloudy', style: TextStyle(fontSize: 12)),
-                    ],
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.2),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.agriculture_rounded, color: Colors.white, size: 24),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          farm.farmerName,
+                          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white),
+                        ),
+                        Text(
+                          '${farm.locationName}, Brgy. ${farm.barangay}, Pagsanjan',
+                          style: TextStyle(fontSize: 12, color: Colors.white.withValues(alpha: 0.9)),
+                        ),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close_rounded, color: Colors.white),
+                    onPressed: () => Navigator.pop(context),
                   ),
                 ],
+              ),
+            ),
+
+            // MODAL SCROLLABLE CONTENT
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // FARM DETAILS CARD
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: const Color(0xFFE2E8F0)),
+                        boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 6)],
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              const Icon(Icons.info_outline_rounded, color: Color(0xFF0056B3), size: 20),
+                              const SizedBox(width: 8),
+                              Text(
+                                isTagalog ? 'IMPORMASYON NG SAKAHAN' : 'FARM LAND DETAILS',
+                                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF0056B3)),
+                              ),
+                            ],
+                          ),
+                          const Divider(height: 20),
+                          _infoRow(Icons.eco_rounded, isTagalog ? 'Mga Tanim' : 'Crop Types', farm.cropType),
+                          const SizedBox(height: 8),
+                          _infoRow(Icons.square_foot_rounded, isTagalog ? 'Laki ng Lupa' : 'Land Size', '${farm.landAreaHectares} Ha (${(farm.landAreaHectares * 10000).round()} m²)'),
+                          const SizedBox(height: 8),
+                          _infoRow(Icons.badge_rounded, isTagalog ? 'Katayuan sa Lupa' : 'Tenure Status', farm.tenureStatus),
+                          const SizedBox(height: 8),
+                          _infoRow(Icons.my_location_rounded, isTagalog ? 'GPS Coordinates' : 'GPS Coordinates', '${farm.latitude.toStringAsFixed(5)}° N, ${farm.longitude.toStringAsFixed(5)}° E'),
+                        ],
+                      ),
+                    ),
+
+                    const SizedBox(height: 16),
+
+                    // DEDICATED MINI-MAP PREVIEW OF FARM AREA
+                    Text(
+                      isTagalog ? '🗺️ MAPA NG AREA NG SAKAHAN' : '🗺️ FARM AREA LOCATION MAP',
+                      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF0056B3)),
+                    ),
+                    const SizedBox(height: 8),
+                    Container(
+                      height: 220,
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: const Color(0xFFBFDBFE), width: 2),
+                        boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 6)],
+                      ),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(14),
+                        child: PagsanjanMapWidget(
+                          initialCenter: LatLng(farm.latitude, farm.longitude),
+                          initialZoom: 16.0, // Zoomed in directly to farm area!
+                          markers: [
+                            _buildBlueFarmMarker(farm, () {}),
+                          ],
+                        ),
+                      ),
+                    ),
+
+                    const SizedBox(height: 16),
+
+                    // REAL-TIME WEATHER & AGRIBUSINESS ADVISORY
+                    Text(
+                      isTagalog ? '🌾 ULAT NG PANAHON SA SAKAHAN' : '🌾 FARM REAL-TIME WEATHER & ADVISORY',
+                      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF0056B3)),
+                    ),
+                    const SizedBox(height: 8),
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(
+                          colors: [Color(0xFFEFF6FF), Color(0xFFDBEAFE)],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: const Color(0xFFBFDBFE)),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              const Icon(Icons.wb_sunny_rounded, color: Colors.amber, size: 36),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      isTagalog
+                                          ? 'Kasalukuyang Panahon sa Brgy. ${farm.barangay}'
+                                          : 'Current Farm Weather at Brgy. ${farm.barangay}',
+                                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF1E3A8A)),
+                                    ),
+                                    const Text(
+                                      '29°C • Humidity: 76% • Wind: 12 km/h',
+                                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF1E40AF)),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                          const Divider(height: 20, color: Color(0xFF93C5FD)),
+                          Row(
+                            children: [
+                              const Icon(Icons.lightbulb_outline_rounded, color: Color(0xFF1D4ED8), size: 20),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  isTagalog
+                                      ? 'Payo sa Sakahan: Maganda ang panahon ngayong araw para sa pagpapataba at patubig sa pananim na ${farm.cropType}.'
+                                      : 'Agri Advisory: Ideal weather conditions today for fertilizing and irrigating ${farm.cropType} crops.',
+                                  style: const TextStyle(fontSize: 12, fontStyle: FontStyle.italic, color: Color(0xFF1E3A8A)),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
           ],
@@ -3321,7 +5043,7 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
                            f.profileName.toLowerCase().contains(query) ||
                            f.username.toLowerCase().contains(query) ||
                            f.organization.toLowerCase().contains(query);
-      final matchesBarangay = _selectedBarangayFilter == 'All' || f.barangay == _selectedBarangayFilter;
+      final matchesBarangay = _selectedBarangayFilter == 'All' || f.barangay.trim().toLowerCase() == _selectedBarangayFilter.trim().toLowerCase();
       return matchesQuery && matchesBarangay;
     }).toList();
 
@@ -3746,3 +5468,19 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
     );
   }
 }
+
+class _TriangleClipper extends CustomClipper<Path> {
+  @override
+  Path getClip(Size size) {
+    final path = Path();
+    path.moveTo(0, 0);
+    path.lineTo(size.width / 2, size.height);
+    path.lineTo(size.width, 0);
+    path.close();
+    return path;
+  }
+
+  @override
+  bool shouldReclip(CustomClipper<Path> oldClipper) => false;
+}
+

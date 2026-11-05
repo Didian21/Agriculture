@@ -13,3 +13,10 @@
 .externalNativeBuild
 .cxx
 local.properties
+
+# Flutter/Dart build files
+.dart_tool/
+build/
+.packages
+.flutter-plugins
+.flutter-plugins-dependencies

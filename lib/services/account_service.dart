@@ -149,9 +149,9 @@ class AccountService extends ChangeNotifier {
   final List<AdminStaff> _adminStaffList = [
     AdminStaff(
       id: 'STAFF001',
-      name: 'Dr. Roberto Mendoza',
-      username: 'roberto_mao',
-      email: 'rmendoza@pagsanjan.gov.ph',
+      name: 'Ms. Jellie Masacayan',
+      username: 'jellie_masacayan',
+      email: 'jmasacayan@pagsanjan.gov.ph',
       role: 'Municipal Agriculturist',
       status: 'Active',
     ),
