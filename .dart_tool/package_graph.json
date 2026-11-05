@@ -15,6 +15,7 @@
         "http",
         "intl",
         "latlong2",
+        "pdf",
         "provider",
         "shared_preferences",
         "supabase_flutter"
@@ -23,6 +24,19 @@
         "flutter_launcher_icons",
         "flutter_lints",
         "flutter_test"
+      ]
+    },
+    {
+      "name": "flutter_launcher_icons",
+      "version": "0.14.4",
+      "dependencies": [
+        "args",
+        "checked_yaml",
+        "cli_util",
+        "image",
+        "json_annotation",
+        "path",
+        "yaml"
       ]
     },
     {
@@ -48,6 +62,21 @@
         "stream_channel",
         "test_api",
         "vector_math"
+      ]
+    },
+    {
+      "name": "pdf",
+      "version": "3.13.1",
+      "dependencies": [
+        "archive",
+        "barcode",
+        "bidi",
+        "crypto",
+        "image",
+        "meta",
+        "path_parsing",
+        "vector_math",
+        "xml"
       ]
     },
     {
@@ -170,6 +199,56 @@
       ]
     },
     {
+      "name": "yaml",
+      "version": "3.1.4",
+      "dependencies": [
+        "collection",
+        "source_span",
+        "string_scanner"
+      ]
+    },
+    {
+      "name": "path",
+      "version": "1.9.1",
+      "dependencies": []
+    },
+    {
+      "name": "json_annotation",
+      "version": "4.12.0",
+      "dependencies": [
+        "meta"
+      ]
+    },
+    {
+      "name": "image",
+      "version": "4.12.0",
+      "dependencies": [
+        "archive"
+      ]
+    },
+    {
+      "name": "cli_util",
+      "version": "0.4.2",
+      "dependencies": [
+        "meta",
+        "path"
+      ]
+    },
+    {
+      "name": "checked_yaml",
+      "version": "2.0.4",
+      "dependencies": [
+        "json_annotation",
+        "source_span",
+        "yaml"
+      ]
+    },
+    {
+      "name": "args",
+      "version": "2.7.0",
+      "dependencies": []
+    },
+    {
       "name": "lints",
       "version": "6.1.0",
       "dependencies": []
@@ -228,11 +307,6 @@
       ]
     },
     {
-      "name": "path",
-      "version": "1.9.1",
-      "dependencies": []
-    },
-    {
       "name": "matcher",
       "version": "0.12.20",
       "dependencies": [
@@ -256,6 +330,21 @@
         "stream_channel",
         "string_scanner",
         "term_glyph"
+      ]
+    },
+    {
+      "name": "crypto",
+      "version": "3.0.7",
+      "dependencies": [
+        "typed_data"
+      ]
+    },
+    {
+      "name": "archive",
+      "version": "4.5.2",
+      "dependencies": [
+        "path",
+        "posix"
       ]
     },
     {
@@ -436,13 +525,6 @@
       ]
     },
     {
-      "name": "crypto",
-      "version": "3.0.7",
-      "dependencies": [
-        "typed_data"
-      ]
-    },
-    {
       "name": "http_parser",
       "version": "4.1.2",
       "dependencies": [
@@ -477,6 +559,22 @@
       "dependencies": []
     },
     {
+      "name": "string_scanner",
+      "version": "1.4.1",
+      "dependencies": [
+        "source_span"
+      ]
+    },
+    {
+      "name": "source_span",
+      "version": "1.10.2",
+      "dependencies": [
+        "collection",
+        "path",
+        "term_glyph"
+      ]
+    },
+    {
       "name": "leak_tracker_testing",
       "version": "3.0.2",
       "dependencies": [
@@ -502,27 +600,27 @@
       "dependencies": []
     },
     {
-      "name": "string_scanner",
-      "version": "1.4.1",
-      "dependencies": [
-        "source_span"
-      ]
-    },
-    {
-      "name": "source_span",
-      "version": "1.10.2",
-      "dependencies": [
-        "collection",
-        "path",
-        "term_glyph"
-      ]
-    },
-    {
       "name": "boolean_selector",
       "version": "2.1.2",
       "dependencies": [
         "source_span",
         "string_scanner"
+      ]
+    },
+    {
+      "name": "typed_data",
+      "version": "1.4.0",
+      "dependencies": [
+        "collection"
+      ]
+    },
+    {
+      "name": "posix",
+      "version": "6.5.4",
+      "dependencies": [
+        "ffi",
+        "meta",
+        "path"
       ]
     },
     {
@@ -661,13 +759,6 @@
       ]
     },
     {
-      "name": "json_annotation",
-      "version": "4.12.0",
-      "dependencies": [
-        "meta"
-      ]
-    },
-    {
       "name": "app_links_web",
       "version": "1.0.5",
       "dependencies": [
@@ -785,15 +876,13 @@
       ]
     },
     {
-      "name": "typed_data",
-      "version": "1.4.0",
-      "dependencies": [
-        "collection"
-      ]
-    },
-    {
       "name": "vm_service",
       "version": "15.3.0",
+      "dependencies": []
+    },
+    {
+      "name": "ffi",
+      "version": "2.2.0",
       "dependencies": []
     },
     {
@@ -829,11 +918,6 @@
       ]
     },
     {
-      "name": "ffi",
-      "version": "2.2.0",
-      "dependencies": []
-    },
-    {
       "name": "platform",
       "version": "3.2.0",
       "dependencies": [
@@ -861,11 +945,6 @@
       "dependencies": [
         "path"
       ]
-    },
-    {
-      "name": "args",
-      "version": "2.7.0",
-      "dependencies": []
     },
     {
       "name": "objective_c",
@@ -946,15 +1025,6 @@
       ]
     },
     {
-      "name": "yaml",
-      "version": "3.1.4",
-      "dependencies": [
-        "collection",
-        "source_span",
-        "string_scanner"
-      ]
-    },
-    {
       "name": "record_use",
       "version": "0.6.0",
       "dependencies": [
@@ -964,57 +1034,48 @@
       ]
     },
     {
-      "name": "flutter_launcher_icons",
-      "version": "0.14.4",
+      "name": "xml",
+      "version": "7.0.1",
       "dependencies": [
-        "args",
-        "checked_yaml",
-        "cli_util",
-        "image",
-        "json_annotation",
-        "path",
-        "yaml"
+        "collection",
+        "meta",
+        "petitparser"
       ]
     },
     {
-      "name": "cli_util",
-      "version": "0.4.2",
+      "name": "petitparser",
+      "version": "7.0.2",
+      "dependencies": [
+        "collection",
+        "meta"
+      ]
+    },
+    {
+      "name": "bidi",
+      "version": "2.0.13",
+      "dependencies": []
+    },
+    {
+      "name": "path_parsing",
+      "version": "1.1.0",
       "dependencies": [
         "meta",
-        "path"
+        "vector_math"
       ]
     },
     {
-      "name": "checked_yaml",
-      "version": "2.0.4",
+      "name": "barcode",
+      "version": "2.2.9",
       "dependencies": [
-        "json_annotation",
-        "source_span",
-        "yaml"
-      ]
-    },
-    {
-      "name": "image",
-      "version": "4.12.0",
-      "dependencies": [
-        "archive"
-      ]
-    },
-    {
-      "name": "archive",
-      "version": "4.5.2",
-      "dependencies": [
-        "path",
-        "posix"
-      ]
-    },
-    {
-      "name": "posix",
-      "version": "6.5.4",
-      "dependencies": [
-        "ffi",
         "meta",
-        "path"
+        "qr"
+      ]
+    },
+    {
+      "name": "qr",
+      "version": "3.0.3",
+      "dependencies": [
+        "meta"
       ]
     }
   ],

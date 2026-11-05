@@ -1,0 +1,1 @@
+ C:\\Users\\Administrator\\OneDrive\\Documents\\Agriculture\\.dart_tool\\flutter_build\\230f1bd32fbc26193fa3da1862f2b9ba\\native_assets.json: 
