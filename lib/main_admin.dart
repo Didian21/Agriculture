@@ -41,7 +41,7 @@ class AdminApp extends StatelessWidget {
           supportedLocales: AppLocalizations.supportedLocales,
           initialRoute: '/splash',
           routes: {
-            '/splash': (context) => const SplashScreen(nextScreen: AdminLoginScreen()),
+            '/splash': (context) => const SplashScreen(nextScreen: AdminLoginScreen(), isAdmin: true),
             '/': (context) => const AdminLoginScreen(),
             '/admin_dashboard': (context) => const AdminDashboard(),
             '/thank_you': (context) => const ThankYouScreen(),

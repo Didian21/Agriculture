@@ -333,10 +333,40 @@
       ]
     },
     {
+      "name": "xml",
+      "version": "7.0.1",
+      "dependencies": [
+        "collection",
+        "meta",
+        "petitparser"
+      ]
+    },
+    {
+      "name": "path_parsing",
+      "version": "1.1.0",
+      "dependencies": [
+        "meta",
+        "vector_math"
+      ]
+    },
+    {
       "name": "crypto",
       "version": "3.0.7",
       "dependencies": [
         "typed_data"
+      ]
+    },
+    {
+      "name": "bidi",
+      "version": "2.0.13",
+      "dependencies": []
+    },
+    {
+      "name": "barcode",
+      "version": "2.2.9",
+      "dependencies": [
+        "meta",
+        "qr"
       ]
     },
     {
@@ -575,8 +605,6 @@
       ]
     },
     {
-
-
       "name": "leak_tracker_testing",
       "version": "3.0.2",
       "dependencies": [
@@ -604,8 +632,36 @@
     {
       "name": "boolean_selector",
       "version": "2.1.2",
-
-
+      "dependencies": [
+        "source_span",
+        "string_scanner"
+      ]
+    },
+    {
+      "name": "petitparser",
+      "version": "7.0.2",
+      "dependencies": [
+        "collection",
+        "meta"
+      ]
+    },
+    {
+      "name": "typed_data",
+      "version": "1.4.0",
+      "dependencies": [
+        "collection"
+      ]
+    },
+    {
+      "name": "qr",
+      "version": "3.0.3",
+      "dependencies": [
+        "meta"
+      ]
+    },
+    {
+      "name": "posix",
+      "version": "6.5.4",
       "dependencies": [
         "ffi",
         "meta",
@@ -865,8 +921,6 @@
       ]
     },
     {
-
-
       "name": "vm_service",
       "version": "15.3.0",
       "dependencies": []
@@ -1022,51 +1076,6 @@
         "collection",
         "meta",
         "pub_semver"
-      ]
-    },
-    {
-      "name": "xml",
-      "version": "7.0.1",
-      "dependencies": [
-        "collection",
-        "meta",
-        "petitparser"
-      ]
-    },
-    {
-      "name": "petitparser",
-      "version": "7.0.2",
-      "dependencies": [
-        "collection",
-        "meta"
-      ]
-    },
-    {
-      "name": "bidi",
-      "version": "2.0.13",
-      "dependencies": []
-    },
-    {
-      "name": "path_parsing",
-      "version": "1.1.0",
-      "dependencies": [
-        "meta",
-        "vector_math"
-      ]
-    },
-    {
-      "name": "barcode",
-      "version": "2.2.9",
-      "dependencies": [
-        "meta",
-        "qr"
-      ]
-    },
-    {
-      "name": "qr",
-      "version": "3.0.3",
-      "dependencies": [
-        "meta"
       ]
     }
   ],

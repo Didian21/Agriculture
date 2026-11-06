@@ -8,7 +8,8 @@ import 'dashboard/dashboard_screen.dart';
 
 class SplashScreen extends StatefulWidget {
   final Widget nextScreen;
-  const SplashScreen({super.key, required this.nextScreen});
+  final bool isAdmin;
+  const SplashScreen({super.key, required this.nextScreen, this.isAdmin = false});
 
   @override
   State<SplashScreen> createState() => _SplashScreenState();
@@ -40,8 +41,13 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
 
     Timer(const Duration(milliseconds: 2400), () {
       if (mounted) {
-        final p = Provider.of<DashboardProvider>(context, listen: false);
-        final targetScreen = p.isLoggedIn ? const DashboardScreen() : widget.nextScreen;
+        Widget targetScreen = widget.nextScreen;
+        if (!widget.isAdmin) {
+          final p = Provider.of<DashboardProvider>(context, listen: false);
+          if (p.isLoggedIn) {
+            targetScreen = const DashboardScreen();
+          }
+        }
 
         Navigator.of(context).pushReplacement(
           PageRouteBuilder(
