@@ -32,6 +32,8 @@ class _PricesTabState extends State<PricesTab> {
 
   /// Huling ani (kg) na inilagay ng magsasaka sa DSS para sa pananim na ito.
   double? _lastHarvestKg(FarmInputProvider farm, String crop) {
+    final recorded = farm.lastRecordedYieldKg(crop);
+    if (recorded != null) return recorded;
     FarmPlanting? best;
     for (final e in farm.plantings) {
       if (e.crop != crop || e.lastYieldKg == null || e.lastYieldKg! <= 0) continue;

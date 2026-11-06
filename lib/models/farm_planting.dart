@@ -8,12 +8,16 @@ class FarmPlanting {
   /// Dami ng ani (kg) mula sa huling ani - opsyonal. Ginagamit ng DSS para mas tumpak ang tantiya.
   final double? lastYieldKg;
 
+  /// Gastos sa produksyon (PHP) para sa tanim na ito - opsyonal. Ginagamit sa pagkuwenta ng tubo.
+  final double? costPhp;
+
   const FarmPlanting({
     required this.id,
     required this.crop,
     required this.hectares,
     required this.plantedOn,
     this.lastYieldKg,
+    this.costPhp,
   });
 
   Map<String, dynamic> toJson() => {
@@ -22,6 +26,7 @@ class FarmPlanting {
     'hectares': hectares,
     'plantedOn': plantedOn.toIso8601String(),
     'lastYieldKg': lastYieldKg,
+    'costPhp': costPhp,
   };
 
   factory FarmPlanting.fromJson(Map<String, dynamic> j) => FarmPlanting(
@@ -30,5 +35,6 @@ class FarmPlanting {
     hectares: (j['hectares'] as num).toDouble(),
     plantedOn: DateTime.parse(j['plantedOn'] as String),
     lastYieldKg: (j['lastYieldKg'] as num?)?.toDouble(),
+    costPhp: (j['costPhp'] as num?)?.toDouble(),
   );
 }

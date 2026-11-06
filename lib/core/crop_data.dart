@@ -57,7 +57,7 @@ const Map<String, CropFacts> kCropFacts = {
   'Tomato': CropFacts(minDays: 90, maxDays: 110, lowKgHa: 8000, midKgHa: 12000, highKgHa: 18000, bestMonths: {10, 11, 12}, possibleMonths: {1, 9}, basePrice: 55.0),
   'String beans': CropFacts(minDays: 60, maxDays: 70, lowKgHa: 4000, midKgHa: 6000, highKgHa: 8500, bestMonths: {10, 11, 12, 1}, possibleMonths: {2, 9, 5, 6}, basePrice: 70.0),
   'Banana': CropFacts(minDays: 270, maxDays: 360, lowKgHa: 10000, midKgHa: 18000, highKgHa: 28000, bestMonths: {5, 6, 7, 8}, possibleMonths: {4, 9, 10}, basePrice: 40.0),
-  'Coconut': CropFacts(lowKgHa: 3000, midKgHa: 5000, highKgHa: 8000, storable: true, bestMonths: {6, 7, 8}, possibleMonths: {5, 9, 10}),
+  'Coconut': CropFacts(lowKgHa: 3000, midKgHa: 5000, highKgHa: 8000, storable: true, bestMonths: {6, 7, 8}, possibleMonths: {5, 9, 10}, basePrice: 15.0),
   'Ampalaya': CropFacts(minDays: 60, maxDays: 90, lowKgHa: 6000, midKgHa: 9000, highKgHa: 13000, bestMonths: {10, 11, 12, 1}, possibleMonths: {2, 3, 9}, basePrice: 65.0),
   'Squash': CropFacts(minDays: 90, maxDays: 120, lowKgHa: 8000, midKgHa: 12000, highKgHa: 18000, bestMonths: {10, 11, 12}, possibleMonths: {1, 2, 9}, basePrice: 30.0),
   'Sweet potato': CropFacts(minDays: 90, maxDays: 120, lowKgHa: 6000, midKgHa: 9000, highKgHa: 14000, storable: true, bestMonths: {5, 6, 7, 8}, possibleMonths: {4, 9, 10}, basePrice: 35.0),
