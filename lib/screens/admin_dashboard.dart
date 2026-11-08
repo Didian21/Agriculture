@@ -247,17 +247,35 @@ class _AdminDashboardState extends State<AdminDashboard> {
         final crop = parts[1];
         final year = int.tryParse(parts[2]) ?? DateTime.now().year;
         final month = parts[3];
-        final prod = double.tryParse(parts[4].replaceAll('MT', '').trim()) ?? 0.0;
-        final price = parts.length > 5 ? double.tryParse(parts[5].replaceAll('P', '').replaceAll('PHP', '').trim()) ?? 0.0 : 0.0;
+        String barangay = 'ALL';
+        double prod = 0.0;
+        double price = 0.0;
+
+        if (parts.length >= 6) {
+          if (double.tryParse(parts[4].replaceAll('MT', '').trim()) != null) {
+            prod = double.tryParse(parts[4].replaceAll('MT', '').trim()) ?? 0.0;
+            price = double.tryParse(parts[5].replaceAll('P', '').replaceAll('PHP', '').trim()) ?? 0.0;
+          } else {
+            barangay = parts[4];
+            prod = double.tryParse(parts[5].replaceAll('MT', '').trim()) ?? 0.0;
+            price = parts.length > 6 ? double.tryParse(parts[6].replaceAll('P', '').replaceAll('PHP', '').trim()) ?? 0.0 : 0.0;
+          }
+        } else {
+          prod = double.tryParse(parts[4].replaceAll('MT', '').trim()) ?? 0.0;
+        }
 
         if (crop.isNotEmpty && prod >= 0) {
           final isDuplicate = service.historicalRecords.any((h) =>
-              h.crop.toLowerCase() == crop.toLowerCase() && h.year == year && h.month.toLowerCase() == month.toLowerCase());
+              h.crop.toLowerCase() == crop.toLowerCase() &&
+              h.year == year &&
+              h.month.toLowerCase() == month.toLowerCase() &&
+              h.barangay.toLowerCase() == barangay.toLowerCase());
           if (!isDuplicate) {
             service.addHistoricalRecord(
               crop: crop,
               year: year,
               month: month,
+              barangay: barangay,
               productionMT: prod,
               pricePerKg: price,
               uploadedBy: service.activeUserName,
@@ -508,10 +526,10 @@ $offsetXref
           }
         }
       } else if (mod.contains('historical')) {
-        sb.writeln('No.,Crop,Year,Month,Production (MT),Price per Kg (PHP),Uploaded By');
+        sb.writeln('No.,Crop,Year,Month,Barangay,Production (MT),Price per Kg (PHP),Uploaded By');
         int i = 1;
         for (final h in service.historicalRecords) {
-          sb.writeln('$i,${h.crop},${h.year},${h.month},${h.productionMT},${h.pricePerKg},"${h.uploadedBy}"');
+          sb.writeln('$i,${h.crop},${h.year},${h.month},"${h.barangay}",${h.productionMT},${h.pricePerKg},"${h.uploadedBy}"');
           i++;
         }
       } else if (mod.contains('map')) {
@@ -565,11 +583,11 @@ $offsetXref
           }
         }
       } else if (mod.contains('historical')) {
-        textSb.writeln(' No. | Crop Name          | Year | Month     | Prod (MT) | Price/kg');
+        textSb.writeln(' No. | Crop Name          | Year | Month     | Barangay    | Prod (MT) | Price/kg');
         textSb.writeln('--------------------------------------------------------------------------------');
         int i = 1;
         for (final h in service.historicalRecords) {
-          textSb.writeln(' ${i.toString().padLeft(3)} | ${h.crop.padRight(18)} | ${h.year} | ${h.month.padRight(9)} | ${h.productionMT.toStringAsFixed(1).padRight(9)} | P${h.pricePerKg.toStringAsFixed(2)}');
+          textSb.writeln(' ${i.toString().padLeft(3)} | ${h.crop.padRight(18)} | ${h.year} | ${h.month.padRight(9)} | ${h.barangay.padRight(11)} | ${h.productionMT.toStringAsFixed(1).padRight(9)} | P${h.pricePerKg.toStringAsFixed(2)}');
           i++;
         }
       } else if (mod.contains('map')) {
@@ -694,10 +712,10 @@ $offsetXref
               }
             }
           } else if (mod.contains('historical')) {
-            headers = ['No.', 'Crop', 'Year', 'Month', 'Production (MT)', 'Price/kg (PHP)'];
+            headers = ['No.', 'Crop', 'Year', 'Month', 'Barangay', 'Production (MT)', 'Price/kg (PHP)'];
             int i = 1;
             for (final h in service.historicalRecords) {
-              tableData.add(['$i', h.crop, '${h.year}', h.month, h.productionMT.toString(), 'P${h.pricePerKg.toStringAsFixed(2)}']);
+              tableData.add(['$i', h.crop, '${h.year}', h.month, h.barangay, h.productionMT.toString(), 'P${h.pricePerKg.toStringAsFixed(2)}']);
               i++;
             }
           } else if (mod.contains('account')) {
@@ -1014,10 +1032,10 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
                     onPressed: () async {
                       final isHistorical = moduleName.toLowerCase().contains('historical');
                       final templateCsv = isHistorical
-                          ? 'Crop,Year,Month,Production (MT),Price Per KG (PHP)\n'
-                            'Rice,2026,January,480.0,24.00\n'
-                            'Prutas (Banana),2025,November,120.0,45.00\n'
-                            'Gulay (Talong),2025,December,85.2,55.00\n'
+                          ? 'Crop,Year,Month,Barangay,Production (MT),Price Per KG (PHP)\n'
+                            'Rice,2026,January,Biñan,480.0,24.00\n'
+                            'Prutas (Banana),2025,November,Anibong,120.0,45.00\n'
+                            'Gulay (Talong),2025,December,Buboy,85.2,55.00\n'
                           : 'Full Personal Name,Username,Barangay,Contact Number,Organization Membership,Primary Crop Type,Land Area (Hectares)\n'
                             'Juan Dela Cruz,juan_dela_cruz,Biñan,09171234567,Pagsanjan Farmers Coop,Rice,2.5\n'
                             'Maria Santos,maria_santos,Buboy,09189876543,Anibong Planters,Gulay,1.2\n';
@@ -1349,8 +1367,19 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
                       final crop = parts[0 + offset].trim();
                       final year = int.tryParse(parts[1 + offset].trim()) ?? 0;
                       final month = parts[2 + offset].trim();
-                      final prod = double.tryParse(parts[3 + offset].trim()) ?? -1.0;
-                      final price = parts.length > (4 + offset) ? (double.tryParse(parts[4 + offset].trim()) ?? 0.0) : 0.0;
+
+                      String barangay = 'ALL';
+                      double prod = -1.0;
+                      double price = 0.0;
+
+                      if (parts.length >= (6 + offset)) {
+                        barangay = parts[3 + offset].trim();
+                        prod = double.tryParse(parts[4 + offset].trim()) ?? -1.0;
+                        price = double.tryParse(parts[5 + offset].trim()) ?? 0.0;
+                      } else {
+                        prod = double.tryParse(parts[3 + offset].trim()) ?? -1.0;
+                        price = parts.length > (4 + offset) ? (double.tryParse(parts[4 + offset].trim()) ?? 0.0) : 0.0;
+                      }
 
                       // Validate incomplete data
                       if (crop.isEmpty || year <= 0 || month.isEmpty || prod < 0) {
@@ -1362,7 +1391,8 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
                       final isDuplicate = service.historicalRecords.any((h) =>
                           h.crop.toLowerCase() == crop.toLowerCase() &&
                           h.year == year &&
-                          h.month.toLowerCase() == month.toLowerCase());
+                          h.month.toLowerCase() == month.toLowerCase() &&
+                          h.barangay.toLowerCase() == barangay.toLowerCase());
 
                       if (isDuplicate) {
                         skippedCount++;
@@ -1373,6 +1403,7 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
                         crop: crop,
                         year: year,
                         month: month,
+                        barangay: barangay,
                         productionMT: prod,
                         pricePerKg: price,
                         uploadedBy: service.activeUserName,
@@ -1872,9 +1903,16 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
       return Scaffold(
         backgroundColor: bgColor,
         appBar: AppBar(
+          automaticallyImplyLeading: false,
           backgroundColor: sidebarBg,
           foregroundColor: Colors.white,
           title: Text(locale.adminTitle, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+          leading: Builder(
+            builder: (context) => IconButton(
+              icon: const Icon(Icons.menu_rounded),
+              onPressed: () => Scaffold.of(context).openDrawer(),
+            ),
+          ),
           actions: [
             IconButton(
               icon: const Icon(Icons.logout_rounded),
@@ -1962,8 +2000,11 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
     }).toList();
 
     final filteredHistorical = historical.where((h) {
+      final matchesBarangay = _selectedBarangayFilter == 'All' ||
+          h.barangay.trim().toLowerCase() == _selectedBarangayFilter.trim().toLowerCase() ||
+          h.barangay.toUpperCase() == 'ALL';
       final matchesCrop = _matchesCrop(h.crop, _selectedCropFilter);
-      if (!matchesCrop) return false;
+      if (!matchesBarangay || !matchesCrop) return false;
       if (_selectedTimePeriodFilter == 'All') return true;
       if (_selectedTimePeriodFilter == '2026') return h.year == 2026;
       if (_selectedTimePeriodFilter == '2025') return h.year == 2025;
@@ -2246,6 +2287,7 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
                       columns: [
                         DataColumn(label: Text('Crop', style: TextStyle(color: subtextColor))),
                         DataColumn(label: Text('Period', style: TextStyle(color: subtextColor))),
+                        DataColumn(label: Text('Barangay', style: TextStyle(color: subtextColor))),
                         DataColumn(label: Text('Production (MT)', style: TextStyle(color: subtextColor))),
                         DataColumn(label: Text('Avg Price (PHP/kg)', style: TextStyle(color: subtextColor))),
                         DataColumn(label: Text('Uploaded By', style: TextStyle(color: subtextColor))),
@@ -2254,6 +2296,7 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
                         cells: [
                           DataCell(Text(h.crop, style: TextStyle(fontWeight: FontWeight.bold, color: textColor))),
                           DataCell(Text('${h.month} ${h.year}', style: TextStyle(color: textColor))),
+                          DataCell(Text(h.barangay, style: TextStyle(color: textColor))),
                           DataCell(Text('${h.productionMT} MT', style: TextStyle(color: textColor))),
                           DataCell(Text('₱${h.pricePerKg.toStringAsFixed(2)}', style: TextStyle(color: textColor))),
                           DataCell(Text(h.uploadedBy, style: TextStyle(color: textColor))),
@@ -2300,6 +2343,21 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
               'condition': 'Cloudy',
             };
           });
+
+    final forecast = List.generate(5, (index) {
+      final date = now.add(Duration(days: index));
+      final dayStr = index == 0
+          ? (locale.isTagalog ? 'Ngayon' : 'Today')
+          : dayNames[date.weekday - 1];
+      final cond = conditions[index % conditions.length];
+      return {
+        'day': dayStr,
+        'temp': cond['temp'],
+        'icon': cond['icon'],
+        'color': cond['color'],
+        'condition': cond['condition'],
+      };
+    });
 
     return Container(
       decoration: BoxDecoration(
@@ -4577,6 +4635,7 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
                       DataColumn(label: Text('Crop', style: TextStyle(color: subtextColor))),
                       DataColumn(label: Text('Year', style: TextStyle(color: subtextColor))),
                       DataColumn(label: Text('Month', style: TextStyle(color: subtextColor))),
+                      DataColumn(label: Text('Barangay', style: TextStyle(color: subtextColor))),
                       DataColumn(label: Text('Production (MT)', style: TextStyle(color: subtextColor))),
                       DataColumn(label: Text('Price / kg (PHP)', style: TextStyle(color: subtextColor))),
                       DataColumn(label: Text('Uploaded By', style: TextStyle(color: subtextColor))),
@@ -4587,6 +4646,7 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
                         DataCell(Text(r.crop, style: TextStyle(fontWeight: FontWeight.bold, color: textColor))),
                         DataCell(Text('${r.year}', style: TextStyle(color: textColor))),
                         DataCell(Text(r.month, style: TextStyle(color: textColor))),
+                        DataCell(Text(r.barangay, style: TextStyle(color: textColor))),
                         DataCell(Text('${r.productionMT} MT', style: TextStyle(color: textColor))),
                         DataCell(Text('₱${r.pricePerKg.toStringAsFixed(2)}', style: TextStyle(color: textColor))),
                         DataCell(Text(r.uploadedBy, style: TextStyle(color: textColor))),
@@ -4641,47 +4701,58 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
     final cropCtrl = TextEditingController(text: 'Rice');
     final yearCtrl = TextEditingController(text: '2026');
     final monthCtrl = TextEditingController(text: 'February');
+    String selectedBrgy = 'ALL';
     final prodCtrl = TextEditingController(text: '500.0');
     final priceCtrl = TextEditingController(text: '24.50');
 
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Upload / Add MAO Historical Record'),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text('Validated input format for data cleaning:', style: TextStyle(fontSize: 12, color: Colors.grey)),
-              const SizedBox(height: 12),
-              TextField(controller: cropCtrl, decoration: const InputDecoration(labelText: 'Crop Name')),
-              TextField(controller: yearCtrl, decoration: const InputDecoration(labelText: 'Year'), keyboardType: TextInputType.number),
-              TextField(controller: monthCtrl, decoration: const InputDecoration(labelText: 'Month')),
-              TextField(controller: prodCtrl, decoration: const InputDecoration(labelText: 'Production (Metric Tons)'), keyboardType: TextInputType.number),
-              TextField(controller: priceCtrl, decoration: const InputDecoration(labelText: 'Price per KG (PHP)'), keyboardType: TextInputType.number),
-            ],
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: const Text('Upload / Add MAO Historical Record'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text('Validated input format for data cleaning:', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                const SizedBox(height: 12),
+                TextField(controller: cropCtrl, decoration: const InputDecoration(labelText: 'Crop Name')),
+                TextField(controller: yearCtrl, decoration: const InputDecoration(labelText: 'Year'), keyboardType: TextInputType.number),
+                TextField(controller: monthCtrl, decoration: const InputDecoration(labelText: 'Month')),
+                const SizedBox(height: 8),
+                DropdownButtonFormField<String>(
+                  initialValue: selectedBrgy,
+                  decoration: const InputDecoration(labelText: 'Barangay'),
+                  items: ['ALL', ...AccountService.pagsanjanBarangays].map((b) => DropdownMenuItem(value: b, child: Text(b))).toList(),
+                  onChanged: (val) => setDialogState(() => selectedBrgy = val ?? 'ALL'),
+                ),
+                TextField(controller: prodCtrl, decoration: const InputDecoration(labelText: 'Production (Metric Tons)'), keyboardType: TextInputType.number),
+                TextField(controller: priceCtrl, decoration: const InputDecoration(labelText: 'Price per KG (PHP)'), keyboardType: TextInputType.number),
+              ],
+            ),
           ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
+            ElevatedButton(
+              onPressed: () {
+                service.addHistoricalRecord(
+                  crop: cropCtrl.text,
+                  year: int.tryParse(yearCtrl.text) ?? 2026,
+                  month: monthCtrl.text,
+                  barangay: selectedBrgy,
+                  productionMT: double.tryParse(prodCtrl.text) ?? 100.0,
+                  pricePerKg: double.tryParse(priceCtrl.text) ?? 20.0,
+                  uploadedBy: service.activeUserName,
+                );
+                Navigator.pop(context);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Historical record validated and saved!')),
+                );
+              },
+              child: const Text('Validate & Save'),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
-          ElevatedButton(
-            onPressed: () {
-              service.addHistoricalRecord(
-                crop: cropCtrl.text,
-                year: int.tryParse(yearCtrl.text) ?? 2026,
-                month: monthCtrl.text,
-                productionMT: double.tryParse(prodCtrl.text) ?? 100.0,
-                pricePerKg: double.tryParse(priceCtrl.text) ?? 20.0,
-                uploadedBy: service.activeUserName,
-              );
-              Navigator.pop(context);
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Historical record validated and saved!')),
-              );
-            },
-            child: const Text('Validate & Save'),
-          ),
-        ],
       ),
     );
   }

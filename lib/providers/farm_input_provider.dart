@@ -7,6 +7,7 @@ import '../main.dart';
 import '../models/farm_planting.dart';
 import '../models/harvest_record.dart';
 import '../services/dss_service.dart';
+import '../services/supabase_service.dart';
 
 /// Hawak ang mga inilagay ng magsasaka: mga tanim at lokasyon ng bukid.
 /// Nase-save sa telepono (shared_preferences) kaya nandoon pa rin pagbukas ulit ng app.
@@ -27,6 +28,32 @@ class FarmInputProvider extends ChangeNotifier {
   double lat = AppConstants.defaultLat;
   double lon = AppConstants.defaultLon;
   bool loaded = false;
+  String farmerName = 'Magsasaka ng Pagsanjan';
+  String? farmerId;
+  String barangay = 'Biñan';
+  String locationName = 'Barangay Biñan';
+
+  void setFarmerInfo({String? id, String? name, String? brgy, String? location}) {
+    bool nameChanged = false;
+    if (id != null && id.isNotEmpty && farmerId != id) {
+      farmerId = id;
+      nameChanged = true;
+    }
+    if (name != null && name.isNotEmpty && farmerName != name) {
+      farmerName = name;
+      nameChanged = true;
+    }
+    if (brgy != null && brgy.isNotEmpty && barangay != brgy) {
+      barangay = brgy;
+    }
+    if (location != null && location.isNotEmpty && locationName != location) {
+      locationName = location;
+    }
+    if (nameChanged) {
+      notifyListeners();
+      fetchFarmerCropsFromSupabase();
+    }
+  }
 
   FarmPlanting? get selected {
     if (plantings.isEmpty) return null;
@@ -81,6 +108,72 @@ class FarmInputProvider extends ChangeNotifier {
     }
     loaded = true;
     notifyListeners();
+    fetchFarmerCropsFromSupabase();
+  }
+
+  Future<void> fetchFarmerCropsFromSupabase() async {
+    if (farmerName.isEmpty && (farmerId == null || farmerId!.isEmpty)) return;
+    try {
+      dynamic query = SupabaseService.client.from('farmer_plantings').select();
+      if (farmerId != null && farmerId!.isNotEmpty) {
+        query = query.or('farmer_id.eq.$farmerId,farmer_name.eq.$farmerName');
+      } else {
+        query = query.eq('farmer_name', farmerName);
+      }
+
+      final res = await query;
+      if (res != null && res is List && res.isNotEmpty) {
+        final fetched = <FarmPlanting>[];
+        for (var row in res) {
+          fetched.add(FarmPlanting(
+            id: row['id'] ?? 'P${DateTime.now().millisecondsSinceEpoch}',
+            crop: row['crop'] ?? 'Rice',
+            hectares: (row['hectares'] as num?)?.toDouble() ?? 1.0,
+            plantedOn: row['planted_on'] != null ? DateTime.parse(row['planted_on']) : DateTime.now(),
+            lastYieldKg: (row['last_yield_kg'] as num?)?.toDouble(),
+            costPhp: (row['cost_php'] as num?)?.toDouble(),
+          ));
+        }
+        if (fetched.isNotEmpty) {
+          plantings = fetched;
+          if (selectedId == null || !plantings.any((p) => p.id == selectedId)) {
+            selectedId = plantings.first.id;
+          }
+          notifyListeners();
+          _save();
+        }
+      } else {
+        // Fallback: Check 'farms' table for this farmer's crops
+        dynamic farmsQuery = SupabaseService.client.from('farms').select();
+        if (farmerId != null && farmerId!.isNotEmpty) {
+          farmsQuery = farmsQuery.or('farmer_id.eq.$farmerId,farmer_name.eq.$farmerName');
+        } else {
+          farmsQuery = farmsQuery.eq('farmer_name', farmerName);
+        }
+        final farmRes = await farmsQuery;
+        if (farmRes != null && farmRes is List && farmRes.isNotEmpty) {
+          final fetchedFarms = <FarmPlanting>[];
+          for (var row in farmRes) {
+            fetchedFarms.add(FarmPlanting(
+              id: row['id'] ?? 'P${DateTime.now().millisecondsSinceEpoch}',
+              crop: row['crop_type'] ?? 'Rice',
+              hectares: (row['land_area_hectares'] as num?)?.toDouble() ?? 1.0,
+              plantedOn: DateTime.now().subtract(const Duration(days: 30)),
+            ));
+          }
+          if (fetchedFarms.isNotEmpty) {
+            plantings = fetchedFarms;
+            if (selectedId == null || !plantings.any((p) => p.id == selectedId)) {
+              selectedId = plantings.first.id;
+            }
+            notifyListeners();
+            _save();
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('Supabase fetch farmer crops error: $e');
+    }
   }
 
   Future<void> _save() async {
@@ -106,21 +199,105 @@ class FarmInputProvider extends ChangeNotifier {
     _save();
   }
 
-  void add(FarmPlanting p) {
+  Future<void> add(FarmPlanting p) async {
     plantings = [...plantings, p];
     selectedId = p.id;
     _changed();
+
+    // 1. Sync to main farms table
+    try {
+      final realLocation = (locationName.isNotEmpty && !locationName.startsWith('Pagsanjan Farm'))
+          ? locationName
+          : 'Barangay $barangay';
+
+      final farmData = <String, dynamic>{
+        'id': p.id,
+        'farmer_name': farmerName,
+        'location_name': realLocation,
+        'latitude': lat,
+        'longitude': lon,
+        'land_area_hectares': p.hectares,
+        'tenure_status': 'Owner',
+        'crop_type': p.crop,
+        'barangay': barangay,
+      };
+      if (farmerId != null && farmerId!.isNotEmpty) {
+        farmData['farmer_id'] = farmerId;
+      }
+      await SupabaseService.client.from('farms').upsert(farmData);
+      debugPrint('Successfully uploaded crop to Supabase farms table: ${p.crop}');
+    } catch (e) {
+      debugPrint('Supabase farms sync error (add): $e');
+    }
+
+    // 2. Sync to farmer_plantings table (if created)
+    try {
+      final plantingData = <String, dynamic>{
+        'id': p.id,
+        'farmer_name': farmerName,
+        'crop': p.crop,
+        'hectares': p.hectares,
+        'planted_on': p.plantedOn.toIso8601String(),
+        'last_yield_kg': p.lastYieldKg,
+        'cost_php': p.costPhp,
+        'barangay': barangay,
+      };
+      if (farmerId != null && farmerId!.isNotEmpty) {
+        plantingData['farmer_id'] = farmerId;
+      }
+      await SupabaseService.client.from('farmer_plantings').upsert(plantingData);
+      debugPrint('Successfully uploaded crop to Supabase farmer_plantings table: ${p.crop}');
+    } catch (e) {
+      debugPrint('Supabase farmer_plantings sync error (add): $e');
+    }
   }
 
-  void update(FarmPlanting p) {
+  Future<void> update(FarmPlanting p) async {
     plantings = [for (final e in plantings) e.id == p.id ? p : e];
     _changed();
+
+    try {
+      await SupabaseService.client.from('farms').update({
+        'land_area_hectares': p.hectares,
+        'crop_type': p.crop,
+        'latitude': lat,
+        'longitude': lon,
+        'barangay': barangay,
+      }).eq('id', p.id);
+    } catch (e) {
+      debugPrint('Supabase farms sync error (update): $e');
+    }
+
+    try {
+      await SupabaseService.client.from('farmer_plantings').update({
+        'crop': p.crop,
+        'hectares': p.hectares,
+        'planted_on': p.plantedOn.toIso8601String(),
+        'last_yield_kg': p.lastYieldKg,
+        'cost_php': p.costPhp,
+        'barangay': barangay,
+      }).eq('id', p.id);
+    } catch (e) {
+      debugPrint('Supabase farmer_plantings sync error (update): $e');
+    }
   }
 
-  void remove(String id) {
+  Future<void> remove(String id) async {
     plantings = plantings.where((e) => e.id != id).toList();
     if (selectedId == id) selectedId = plantings.isEmpty ? null : plantings.first.id;
     _changed();
+
+    try {
+      await SupabaseService.client.from('farms').delete().eq('id', id);
+    } catch (e) {
+      debugPrint('Supabase farms sync error (remove): $e');
+    }
+
+    try {
+      await SupabaseService.client.from('farmer_plantings').delete().eq('id', id);
+    } catch (e) {
+      debugPrint('Supabase farmer_plantings sync error (remove): $e');
+    }
   }
 
   /// Karaniwang ani kada ektarya ng farmer para sa pananim na ito, mula sa sarili niyang mga ani. Null kung wala pa.
@@ -151,11 +328,23 @@ class FarmInputProvider extends ChangeNotifier {
   bool get hasProfitRecords => history.any((e) => e.profit != null);
 
   /// Itala ang ani: aalisin ang tanim sa aktibo (babalik sa natitirang lupa ang sukat nito) at ilalagay sa kasaysayan.
-  void recordHarvest(String plantingId, HarvestRecord r) {
+  Future<void> recordHarvest(String plantingId, HarvestRecord r) async {
     plantings = plantings.where((e) => e.id != plantingId).toList();
     if (selectedId == plantingId) selectedId = plantings.isEmpty ? null : plantings.first.id;
     history = [r, ...history];
     _changed();
+
+    try {
+      await SupabaseService.client.from('farms').delete().eq('id', plantingId);
+    } catch (e) {
+      debugPrint('Supabase farms sync error (harvest): $e');
+    }
+
+    try {
+      await SupabaseService.client.from('farmer_plantings').delete().eq('id', plantingId);
+    } catch (e) {
+      debugPrint('Supabase farmer_plantings sync error (harvest): $e');
+    }
   }
 
   void removeRecord(String id) {

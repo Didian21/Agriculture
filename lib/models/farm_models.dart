@@ -1,14 +1,18 @@
 enum PlotStatus { harvested, growing }
 
 class FarmerProfile {
+  final String id;
   final String name;
   final String barangay;
+  final String locationName;
   final double landSizeHectares;
   final List<String> cropTypes;
 
   const FarmerProfile({
+    this.id = '',
     required this.name,
     required this.barangay,
+    this.locationName = '',
     required this.landSizeHectares,
     required this.cropTypes,
   });
