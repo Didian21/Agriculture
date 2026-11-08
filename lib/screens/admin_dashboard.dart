@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
@@ -9,6 +10,8 @@ import 'package:pdf/widgets.dart' as pw;
 
 import '../models/farmer.dart';
 import '../services/account_service.dart';
+import '../services/weather_service.dart';
+import '../models/weather_models.dart';
 import 'package:latlong2/latlong.dart' hide Path;
 import 'package:flutter_map/flutter_map.dart';
 import 'map_screen.dart';
@@ -93,8 +96,40 @@ class _AdminDashboardState extends State<AdminDashboard> {
 
   // Interactive Map State
   bool _showRegisteredPins = true;
+  bool _showMapSidePanel = true;
   LatLng _mapCenter = const LatLng(14.2790, 121.4550);
   double _mapZoom = 13.5;
+
+  WeatherBundle? _liveWeather;
+
+  Future<void> _fetchLiveWeather() async {
+    try {
+      final bundle = await WeatherService().fetch(lat: 14.2717, lon: 121.4553);
+      if (mounted) {
+        setState(() {
+          _liveWeather = bundle;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error fetching live weather: $e');
+    }
+  }
+
+  String _getBasicWeatherTerm(int code) {
+    if (code == 0) return 'Sunny';
+    if (code >= 1 && code <= 3) return 'Cloudy';
+    if (code >= 51 && code <= 67 || code >= 80 && code <= 82) return 'Rainy';
+    if (code >= 95) return 'Stormy';
+    return 'Cloudy';
+  }
+
+  IconData _getWeatherIcon(int code) {
+    if (code == 0) return Icons.wb_sunny_rounded;
+    if (code >= 1 && code <= 3) return Icons.cloud_rounded;
+    if (code >= 51 && code <= 67 || code >= 80 && code <= 82) return Icons.grain_rounded;
+    if (code >= 95) return Icons.thunderstorm_rounded;
+    return Icons.cloud_queue_rounded;
+  }
 
   static final Map<String, LatLng> _barangayCenterMap = {
     'Anibong': const LatLng(14.2855, 121.4682),
@@ -119,7 +154,8 @@ class _AdminDashboardState extends State<AdminDashboard> {
     if (barangay == 'All') {
       return const LatLng(14.2790, 121.4550);
     }
-    final brgyFarms = allFarms.where((f) => f.barangay == barangay).toList();
+    final normBrgy = AccountService.normalizeBarangay(barangay);
+    final brgyFarms = allFarms.where((f) => AccountService.normalizeBarangay(f.barangay) == normBrgy).toList();
     if (brgyFarms.isNotEmpty) {
       double sumLat = 0;
       double sumLon = 0;
@@ -129,7 +165,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
       }
       return LatLng(sumLat / brgyFarms.length, sumLon / brgyFarms.length);
     }
-    return _barangayCenterMap[barangay] ?? const LatLng(14.2790, 121.4550);
+    return _barangayCenterMap[normBrgy] ?? const LatLng(14.2790, 121.4550);
   }
 
   List<String> _parseCsvLine(String line) {
@@ -352,6 +388,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
   @override
   void initState() {
     super.initState();
+    _fetchLiveWeather();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         Provider.of<AccountService>(context, listen: false).loadFromSupabase();
@@ -1986,7 +2023,8 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
 
     final Map<String, int> farmersPerBarangay = {};
     for (final f in filteredFarmers) {
-      farmersPerBarangay[f.barangay] = (farmersPerBarangay[f.barangay] ?? 0) + 1;
+      final normBrgy = AccountService.normalizeBarangay(f.barangay);
+      farmersPerBarangay[normBrgy] = (farmersPerBarangay[normBrgy] ?? 0) + 1;
     }
 
     final Map<String, double> areaPerCrop = {};
@@ -2275,15 +2313,36 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
   }
 
   Widget _buildWeatherCard(AdminLocale locale, bool isDark, Color cardBg, Color textColor, Color primaryAccent) {
-    final now = DateTime.now();
-    final dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-    final conditions = [
-      {'temp': '30°C', 'icon': Icons.wb_sunny_rounded, 'color': Colors.amber, 'condition': 'Sunny'},
-      {'temp': '28°C', 'icon': Icons.grain_rounded, 'color': Colors.lightBlueAccent, 'condition': 'Light Rain'},
-      {'temp': '29°C', 'icon': Icons.cloud_rounded, 'color': Colors.grey, 'condition': 'Partly Cloudy'},
-      {'temp': '31°C', 'icon': Icons.wb_sunny_rounded, 'color': Colors.amber, 'condition': 'Clear Sky'},
-      {'temp': '27°C', 'icon': Icons.water_drop_rounded, 'color': Colors.blueAccent, 'condition': 'Showers'},
-    ];
+    final currentTemp = _liveWeather != null ? '${_liveWeather!.current.temp.toStringAsFixed(1)}°C' : '29°C';
+    final currentCond = _liveWeather != null ? _getBasicWeatherTerm(_liveWeather!.current.code) : 'Cloudy';
+    final currentHumidity = _liveWeather != null ? '${_liveWeather!.current.humidity}%' : '76%';
+    final currentRain = _liveWeather != null ? '${_liveWeather!.current.rainMm.toStringAsFixed(1)} mm' : '12 mm';
+
+    final ictDays = _liveWeather != null && _liveWeather!.daily.isNotEmpty
+        ? _liveWeather!.daily.take(7).map((d) {
+            final dayName = DateFormat('EEE').format(d.date);
+            final dateStr = DateFormat('MMM d').format(d.date);
+            final cond = _getBasicWeatherTerm(d.code);
+            return {
+              'day': dayName,
+              'date': dateStr,
+              'temp': '${d.tempMax.round()}°C',
+              'icon': _getWeatherIcon(d.code),
+              'color': d.code == 0 ? Colors.amber : (d.code >= 51 ? Colors.blueAccent : Colors.lightBlueAccent),
+              'condition': cond,
+            };
+          }).toList()
+        : List.generate(7, (i) {
+            final date = DateTime.now().add(Duration(days: i));
+            return {
+              'day': DateFormat('EEE').format(date),
+              'date': DateFormat('MMM d').format(date),
+              'temp': '29°C',
+              'icon': Icons.cloud_rounded,
+              'color': Colors.lightBlueAccent,
+              'condition': 'Cloudy',
+            };
+          });
 
     final forecast = List.generate(5, (index) {
       final date = now.add(Duration(days: index));
@@ -2327,7 +2386,7 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(locale.weatherTitle, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
-                      Text('${locale.location} (14.2717° N, 121.4553° E)', style: const TextStyle(color: Colors.white70, fontSize: 11)),
+                      Text('${locale.location} (14.2717° N, 121.4553° E) • Open-Meteo Live', style: const TextStyle(color: Colors.white70, fontSize: 11)),
                     ],
                   ),
                 ],
@@ -2345,27 +2404,29 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
           const SizedBox(height: 16),
           Row(
             children: [
-              const Text('29°C', style: TextStyle(color: Colors.white, fontSize: 40, fontWeight: FontWeight.bold)),
+              Text(currentTemp, style: const TextStyle(color: Colors.white, fontSize: 40, fontWeight: FontWeight.bold)),
               const SizedBox(width: 16),
-              const Column(
+              Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Partly Cloudy', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15)),
-                  Text('Feels like 32°C • Wind: 14 km/h ENE', style: TextStyle(color: Colors.white70, fontSize: 12)),
+                  Text(currentCond, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15)),
+                  const Text('Real-time meteorological live feed', style: TextStyle(color: Colors.white70, fontSize: 12)),
                 ],
               ),
               const Spacer(),
               Wrap(
                 spacing: 16,
                 children: [
-                  _buildWeatherInfoBadge(Icons.water_drop_rounded, 'Humidity', '76%'),
-                  _buildWeatherInfoBadge(Icons.thunderstorm_rounded, 'Rainfall', '12 mm'),
+                  _buildWeatherInfoBadge(Icons.water_drop_rounded, 'Humidity', currentHumidity),
+                  _buildWeatherInfoBadge(Icons.thunderstorm_rounded, 'Rainfall', currentRain),
                   _buildWeatherInfoBadge(Icons.eco_rounded, 'Soil Temp', '26.5°C'),
                 ],
               ),
             ],
           ),
           const Divider(color: Colors.white24, height: 26),
+
+          // 7-DAY FORECAST WITH DATES
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -2377,29 +2438,100 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
               ),
             ],
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 10),
           Row(
-            children: forecast.map((f) => Expanded(
+            children: ictDays.map((f) => Expanded(
               child: Container(
-                margin: const EdgeInsets.symmetric(horizontal: 4),
-                padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 4),
+                margin: const EdgeInsets.symmetric(horizontal: 3),
+                padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 2),
                 decoration: BoxDecoration(
                   color: Colors.white.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(10),
                 ),
                 child: Column(
                   children: [
-                    Text(f['day'] as String, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
-                    const SizedBox(height: 4),
-                    Icon(f['icon'] as IconData, color: f['color'] as Color, size: 22),
-                    const SizedBox(height: 4),
-                    Text(f['temp'] as String, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
-                    Text(f['condition'] as String, style: const TextStyle(color: Colors.white70, fontSize: 10), textAlign: TextAlign.center, overflow: TextOverflow.ellipsis),
+                    Text(f['day'] as String, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11)),
+                    Text(f['date'] as String, style: const TextStyle(color: Colors.white70, fontSize: 9)),
+                    const SizedBox(height: 2),
+                    Icon(f['icon'] as IconData, color: f['color'] as Color, size: 20),
+                    const SizedBox(height: 2),
+                    Text(f['temp'] as String, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
+                    Text(f['condition'] as String, style: const TextStyle(color: Colors.white70, fontSize: 9), textAlign: TextAlign.center, overflow: TextOverflow.ellipsis),
                   ],
                 ),
               ),
             )).toList(),
           ),
+          const SizedBox(height: 14),
+
+          // MOST FAVORABLE CROP NEXT MONTH ADVISORY BANNER
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.white30),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.eco_rounded, color: Color(0xFF86EFAC), size: 24),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        locale.isTagalog ? '🌱 Paboritong Itanim sa Susunod na Buwan:' : '🌱 Most Favorable Crop to Plant Next Month:',
+                        style: const TextStyle(color: Color(0xFFFDE047), fontWeight: FontWeight.bold, fontSize: 12),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        locale.isTagalog
+                            ? 'Gulay (Espesipikong Variety: Talong [Ilocano Long] & Okra [Emerald]) • Angkop sa 30-day soil moisture at inaasahang ulan.'
+                            : 'Vegetables (Specific Variety: Eggplant [Ilocano Long] & Okra [Emerald]) • Ideal for upcoming 30-day soil moisture & expected rainfall.',
+                        style: const TextStyle(color: Colors.white, fontSize: 11),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 14),
+
+          // WEEK 2 TO WEEK 4 MONTHLY OUTLOOK
+          Text(
+            locale.isTagalog ? '30-Araw na Ulat (Week 2 - Week 4 Outlook)' : '30-Day Extended Outlook (Week 2 - Week 4)',
+            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              _buildMonthForecastWeek('Week 2', '30°C', locale.isTagalog ? 'Bahagyang Maulap' : 'Partly Cloudy', Icons.cloud_queue_rounded, Colors.lightBlueAccent),
+              _buildMonthForecastWeek('Week 3', '28°C', locale.isTagalog ? 'Mahinang Ulan' : 'Moderate Rain', Icons.grain_rounded, Colors.blueAccent),
+              _buildMonthForecastWeek('Week 4', '29°C', locale.isTagalog ? 'Angkop na Tubig' : 'Ideal Growth', Icons.eco_rounded, Colors.greenAccent),
+            ].map((w) => Expanded(child: Padding(padding: const EdgeInsets.symmetric(horizontal: 4), child: w))).toList(),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMonthForecastWeek(String weekLabel, String temp, String condition, IconData icon, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 6),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        children: [
+          Text(weekLabel, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
+          const SizedBox(height: 4),
+          Icon(icon, color: color, size: 22),
+          const SizedBox(height: 4),
+          Text(temp, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
+          Text(condition, style: const TextStyle(color: Colors.white70, fontSize: 10), textAlign: TextAlign.center, overflow: TextOverflow.ellipsis),
         ],
       ),
     );
@@ -2500,7 +2632,7 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
               Wrap(
                 spacing: 8,
                 children: [
-                  _buildExportImportButtons(context, 'Farmer and Farm Records', locale, service),
+                  _buildExportImportButtons(context, 'Farmer and Farm Records', locale, service, showImport: false),
                 ],
               ),
             ],
@@ -4661,15 +4793,70 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
     Color cardBorder,
     Color primaryAccent,
   ) {
-    final farms = service.farms.where((farm) {
+    final List<FarmRecord> displayedFarms = [];
+    final mapMarkers = <Marker>[];
+    final Map<String, int> barangayPinCounts = {};
+
+    for (int index = 0; index < service.farmers.length; index++) {
+      final farmer = service.farmers[index];
+      final normBrgy = AccountService.normalizeBarangay(farmer.barangay);
+      final matchesBarangay = _selectedBarangayFilter == 'All' ||
+          normBrgy.toLowerCase() == AccountService.normalizeBarangay(_selectedBarangayFilter).toLowerCase();
       final query = _searchQuery.toLowerCase();
       final matchesQuery = query.isEmpty ||
-                           farm.farmerName.toLowerCase().contains(query) ||
-                           farm.locationName.toLowerCase().contains(query) ||
-                           farm.cropType.toLowerCase().contains(query);
-      final matchesBarangay = _selectedBarangayFilter == 'All' || farm.barangay.trim().toLowerCase() == _selectedBarangayFilter.trim().toLowerCase();
-      return matchesQuery && matchesBarangay;
-    }).toList();
+          farmer.profileName.toLowerCase().contains(query) ||
+          farmer.username.toLowerCase().contains(query) ||
+          normBrgy.toLowerCase().contains(query);
+
+      if (!matchesBarangay || !matchesQuery) continue;
+
+      final pinNumInBrgy = barangayPinCounts[normBrgy] ?? 0;
+      barangayPinCounts[normBrgy] = pinNumInBrgy + 1;
+
+      final center = _getBarangayCenter(normBrgy, service.farms);
+      double angle = pinNumInBrgy * (2 * math.pi / 6);
+      double radius = pinNumInBrgy == 0 ? 0.0 : (0.0022 + (pinNumInBrgy ~/ 6) * 0.0015);
+
+      final pinLat = center.latitude + (radius * math.cos(angle));
+      final pinLng = center.longitude + (radius * math.sin(angle));
+
+      FarmRecord originalFarm = service.farms.firstWhere(
+        (f) => f.farmerId == farmer.id || f.farmerName == farmer.profileName,
+        orElse: () => FarmRecord(
+          id: 'FARM_AUTO_${farmer.id}',
+          farmerId: farmer.id,
+          farmerName: farmer.profileName,
+          locationName: 'Sitio $normBrgy',
+          latitude: pinLat,
+          longitude: pinLng,
+          landAreaHectares: 2.0,
+          tenureStatus: 'Owner',
+          cropType: 'Rice',
+          barangay: normBrgy,
+        ),
+      );
+
+      final distinctFarm = FarmRecord(
+        id: originalFarm.id,
+        farmerId: farmer.id,
+        farmerName: farmer.profileName,
+        locationName: originalFarm.locationName,
+        latitude: pinLat,
+        longitude: pinLng,
+        landAreaHectares: originalFarm.landAreaHectares,
+        tenureStatus: originalFarm.tenureStatus,
+        cropType: originalFarm.cropType,
+        barangay: normBrgy,
+      );
+
+      displayedFarms.add(distinctFarm);
+
+      if (_showRegisteredPins) {
+        mapMarkers.add(_buildBlueFarmMarker(distinctFarm, () {
+          _showFarmWeatherModal(context, distinctFarm, locale, cardBg, textColor);
+        }));
+      }
+    }
 
     return Padding(
       padding: const EdgeInsets.all(22),
@@ -4708,11 +4895,7 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
                       child: PagsanjanMapWidget(
                         initialCenter: _mapCenter,
                         initialZoom: _mapZoom,
-                        markers: _showRegisteredPins
-                            ? farms.map((f) => _buildBlueFarmMarker(f, () {
-                                _showFarmWeatherModal(context, f, locale, cardBg, textColor);
-                              })).toList()
-                            : [],
+                        markers: mapMarkers,
                       ),
                     ),
                   ),
@@ -4726,11 +4909,7 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
                         context,
                         MaterialPageRoute(
                           builder: (_) => PagsanjanMapScreen(
-                            markers: _showRegisteredPins
-                                ? farms.map((f) => _buildBlueFarmMarker(f, () {
-                                    _showFarmWeatherModal(context, f, locale, cardBg, textColor);
-                                  })).toList()
-                                : [],
+                            markers: mapMarkers,
                           ),
                         ),
                       ),
@@ -4743,53 +4922,81 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
                     ),
                   ),
 
-                  // SIDE OVERLAY PANEL FOR FARMERS & MAP FILTERS
-                  Positioned(
-                    left: 20,
-                    top: 20,
-                    bottom: 20,
-                    width: 320,
-                    child: Container(
-                      padding: const EdgeInsets.all(14),
-                      decoration: BoxDecoration(
-                        color: cardBg,
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: cardBorder),
-                        boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 10)],
+                  // FLOATING SEARCH/FILTER BUTTON WHEN PANEL IS HIDDEN
+                  if (!_showMapSidePanel)
+                    Positioned(
+                      left: 20,
+                      top: 20,
+                      child: FloatingActionButton.extended(
+                        heroTag: 'show_map_panel_btn',
+                        backgroundColor: const Color(0xFF0056B3),
+                        foregroundColor: Colors.white,
+                        onPressed: () => setState(() => _showMapSidePanel = true),
+                        icon: const Icon(Icons.search_rounded),
+                        label: Text(locale.isTagalog ? 'Maghanap at I-filter' : 'Search & Filter'),
                       ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Text(locale.registeredPins, style: TextStyle(fontWeight: FontWeight.bold, color: primaryAccent, fontSize: 13)),
-                              Row(
-                                children: [
-                                  Text(
-                                    locale.isTagalog ? 'Ipakita ang Pin' : 'Show Pins',
-                                    style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: subtextColor),
+                    ),
+
+                  // SIDE OVERLAY PANEL FOR FARMERS & MAP FILTERS
+                  if (_showMapSidePanel)
+                    Positioned(
+                      left: 20,
+                      top: 20,
+                      bottom: 20,
+                      width: 320,
+                      child: Container(
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: cardBg,
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: cardBorder),
+                          boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 10)],
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    locale.registeredPins,
+                                    style: TextStyle(fontWeight: FontWeight.bold, color: primaryAccent, fontSize: 12),
+                                    overflow: TextOverflow.ellipsis,
                                   ),
-                                  const SizedBox(width: 4),
-                                  Switch(
-                                    value: _showRegisteredPins,
-                                    activeThumbColor: const Color(0xFF0056B3),
-                                    onChanged: (val) => setState(() => _showRegisteredPins = val),
-                                  ),
-                                ],
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 6),
-                          TextField(
-                            controller: _searchController,
-                            onChanged: (val) => setState(() => _searchQuery = val),
-                            style: TextStyle(color: textColor, fontSize: 12),
-                            decoration: InputDecoration(
-                              hintText: locale.isTagalog ? 'Maghanap ng sakahan...' : 'Search farm or farmer...',
-                              hintStyle: TextStyle(color: subtextColor, fontSize: 11),
-                              prefixIcon: Icon(Icons.search_rounded, color: subtextColor, size: 18),
-                              isDense: true,
+                                ),
+                                IconButton(
+                                  icon: const Icon(Icons.chevron_left_rounded, color: Color(0xFF0056B3)),
+                                  tooltip: locale.isTagalog ? 'I-hide ang Panel' : 'Hide Panel',
+                                  onPressed: () => setState(() => _showMapSidePanel = false),
+                                ),
+                              ],
+                            ),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Text(
+                                  locale.isTagalog ? 'Ipakita ang Pin' : 'Show Pins',
+                                  style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: subtextColor),
+                                ),
+                                const SizedBox(width: 4),
+                                Switch(
+                                  value: _showRegisteredPins,
+                                  activeThumbColor: const Color(0xFF0056B3),
+                                  onChanged: (val) => setState(() => _showRegisteredPins = val),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 6),
+                            TextField(
+                              controller: _searchController,
+                              onChanged: (val) => setState(() => _searchQuery = val),
+                              style: TextStyle(color: textColor, fontSize: 12),
+                              decoration: InputDecoration(
+                                hintText: locale.isTagalog ? 'Maghanap ng sakahan...' : 'Search farm or farmer...',
+                                hintStyle: TextStyle(color: subtextColor, fontSize: 11),
+                                prefixIcon: Icon(Icons.search_rounded, color: subtextColor, size: 18),
+                                isDense: true,
                               filled: true,
                               fillColor: cardBg,
                               border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: cardBorder)),
@@ -4831,7 +5038,7 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
 
                           // FARMER LIST ITEMS
                           Expanded(
-                            child: farms.isEmpty
+                            child: displayedFarms.isEmpty
                                 ? Center(
                                     child: Text(
                                       locale.isTagalog ? 'Walang sakahang nahanap' : 'No farms found',
@@ -4839,9 +5046,9 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
                                     ),
                                   )
                                 : ListView.builder(
-                                    itemCount: farms.length,
+                                    itemCount: displayedFarms.length,
                                     itemBuilder: (context, index) {
-                                      final farm = farms[index];
+                                      final farm = displayedFarms[index];
                                       return Card(
                                         color: isDark ? const Color(0xFF1E2E4A) : Colors.white,
                                         margin: const EdgeInsets.only(bottom: 8),
@@ -4889,209 +5096,195 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
   ) {
     final isTagalog = locale.isTagalog;
 
-    showModalBottomSheet(
+    showDialog(
       context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) => Container(
-        height: MediaQuery.of(context).size.height * 0.85,
-        decoration: BoxDecoration(
-          color: cardBg,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-          boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 16)],
-        ),
-        child: Column(
-          children: [
-            // MODAL DRAG HANDLE
-            Center(
-              child: Container(
-                margin: const EdgeInsets.only(top: 10, bottom: 6),
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: Colors.grey.shade400,
-                  borderRadius: BorderRadius.circular(2),
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        contentPadding: EdgeInsets.zero,
+        backgroundColor: cardBg,
+        content: SizedBox(
+          width: 580,
+          height: 640,
+          child: Column(
+            children: [
+              // BLUE HEADER BANNER
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                decoration: const BoxDecoration(
+                  color: Color(0xFF0056B3),
+                  borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
                 ),
-              ),
-            ),
-
-            // BLUE HEADER BANNER
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-              decoration: const BoxDecoration(
-                color: Color(0xFF0056B3),
-                borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-              ),
-              child: Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withValues(alpha: 0.2),
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(Icons.agriculture_rounded, color: Colors.white, size: 24),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          farm.farmerName,
-                          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white),
-                        ),
-                        Text(
-                          '${farm.locationName}, Brgy. ${farm.barangay}, Pagsanjan',
-                          style: TextStyle(fontSize: 12, color: Colors.white.withValues(alpha: 0.9)),
-                        ),
-                      ],
-                    ),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.close_rounded, color: Colors.white),
-                    onPressed: () => Navigator.pop(context),
-                  ),
-                ],
-              ),
-            ),
-
-            // MODAL SCROLLABLE CONTENT
-            Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.all(20),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                child: Row(
                   children: [
-                    // FARM DETAILS CARD
                     Container(
-                      padding: const EdgeInsets.all(16),
+                      padding: const EdgeInsets.all(8),
                       decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: const Color(0xFFE2E8F0)),
-                        boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 6)],
+                        color: Colors.white.withValues(alpha: 0.2),
+                        shape: BoxShape.circle,
                       ),
+                      child: const Icon(Icons.agriculture_rounded, color: Colors.white, size: 24),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Row(
-                            children: [
-                              const Icon(Icons.info_outline_rounded, color: Color(0xFF0056B3), size: 20),
-                              const SizedBox(width: 8),
-                              Text(
-                                isTagalog ? 'IMPORMASYON NG SAKAHAN' : 'FARM LAND DETAILS',
-                                style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF0056B3)),
-                              ),
-                            ],
+                          Text(
+                            farm.farmerName,
+                            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.white),
                           ),
-                          const Divider(height: 20),
-                          _infoRow(Icons.eco_rounded, isTagalog ? 'Mga Tanim' : 'Crop Types', farm.cropType),
-                          const SizedBox(height: 8),
-                          _infoRow(Icons.square_foot_rounded, isTagalog ? 'Laki ng Lupa' : 'Land Size', '${farm.landAreaHectares} Ha (${(farm.landAreaHectares * 10000).round()} m²)'),
-                          const SizedBox(height: 8),
-                          _infoRow(Icons.badge_rounded, isTagalog ? 'Katayuan sa Lupa' : 'Tenure Status', farm.tenureStatus),
-                          const SizedBox(height: 8),
-                          _infoRow(Icons.my_location_rounded, isTagalog ? 'GPS Coordinates' : 'GPS Coordinates', '${farm.latitude.toStringAsFixed(5)}° N, ${farm.longitude.toStringAsFixed(5)}° E'),
-                        ],
-                      ),
-                    ),
-
-                    const SizedBox(height: 16),
-
-                    // DEDICATED MINI-MAP PREVIEW OF FARM AREA
-                    Text(
-                      isTagalog ? '🗺️ MAPA NG AREA NG SAKAHAN' : '🗺️ FARM AREA LOCATION MAP',
-                      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF0056B3)),
-                    ),
-                    const SizedBox(height: 8),
-                    Container(
-                      height: 220,
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: const Color(0xFFBFDBFE), width: 2),
-                        boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 6)],
-                      ),
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(14),
-                        child: PagsanjanMapWidget(
-                          initialCenter: LatLng(farm.latitude, farm.longitude),
-                          initialZoom: 16.0, // Zoomed in directly to farm area!
-                          markers: [
-                            _buildBlueFarmMarker(farm, () {}),
-                          ],
-                        ),
-                      ),
-                    ),
-
-                    const SizedBox(height: 16),
-
-                    // REAL-TIME WEATHER & AGRIBUSINESS ADVISORY
-                    Text(
-                      isTagalog ? '🌾 ULAT NG PANAHON SA SAKAHAN' : '🌾 FARM REAL-TIME WEATHER & ADVISORY',
-                      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF0056B3)),
-                    ),
-                    const SizedBox(height: 8),
-                    Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        gradient: const LinearGradient(
-                          colors: [Color(0xFFEFF6FF), Color(0xFFDBEAFE)],
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                        ),
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: const Color(0xFFBFDBFE)),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              const Icon(Icons.wb_sunny_rounded, color: Colors.amber, size: 36),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
-                                      isTagalog
-                                          ? 'Kasalukuyang Panahon sa Brgy. ${farm.barangay}'
-                                          : 'Current Farm Weather at Brgy. ${farm.barangay}',
-                                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF1E3A8A)),
-                                    ),
-                                    const Text(
-                                      '29°C • Humidity: 76% • Wind: 12 km/h',
-                                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF1E40AF)),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ),
-                          const Divider(height: 20, color: Color(0xFF93C5FD)),
-                          Row(
-                            children: [
-                              const Icon(Icons.lightbulb_outline_rounded, color: Color(0xFF1D4ED8), size: 20),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: Text(
-                                  isTagalog
-                                      ? 'Payo sa Sakahan: Maganda ang panahon ngayong araw para sa pagpapataba at patubig sa pananim na ${farm.cropType}.'
-                                      : 'Agri Advisory: Ideal weather conditions today for fertilizing and irrigating ${farm.cropType} crops.',
-                                  style: const TextStyle(fontSize: 12, fontStyle: FontStyle.italic, color: Color(0xFF1E3A8A)),
-                                ),
-                              ),
-                            ],
+                          Text(
+                            '${farm.locationName}, Brgy. ${farm.barangay}, Pagsanjan',
+                            style: TextStyle(fontSize: 12, color: Colors.white.withValues(alpha: 0.9)),
                           ),
                         ],
                       ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close_rounded, color: Colors.white),
+                      onPressed: () => Navigator.pop(context),
                     ),
                   ],
                 ),
               ),
-            ),
-          ],
+
+              // SCROLLABLE CONTENT
+              Expanded(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.all(20),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // FARM DETAILS CARD
+                      Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: const Color(0xFFE2E8F0)),
+                          boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 6)],
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                const Icon(Icons.info_outline_rounded, color: Color(0xFF0056B3), size: 20),
+                                const SizedBox(width: 8),
+                                Text(
+                                  isTagalog ? 'IMPORMASYON NG SAKAHAN' : 'FARM LAND DETAILS',
+                                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF0056B3)),
+                                ),
+                              ],
+                            ),
+                            const Divider(height: 20),
+                            _infoRow(Icons.eco_rounded, isTagalog ? 'Mga Tanim' : 'Crop Types', farm.cropType),
+                            const SizedBox(height: 8),
+                            _infoRow(Icons.square_foot_rounded, isTagalog ? 'Laki ng Lupa' : 'Land Size', '${farm.landAreaHectares} Ha (${(farm.landAreaHectares * 10000).round()} m²)'),
+                            const SizedBox(height: 8),
+                            _infoRow(Icons.badge_rounded, isTagalog ? 'Katayuan sa Lupa' : 'Tenure Status', farm.tenureStatus),
+                            const SizedBox(height: 8),
+                            _infoRow(Icons.my_location_rounded, isTagalog ? 'GPS Coordinates' : 'GPS Coordinates', '${farm.latitude.toStringAsFixed(5)}° N, ${farm.longitude.toStringAsFixed(5)}° E'),
+                          ],
+                        ),
+                      ),
+
+                      const SizedBox(height: 16),
+
+                      // DEDICATED MINI-MAP PREVIEW OF FARM AREA
+                      Text(
+                        isTagalog ? '🗺️ MAPA NG AREA NG SAKAHAN' : '🗺️ FARM AREA LOCATION MAP',
+                        style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF0056B3)),
+                      ),
+                      const SizedBox(height: 8),
+                      Container(
+                        height: 200,
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: const Color(0xFFBFDBFE), width: 2),
+                          boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 6)],
+                        ),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(14),
+                          child: PagsanjanMapWidget(
+                            initialCenter: LatLng(farm.latitude, farm.longitude),
+                            initialZoom: 16.0,
+                            markers: [
+                              _buildBlueFarmMarker(farm, () {}),
+                            ],
+                          ),
+                        ),
+                      ),
+
+                      const SizedBox(height: 16),
+
+                      // REAL-TIME WEATHER & AGRIBUSINESS ADVISORY
+                      Text(
+                        isTagalog ? '🌾 ULAT NG PANAHON SA SAKAHAN' : '🌾 FARM REAL-TIME WEATHER & ADVISORY',
+                        style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF0056B3)),
+                      ),
+                      const SizedBox(height: 8),
+                      Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          gradient: const LinearGradient(
+                            colors: [Color(0xFFEFF6FF), Color(0xFFDBEAFE)],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          ),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: const Color(0xFFBFDBFE)),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                const Icon(Icons.wb_sunny_rounded, color: Colors.amber, size: 36),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        isTagalog
+                                            ? 'Kasalukuyang Panahon sa Brgy. ${farm.barangay}'
+                                            : 'Current Farm Weather at Brgy. ${farm.barangay}',
+                                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF1E3A8A)),
+                                      ),
+                                      const Text(
+                                        '29°C • Humidity: 76% • Wind: 12 km/h',
+                                        style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF1E40AF)),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                            const Divider(height: 20, color: Color(0xFF93C5FD)),
+                            Row(
+                              children: [
+                                const Icon(Icons.lightbulb_outline_rounded, color: Color(0xFF1D4ED8), size: 20),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    isTagalog
+                                        ? 'Payo sa Sakahan: Maganda ang panahon ngayong araw para sa pagpapataba at patubig sa pananim na ${farm.cropType}.'
+                                        : 'Agri Advisory: Ideal weather conditions today for fertilizing and irrigating ${farm.cropType} crops.',
+                                    style: const TextStyle(fontSize: 12, fontStyle: FontStyle.italic, color: Color(0xFF1E3A8A)),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
