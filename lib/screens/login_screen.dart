@@ -43,16 +43,19 @@ class _LoginScreenState extends State<LoginScreen> {
     });
   }
 
-  void _login() {
+  Future<void> _login() async {
     final username = _phoneCtrl.text.trim();
     final password = _pinCtrl.text.trim();
 
     if (_selectedRole == LoginRole.admin) {
       final accountService = Provider.of<AccountService>(context, listen: false);
-      if (accountService.authenticateAdmin(username, password)) {
-        Navigator.pushReplacement(
+      final isValid = await accountService.authenticateAdminAsync(username, password);
+      if (!mounted) return;
+      if (isValid) {
+        Navigator.pushAndRemoveUntil(
           context,
           MaterialPageRoute(builder: (context) => const AdminDashboard()),
+          (route) => false,
         );
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -61,9 +64,10 @@ class _LoginScreenState extends State<LoginScreen> {
       }
     } else {
       widget.p.login();
-      Navigator.pushReplacement(
+      Navigator.pushAndRemoveUntil(
         context,
         MaterialPageRoute(builder: (context) => const DashboardScreen()),
+        (route) => false,
       );
     }
   }

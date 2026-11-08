@@ -1,4 +1,3 @@
-
 {
   "@@locale": "en",
   "appSubtitle": "Pagsanjan Agriculture",
@@ -274,11 +273,11 @@
   "helpSupport": "Help & Support",
   "helpSupportSub": "Need help with the app or your farm?",
   "howToUse": "How to use PAGRI",
-  "howTo1": "Home: see today's weather, the 7-day forecast, farm advice and the crops of Pagsanjan.",
-  "howTo2": "My Farm: see your plots, crops and harvest records.",
-  "howTo3": "Tap a crop on Home to see the best months to plant it.",
-  "howTo4": "Prices: see expected crop prices and when to sell.",
-  "howTo5": "Tap the bell at the top to read your notifications.",
+  "howTo1": "DSS (the green button in the middle): first set your total land size, then add your crops with land area, planting date, last yield and cost. You will see when to plant, an estimate of harvest and income, and price advice.",
+  "howTo2": "Weather: see today's weather, the 7-day forecast, the heat index and advice for your crops.",
+  "howTo3": "My Farm: see your crops and how your land is shared (hectares or square meters). Tap a crop to open it in DSS. Your harvest records are here too.",
+  "howTo4": "Prices: only the crops you added in DSS appear here, with expected prices and when it is a good time to sell.",
+  "howTo5": "After harvest, tap \"Record harvest\" in DSS so estimates get closer to your own farm. Tap the bell at the top to read notifications. Numbers are estimates only, not official.",
   "contactOffice": "Municipal Agriculture Office",
   "contactOfficeSub": "Visit the office in Pagsanjan, Laguna for account changes, subsidies and farming help.",
   "aboutApp": "About",
@@ -468,7 +467,7 @@
   "dssLikely": "Likely",
   "dssHigh": "High",
   "dssHowComputed": "How it is computed",
-  "dssBasisOwn": "Your last harvest per hectare, for {ha} (±15%).",
+  "dssBasisOwn": "Your own harvest per hectare (from your records), for {ha} (±15%).",
   "@dssBasisOwn": {
     "placeholders": {
       "ha": {
@@ -818,5 +817,106 @@
   },
   "dssLandSet": "Set land size",
   "dssLandNotSet": "Enter your total land size so the app can show how much each crop uses.",
-  "farmUnallocated": "Not planted"
+  "farmUnallocated": "Not planted",
+  "dssCost": "Production cost (optional)",
+  "dssCostHint": "Total you spent or will spend on this crop: seeds, fertilizer, pesticide, labor, water. It is used to show your profit.",
+  "dssCostDetails": "Cost details (optional)",
+  "dssCostSeed": "Seeds / seedlings",
+  "dssCostFertilizer": "Fertilizer",
+  "dssCostPesticide": "Pesticide",
+  "dssCostLabor": "Labor and hired work",
+  "dssCostOther": "Other (water, fuel, transport)",
+  "dssYourCost": "Your cost",
+  "dssProfit": "Estimated profit",
+  "dssRoi": "Return on cost",
+  "dssCostAsk": "Add your production cost when you edit this crop to see your profit.",
+  "dssProfitNote": "Profit = expected income minus your cost. The low value uses the lower harvest and price, and the high value uses the higher ones.",
+  "dssRecordHarvest": "Record harvest",
+  "dssRecordTitle": "Record harvest: {crop}",
+  "@dssRecordTitle": {
+    "placeholders": {
+      "crop": {
+        "type": "String"
+      }
+    }
+  },
+  "dssRecordSub": "Enter what really happened. Your records make the advice closer to your own farm.",
+  "dssHarvestedOn": "Date harvested",
+  "dssActualYield": "Total harvest",
+  "dssSoldPrice": "Price you sold at",
+  "dssSoldPriceHint": "Estimated price: {price} per kg",
+  "@dssSoldPriceHint": {
+    "placeholders": {
+      "price": {
+        "type": "String"
+      }
+    }
+  },
+  "dssRecIncome": "Income",
+  "dssRecProfit": "Profit",
+  "dssRecordSaved": "Harvest saved. The land is free again for your next crop.",
+  "farmHistoryTitle": "Harvest history",
+  "farmHistorySub": "Your recorded harvests, income and profit.",
+  "farmHistoryDeleteTitle": "Delete this record?",
+  "farmHistoryDeleteBody": "The {crop} harvest record will be removed.",
+  "@farmHistoryDeleteBody": {
+    "placeholders": {
+      "crop": {
+        "type": "String"
+      }
+    }
+  },
+  "farmWxTitle": "Weather until harvest",
+  "farmWxNoHarvest": "Weather for the next 2 weeks",
+  "farmWxPast": "Past",
+  "farmWxForecast": "Forecast",
+  "farmWxTypical": "Based on last year",
+  "farmWxToday": "Today",
+  "farmWxHarvest": "Harvest",
+  "farmWxLoadFail": "Weather unavailable",
+  "farmWxRetry": "Try again",
+  "farmWxNote": "The forecast only covers 16 days. Later dates are based on last year's weather.",
+  "weatherOutlookTitle": "Weather for the next 2 months",
+  "weatherOutlookSub": "The first 16 days are accurate. The rest is only an estimate based on last year's weather.",
+  "cropsTitle": "All Commodities",
+  "cropsSub": "Tap a crop for the full guide",
+  "cropsAll": "All",
+  "cropsGroupVeg": "Vegetables",
+  "cropsGroupFruit": "Fruits",
+  "cropsGroupRoot": "Roots & Spices",
+  "cropsGroupGrain": "Rice & Coconut",
+  "cropsSeeAll": "See all",
+  "cropsSeeLess": "Show less",
+  "cropAlsoCalled": "Also called",
+  "cropStorable": "Can be stored",
+  "cropSecBestTime": "Best time to plant",
+  "cropBest": "Best",
+  "cropPossible": "Possible",
+  "cropSecHarvest": "Time to harvest",
+  "cropDaysWord": "days",
+  "cropMonthsWord": "months",
+  "cropHarvestYearly": "Takes years before the first fruit, then gives harvests every year.",
+  "cropSecYield": "Estimated yield",
+  "cropPerHa": "per hectare",
+  "cropUnitKg": "kg",
+  "cropUnitTali": "bundles",
+  "cropUnitPc": "pieces",
+  "cropSecPrice": "Farmgate price",
+  "cropNoPrice": "No price data yet.",
+  "cropPriceReal": "Data from the Municipal Agriculture Office (May-November).",
+  "cropPriceEstimate": "Estimate only; no official data yet.",
+  "cropBestSell": "Highest prices in",
+  "cropIncomeHa": "Estimated income per hectare (before costs)",
+  "cropSecGuide": "Farming guide",
+  "cropSecDiversify": "Why try this crop?",
+  "cropInsPlantNow": "A good time to plant this month.",
+  "cropInsNextPlant": "Next good planting month:",
+  "cropInsFast": "Quick harvest; can be grown several times a year.",
+  "cropInsPriceStable": "Prices stay fairly steady.",
+  "cropInsPriceVolatile": "Prices swing a lot; plan when to sell.",
+  "cropInsIncomeHigh": "One of the higher estimated incomes per hectare.",
+  "cropInsStorable": "Can be stored, so you can wait for a better price.",
+  "cropDiversifyNote": "Grow different crops so you do not depend on one price or season.",
+  "cropEstNote": "Numbers and tips are a guide only. Please verify with the Municipal Agriculture Office.",
+  "cropTryDss": "Try in DSS"
 }

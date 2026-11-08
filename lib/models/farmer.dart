@@ -53,6 +53,7 @@ class HistoricalDataRecord {
   String crop;
   int year;
   String month;
+  String barangay;
   double productionMT; // Metric Tons
   double pricePerKg; // PHP
   String uploadedBy;
@@ -63,6 +64,7 @@ class HistoricalDataRecord {
     required this.crop,
     required this.year,
     required this.month,
+    this.barangay = 'ALL',
     required this.productionMT,
     required this.pricePerKg,
     required this.uploadedBy,

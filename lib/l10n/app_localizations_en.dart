@@ -508,19 +508,23 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get howTo1 =>
-      'Home: see today\'s weather, the 7-day forecast, farm advice and the crops of Pagsanjan.';
+      'DSS (the green button in the middle): first set your total land size, then add your crops with land area, planting date, last yield and cost. You will see when to plant, an estimate of harvest and income, and price advice.';
 
   @override
-  String get howTo2 => 'My Farm: see your plots, crops and harvest records.';
+  String get howTo2 =>
+      'Weather: see today\'s weather, the 7-day forecast, the heat index and advice for your crops.';
 
   @override
-  String get howTo3 => 'Tap a crop on Home to see the best months to plant it.';
+  String get howTo3 =>
+      'My Farm: see your crops and how your land is shared (hectares or square meters). Tap a crop to open it in DSS. Your harvest records are here too.';
 
   @override
-  String get howTo4 => 'Prices: see expected crop prices and when to sell.';
+  String get howTo4 =>
+      'Prices: only the crops you added in DSS appear here, with expected prices and when it is a good time to sell.';
 
   @override
-  String get howTo5 => 'Tap the bell at the top to read your notifications.';
+  String get howTo5 =>
+      'After harvest, tap \"Record harvest\" in DSS so estimates get closer to your own farm. Tap the bell at the top to read notifications. Numbers are estimates only, not official.';
 
   @override
   String get contactOffice => 'Municipal Agriculture Office';
@@ -1045,7 +1049,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String dssBasisOwn(String ha) {
-    return 'Your last harvest per hectare, for $ha (±15%).';
+    return 'Your own harvest per hectare (from your records), for $ha (±15%).';
   }
 
   @override
@@ -1336,4 +1340,263 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get farmUnallocated => 'Not planted';
+
+  @override
+  String get dssCost => 'Production cost (optional)';
+
+  @override
+  String get dssCostHint =>
+      'Total you spent or will spend on this crop: seeds, fertilizer, pesticide, labor, water. It is used to show your profit.';
+
+  @override
+  String get dssCostDetails => 'Cost details (optional)';
+
+  @override
+  String get dssCostSeed => 'Seeds / seedlings';
+
+  @override
+  String get dssCostFertilizer => 'Fertilizer';
+
+  @override
+  String get dssCostPesticide => 'Pesticide';
+
+  @override
+  String get dssCostLabor => 'Labor and hired work';
+
+  @override
+  String get dssCostOther => 'Other (water, fuel, transport)';
+
+  @override
+  String get dssYourCost => 'Your cost';
+
+  @override
+  String get dssProfit => 'Estimated profit';
+
+  @override
+  String get dssRoi => 'Return on cost';
+
+  @override
+  String get dssCostAsk =>
+      'Add your production cost when you edit this crop to see your profit.';
+
+  @override
+  String get dssProfitNote =>
+      'Profit = expected income minus your cost. The low value uses the lower harvest and price, and the high value uses the higher ones.';
+
+  @override
+  String get dssRecordHarvest => 'Record harvest';
+
+  @override
+  String dssRecordTitle(String crop) {
+    return 'Record harvest: $crop';
+  }
+
+  @override
+  String get dssRecordSub =>
+      'Enter what really happened. Your records make the advice closer to your own farm.';
+
+  @override
+  String get dssHarvestedOn => 'Date harvested';
+
+  @override
+  String get dssActualYield => 'Total harvest';
+
+  @override
+  String get dssSoldPrice => 'Price you sold at';
+
+  @override
+  String dssSoldPriceHint(String price) {
+    return 'Estimated price: $price per kg';
+  }
+
+  @override
+  String get dssRecIncome => 'Income';
+
+  @override
+  String get dssRecProfit => 'Profit';
+
+  @override
+  String get dssRecordSaved =>
+      'Harvest saved. The land is free again for your next crop.';
+
+  @override
+  String get farmHistoryTitle => 'Harvest history';
+
+  @override
+  String get farmHistorySub => 'Your recorded harvests, income and profit.';
+
+  @override
+  String get farmHistoryDeleteTitle => 'Delete this record?';
+
+  @override
+  String farmHistoryDeleteBody(String crop) {
+    return 'The $crop harvest record will be removed.';
+  }
+
+  @override
+  String get farmWxTitle => 'Weather until harvest';
+
+  @override
+  String get farmWxNoHarvest => 'Weather for the next 2 weeks';
+
+  @override
+  String get farmWxPast => 'Past';
+
+  @override
+  String get farmWxForecast => 'Forecast';
+
+  @override
+  String get farmWxTypical => 'Based on last year';
+
+  @override
+  String get farmWxToday => 'Today';
+
+  @override
+  String get farmWxHarvest => 'Harvest';
+
+  @override
+  String get farmWxLoadFail => 'Weather unavailable';
+
+  @override
+  String get farmWxRetry => 'Try again';
+
+  @override
+  String get farmWxNote =>
+      'The forecast only covers 16 days. Later dates are based on last year\'s weather.';
+
+  @override
+  String get weatherOutlookTitle => 'Weather for the next 2 months';
+
+  @override
+  String get weatherOutlookSub =>
+      'The first 16 days are accurate. The rest is only an estimate based on last year\'s weather.';
+
+  @override
+  String get cropsTitle => 'All Commodities';
+
+  @override
+  String get cropsSub => 'Tap a crop for the full guide';
+
+  @override
+  String get cropsAll => 'All';
+
+  @override
+  String get cropsGroupVeg => 'Vegetables';
+
+  @override
+  String get cropsGroupFruit => 'Fruits';
+
+  @override
+  String get cropsGroupRoot => 'Roots & Spices';
+
+  @override
+  String get cropsGroupGrain => 'Rice & Coconut';
+
+  @override
+  String get cropsSeeAll => 'See all';
+
+  @override
+  String get cropsSeeLess => 'Show less';
+
+  @override
+  String get cropAlsoCalled => 'Also called';
+
+  @override
+  String get cropStorable => 'Can be stored';
+
+  @override
+  String get cropSecBestTime => 'Best time to plant';
+
+  @override
+  String get cropBest => 'Best';
+
+  @override
+  String get cropPossible => 'Possible';
+
+  @override
+  String get cropSecHarvest => 'Time to harvest';
+
+  @override
+  String get cropDaysWord => 'days';
+
+  @override
+  String get cropMonthsWord => 'months';
+
+  @override
+  String get cropHarvestYearly =>
+      'Takes years before the first fruit, then gives harvests every year.';
+
+  @override
+  String get cropSecYield => 'Estimated yield';
+
+  @override
+  String get cropPerHa => 'per hectare';
+
+  @override
+  String get cropUnitKg => 'kg';
+
+  @override
+  String get cropUnitTali => 'bundles';
+
+  @override
+  String get cropUnitPc => 'pieces';
+
+  @override
+  String get cropSecPrice => 'Farmgate price';
+
+  @override
+  String get cropNoPrice => 'No price data yet.';
+
+  @override
+  String get cropPriceReal =>
+      'Data from the Municipal Agriculture Office (May-November).';
+
+  @override
+  String get cropPriceEstimate => 'Estimate only; no official data yet.';
+
+  @override
+  String get cropBestSell => 'Highest prices in';
+
+  @override
+  String get cropIncomeHa => 'Estimated income per hectare (before costs)';
+
+  @override
+  String get cropSecGuide => 'Farming guide';
+
+  @override
+  String get cropSecDiversify => 'Why try this crop?';
+
+  @override
+  String get cropInsPlantNow => 'A good time to plant this month.';
+
+  @override
+  String get cropInsNextPlant => 'Next good planting month:';
+
+  @override
+  String get cropInsFast => 'Quick harvest; can be grown several times a year.';
+
+  @override
+  String get cropInsPriceStable => 'Prices stay fairly steady.';
+
+  @override
+  String get cropInsPriceVolatile => 'Prices swing a lot; plan when to sell.';
+
+  @override
+  String get cropInsIncomeHigh =>
+      'One of the higher estimated incomes per hectare.';
+
+  @override
+  String get cropInsStorable =>
+      'Can be stored, so you can wait for a better price.';
+
+  @override
+  String get cropDiversifyNote =>
+      'Grow different crops so you do not depend on one price or season.';
+
+  @override
+  String get cropEstNote =>
+      'Numbers and tips are a guide only. Please verify with the Municipal Agriculture Office.';
+
+  @override
+  String get cropTryDss => 'Try in DSS';
 }

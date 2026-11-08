@@ -16,13 +16,26 @@ import '../../../services/crop_advice_service.dart';
 import '../../../widgets/common_widgets.dart';
 import '../../../widgets/dss_common.dart';
 import '../../../widgets/dss_summary_card.dart';
+import '../../../widgets/crop_explorer.dart';
+import '../../../widgets/harvest_weather_strip.dart';
 import '../../../widgets/heat_graph.dart';
 import '../../../widgets/weather_icon.dart';
 
-class WeatherTab extends StatelessWidget {
+class WeatherTab extends StatefulWidget {
   final DashboardProvider p;
   final VoidCallback? onOpenDss;
   const WeatherTab({super.key, required this.p, this.onOpenDss});
+
+  @override
+  State<WeatherTab> createState() => _WeatherTabState();
+}
+
+class _WeatherTabState extends State<WeatherTab> {
+  // 0 = Panahon, 1 = Mga Pananim
+  int _seg = 0;
+
+  DashboardProvider get p => widget.p;
+  VoidCallback? get onOpenDss => widget.onOpenDss;
 
   String _greeting(AppLocalizations t) {
     final h = DateTime.now().hour;
@@ -56,14 +69,7 @@ class WeatherTab extends StatelessWidget {
     final cropAdvice = CropAdviceService().build(farm.plantings, w);
     final plantNow = p.guides.where((g) => g.statusFor(DateTime.now().month) == PlantStatus.best).length;
 
-    return AnimatedTabList(items: [
-      _GreetingHeader(
-        title: '${_greeting(t)}, $firstName! 👋',
-        subtitle: DateFormat('EEEE, MMMM d', locale).format(DateTime.now()),
-        initial: firstName.isNotEmpty ? firstName[0].toUpperCase() : 'P',
-      ),
-      const SizedBox(height: 14),
-
+    final weatherItems = <Widget>[
       // Panahon
       _WeatherCard(w: w, updated: p.lastUpdated, stale: p.weatherStale, place: profile.barangay),
       const SizedBox(height: 20),
@@ -131,6 +137,16 @@ class WeatherTab extends StatelessWidget {
       _HeatIndexCard(heat: heat, todayHours: todayHours, now: now),
       const SizedBox(height: 12),
       _ForecastCard(hours: w.hourly, days: w.daily),
+      const SizedBox(height: 12),
+      GlassCard(
+        padding: const EdgeInsets.fromLTRB(12, 12, 12, 10),
+        child: HarvestWeatherStrip.outlook(
+          lat: farm.lat,
+          lon: farm.lon,
+          title: t.weatherOutlookTitle,
+          summary: t.weatherOutlookSub,
+        ),
+      ),
       const SizedBox(height: 20),
 
       // Payo
@@ -140,6 +156,37 @@ class WeatherTab extends StatelessWidget {
       const SizedBox(height: 10),
 
       const SizedBox(height: 24),
+    ];
+
+    final cropItems = <Widget>[
+      CropExplorer(onOpenDss: onOpenDss),
+      const SizedBox(height: 24),
+    ];
+
+    return Column(children: [
+      Padding(
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+        child: Column(children: [
+          _GreetingHeader(
+            title: '${_greeting(t)}, $firstName! 👋',
+            subtitle: DateFormat('EEEE, MMMM d', locale).format(DateTime.now()),
+            initial: firstName.isNotEmpty ? firstName[0].toUpperCase() : 'P',
+          ),
+          const SizedBox(height: 12),
+          _HomeSegments(
+            selected: _seg,
+            labels: [t.navWeather, t.cropsTitle],
+            icons: const [Icons.wb_sunny_rounded, Icons.grass_rounded],
+            onSelect: (i) => setState(() => _seg = i),
+          ),
+        ]),
+      ),
+      Expanded(
+        child: AnimatedTabList(
+          key: ValueKey(_seg),
+          items: _seg == 0 ? weatherItems : cropItems,
+        ),
+      ),
     ]);
   }
 }
@@ -425,7 +472,7 @@ class _HeatScale extends StatelessWidget {
             tween: Tween(begin: _min, end: value),
             duration: const Duration(milliseconds: 900),
             curve: Curves.easeOutCubic,
-            builder: (_, v, _) => Positioned(
+            builder: (context, v, child) => Positioned(
               left: x(v) - 8,
               top: 3,
               child: Container(
@@ -489,14 +536,14 @@ class _ForecastCardState extends State<_ForecastCard> {
       key: const ValueKey('week'),
       scrollDirection: Axis.horizontal,
       itemCount: widget.days.length,
-      separatorBuilder: (_, _) => const SizedBox(width: 8),
+      separatorBuilder: (context, index) => const SizedBox(width: 8),
       itemBuilder: (_, i) => _DayItem(day: widget.days[i], isToday: i == 0, locale: locale, todayLabel: t.today),
     )
         : ListView.separated(
       key: const ValueKey('hours'),
       scrollDirection: Axis.horizontal,
       itemCount: widget.hours.length,
-      separatorBuilder: (_, _) => const SizedBox(width: 8),
+      separatorBuilder: (context, index) => const SizedBox(width: 8),
       itemBuilder: (_, i) => _HourItem(hour: widget.hours[i], isFirst: i == 0, locale: locale, nowLabel: t.now),
     );
 
@@ -707,6 +754,65 @@ class _LiveDotState extends State<_LiveDot> with SingleTickerProviderStateMixin 
     return FadeTransition(
       opacity: Tween(begin: 0.3, end: 1.0).animate(_c),
       child: Container(width: 9, height: 9, decoration: BoxDecoration(color: widget.color, shape: BoxShape.circle)),
+    );
+  }
+}
+
+
+/// Segmented control sa Home tab (Panahon | Mga Pananim).
+class _HomeSegments extends StatelessWidget {
+  final int selected;
+  final List<String> labels;
+  final List<IconData> icons;
+  final ValueChanged<int> onSelect;
+  const _HomeSegments({required this.selected, required this.labels, required this.icons, required this.onSelect});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.6),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.9)),
+      ),
+      child: Row(children: [
+        for (var i = 0; i < labels.length; i++)
+          Expanded(
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: () => onSelect(i),
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 220),
+                curve: Curves.easeOutCubic,
+                padding: const EdgeInsets.symmetric(vertical: 10),
+                decoration: BoxDecoration(
+                  color: selected == i ? AppColors.leaf : Colors.transparent,
+                  borderRadius: BorderRadius.circular(14),
+                  boxShadow: selected == i
+                      ? [BoxShadow(color: AppColors.leaf.withValues(alpha: 0.28), blurRadius: 10, offset: const Offset(0, 4))]
+                      : null,
+                ),
+                child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                  Icon(icons[i], size: 18, color: selected == i ? Colors.white : AppColors.muted),
+                  const SizedBox(width: 6),
+                  Flexible(
+                    child: Text(
+                      labels[i],
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        fontSize: 13.5,
+                        fontWeight: FontWeight.w900,
+                        color: selected == i ? Colors.white : AppColors.muted,
+                      ),
+                    ),
+                  ),
+                ]),
+              ),
+            ),
+          ),
+      ]),
     );
   }
 }

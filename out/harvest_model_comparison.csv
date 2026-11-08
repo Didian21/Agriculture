@@ -1,0 +1,5 @@
+,MAE,RMSE,MAPE_%
+Baseline (crop mean),561.707,765.062,6.103
+GaussianProcess,569.357,775.188,6.252
+RandomForest,574.153,796.79,6.284
+ElasticNet,693.225,902.568,8.636

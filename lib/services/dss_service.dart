@@ -11,6 +11,10 @@ class HarvestEstimate {
   final double? priceLow, priceMid, priceHigh;
   final double? incomeLow, incomeMid, incomeHigh;
 
+  /// Gastos na inilagay ng farmer at ang tubo (kita bawas gastos). Null kung walang gastos o walang presyo.
+  final double? cost;
+  final double? profitLow, profitMid, profitHigh;
+
   const HarvestEstimate({
     required this.kgLow,
     required this.kgMid,
@@ -25,9 +29,17 @@ class HarvestEstimate {
     this.incomeLow,
     this.incomeMid,
     this.incomeHigh,
+    this.cost,
+    this.profitLow,
+    this.profitMid,
+    this.profitHigh,
   });
 
   bool get hasPrice => priceMid != null;
+  bool get hasProfit => profitMid != null;
+
+  /// Balik sa puhunan (%) = tubo / gastos.
+  double? get roiPercent => (profitMid == null || cost == null || cost! <= 0) ? null : profitMid! / cost! * 100;
 }
 
 enum PlantFit { best, possible, avoid }
@@ -54,6 +66,11 @@ class DssService {
   /// Mababa kapag maraming ani sa buwang iyon, mataas kapag kakaunti.
   static List<double> priceIndex(String crop) {
     final f = factsFor(crop);
+    // May totoong presyo (Excel ng MAO): index = presyo ng buwan / karaniwang presyo. Walang datos (Dis-Abr) = 100.
+    if (f != null && f.monthlyPrice != null && f.basePrice != null) {
+      final avg = f.basePrice!;
+      return [for (var m = 1; m <= 12; m++) f.hasRealPrice(m) ? f.priceForMonth(m)! / avg * 100 : 100.0];
+    }
     if (f == null || !f.hasHarvestDays) return List.filled(12, 100.0);
     final supply = List.filled(12, 0.0);
     for (final m in f.bestMonths) {
@@ -73,8 +90,10 @@ class DssService {
 
   /// Presyo (PHP/kg) kada buwan = halimbawang presyo x index. Null kung walang halimbawang presyo.
   static List<double>? monthlyPrices(String crop) {
-    final base = factsFor(crop)?.basePrice;
-    if (base == null) return null;
+    final f = factsFor(crop);
+    if (f == null || f.basePrice == null) return null;
+    if (f.monthlyPrice != null) return [for (var m = 1; m <= 12; m++) f.priceForMonth(m)!];
+    final base = f.basePrice!;
     return [for (final i in priceIndex(crop)) base * i / 100];
   }
 
@@ -93,17 +112,24 @@ class DssService {
   /// Mga buwan na mataas ang inaasahang presyo (pinakamataas na 3).
   static List<int> bestSellMonths(String crop) {
     final idx = priceIndex(crop);
-    final order = List.generate(12, (i) => i)..sort((a, b) => idx[b].compareTo(idx[a]));
+    final f = factsFor(crop);
+    // Kung totoong datos ang presyo, mga buwang may datos lang ang ikukumpara.
+    final real = f?.monthlyPrice != null;
+    final order = List.generate(12, (i) => i).where((i) => !real || f!.hasRealPrice(i + 1)).toList()
+      ..sort((a, b) => idx[b].compareTo(idx[a]));
     final top = order.take(3).map((e) => e + 1).toList()..sort();
     return top;
   }
 
-  static HarvestEstimate? estimate(FarmPlanting p) {
+  /// [historyKgPerHa]: karaniwang ani kada ektarya ng farmer mula sa sarili niyang talaan ng ani (kung mayroon).
+  static HarvestEstimate? estimate(FarmPlanting p, {double? historyKgPerHa}) {
     final f = factsFor(p.crop);
     if (f == null || p.hectares <= 0) return null;
 
-    final own = p.lastYieldKg != null && p.lastYieldKg! > 0;
-    final double mid = own ? p.lastYieldKg! / p.hectares : f.midKgHa.toDouble();
+    final fromLast = p.lastYieldKg != null && p.lastYieldKg! > 0;
+    final fromHistory = !fromLast && historyKgPerHa != null && historyKgPerHa > 0;
+    final own = fromLast || fromHistory;
+    final double mid = fromLast ? p.lastYieldKg! / p.hectares : (fromHistory ? historyKgPerHa : f.midKgHa.toDouble());
     final double lo = own ? mid * 0.85 : f.lowKgHa.toDouble();
     final double hi = own ? mid * 1.15 : f.highKgHa.toDouble();
 
@@ -123,6 +149,7 @@ class DssService {
     }
 
     final kgLow = lo * p.hectares, kgMid = mid * p.hectares, kgHigh = hi * p.hectares;
+    final cost = (p.costPhp != null && p.costPhp! > 0) ? p.costPhp : null;
     return HarvestEstimate(
       kgLow: kgLow,
       kgMid: kgMid,
@@ -137,6 +164,10 @@ class DssService {
       incomeLow: pLow == null ? null : kgLow * pLow,
       incomeMid: pMid == null ? null : kgMid * pMid,
       incomeHigh: pHigh == null ? null : kgHigh * pHigh,
+      cost: cost,
+      profitLow: (pLow == null || cost == null) ? null : kgLow * pLow - cost,
+      profitMid: (pMid == null || cost == null) ? null : kgMid * pMid - cost,
+      profitHigh: (pHigh == null || cost == null) ? null : kgHigh * pHigh - cost,
     );
   }
 }
