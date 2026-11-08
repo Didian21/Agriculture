@@ -36,7 +36,7 @@ class FarmerRepository {
         double landSize = 2.5;
         List<String> cropTypes = ['Rice', 'Eggplant', 'Tomato'];
 
-        String locationName = 'Barangay $barangay';
+String locationName = 'Barangay $barangay';
         final farmRes = await SupabaseService.client.from('farms').select().eq('farmer_id', farmerId);
         if (farmRes.isNotEmpty) {
           landSize = 0;

@@ -148,3 +148,23 @@ class MLModelStatus {
   });
 }
 
+class MarketPriceRecord {
+  final String id;
+  String vegetable;
+  double farmgatePrice; // PHP per kg
+  double marketPrice; // PHP per kg
+  DateTime date;
+  String marketLocation; // Barangay or Market Name
+  String uploadedBy;
+
+  MarketPriceRecord({
+    required this.id,
+    required this.vegetable,
+    required this.farmgatePrice,
+    required this.marketPrice,
+    required this.date,
+    this.marketLocation = 'Pagsanjan Public Market',
+    required this.uploadedBy,
+  });
+}
+

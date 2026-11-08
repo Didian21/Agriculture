@@ -55,8 +55,7 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
             transitionsBuilder: (context, anim, secondaryAnim, child) => FadeTransition(opacity: anim, child: child),
             transitionDuration: const Duration(milliseconds: 600),
           ),
-          (route) => false,
-        );
+          (route) => false        );
       }
     });
   }

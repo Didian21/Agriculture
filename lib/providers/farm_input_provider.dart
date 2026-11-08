@@ -344,8 +344,7 @@ class FarmInputProvider extends ChangeNotifier {
       await SupabaseService.client.from('farmer_plantings').delete().eq('id', plantingId);
     } catch (e) {
       debugPrint('Supabase farmer_plantings sync error (harvest): $e');
-    }
-  }
+    }  }
 
   void removeRecord(String id) {
     history = history.where((e) => e.id != id).toList();

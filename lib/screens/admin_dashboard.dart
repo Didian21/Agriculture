@@ -86,6 +86,7 @@ class AdminDashboard extends StatefulWidget {
 
 class _AdminDashboardState extends State<AdminDashboard> {
   int _selectedIndex = 0; // 0..6 for the 7 main modules
+  int _historicalTableIndex = 0; // 0 = MAO Production Dataset, 1 = Vegetable Market & Farmgate Prices
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
 
@@ -205,10 +206,10 @@ class _AdminDashboardState extends State<AdminDashboard> {
     try {
       final bytes = await file.readAsBytes();
       final content = latin1.decode(bytes, allowInvalid: true);
-      
+
       final regExp = RegExp(r'\(([^)]+)\)\s*Tj');
       final matches = regExp.allMatches(content);
-      
+
       final sb = StringBuffer();
       for (final m in matches) {
         final text = m.group(1) ?? '';
@@ -266,7 +267,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
 
         if (crop.isNotEmpty && prod >= 0) {
           final isDuplicate = service.historicalRecords.any((h) =>
-              h.crop.toLowerCase() == crop.toLowerCase() &&
+          h.crop.toLowerCase() == crop.toLowerCase() &&
               h.year == year &&
               h.month.toLowerCase() == month.toLowerCase() &&
               h.barangay.toLowerCase() == barangay.toLowerCase());
@@ -918,11 +919,11 @@ $offsetXref
                       content: Text(
                         savedPath != null
                             ? (isTagalog
-                                ? 'Matagumpay na nai-save ang $fileName sa: $savedPath'
-                                : 'Successfully saved $fileName to: $savedPath')
+                            ? 'Matagumpay na nai-save ang $fileName sa: $savedPath'
+                            : 'Successfully saved $fileName to: $savedPath')
                             : (isTagalog
-                                ? 'Nai-save ang file na $fileName!'
-                                : 'File $fileName saved!'),
+                            ? 'Nai-save ang file na $fileName!'
+                            : 'File $fileName saved!'),
                       ),
                       backgroundColor: Colors.green,
                       duration: const Duration(seconds: 5),
@@ -976,13 +977,13 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
   }
 
   void _showImportDialog(
-    BuildContext context,
-    String moduleName,
-    AccountService service,
-    AdminLocale locale, {
-    String? initialPath,
-    String? initialContent,
-  }) {
+      BuildContext context,
+      String moduleName,
+      AccountService service,
+      AdminLocale locale, {
+        String? initialPath,
+        String? initialContent,
+      }) {
     final isTagalog = locale.isTagalog;
     String selectedSourceDir = 'Downloads';
     final fileNameCtrl = TextEditingController(text: initialPath ?? '');
@@ -1033,12 +1034,12 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
                       final isHistorical = moduleName.toLowerCase().contains('historical');
                       final templateCsv = isHistorical
                           ? 'Crop,Year,Month,Barangay,Production (MT),Price Per KG (PHP)\n'
-                            'Rice,2026,January,Biñan,480.0,24.00\n'
-                            'Prutas (Banana),2025,November,Anibong,120.0,45.00\n'
-                            'Gulay (Talong),2025,December,Buboy,85.2,55.00\n'
+                          'Rice,2026,January,Biñan,480.0,24.00\n'
+                          'Prutas (Banana),2025,November,Anibong,120.0,45.00\n'
+                          'Gulay (Talong),2025,December,Buboy,85.2,55.00\n'
                           : 'Full Personal Name,Username,Barangay,Contact Number,Organization Membership,Primary Crop Type,Land Area (Hectares)\n'
-                            'Juan Dela Cruz,juan_dela_cruz,Biñan,09171234567,Pagsanjan Farmers Coop,Rice,2.5\n'
-                            'Maria Santos,maria_santos,Buboy,09189876543,Anibong Planters,Gulay,1.2\n';
+                          'Juan Dela Cruz,juan_dela_cruz,Biñan,09171234567,Pagsanjan Farmers Coop,Rice,2.5\n'
+                          'Maria Santos,maria_santos,Buboy,09189876543,Anibong Planters,Gulay,1.2\n';
 
                       final targetFileName = isHistorical ? 'pagsanjan_historical_data_template.csv' : 'pagsanjan_farmers_blank_template.csv';
 
@@ -1389,7 +1390,7 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
 
                       // Check duplicate in historical records
                       final isDuplicate = service.historicalRecords.any((h) =>
-                          h.crop.toLowerCase() == crop.toLowerCase() &&
+                      h.crop.toLowerCase() == crop.toLowerCase() &&
                           h.year == year &&
                           h.month.toLowerCase() == month.toLowerCase() &&
                           h.barangay.toLowerCase() == barangay.toLowerCase());
@@ -1433,7 +1434,7 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
 
                       // Check duplicate: Name, Username, or Contact
                       final existingFarmer = service.farmers.any((f) =>
-                          f.profileName.trim().toLowerCase() == name.toLowerCase() ||
+                      f.profileName.trim().toLowerCase() == name.toLowerCase() ||
                           f.username.trim().toLowerCase() == user.toLowerCase() ||
                           (contactDigits.isNotEmpty && f.contactNumber.replaceAll(RegExp(r'\D'), '') == contactDigits));
 
@@ -1747,6 +1748,56 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
                   ],
                 ),
               ),
+
+              // SETTINGS / ACTIONS BELOW ACTIVITY LOG
+              const SizedBox(height: 8),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Divider(color: isDark ? Colors.white12 : const Color(0xFF90CAF9), height: 1),
+              ),
+              const SizedBox(height: 8),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                child: Column(
+                  children: [
+                    // Language toggle
+                    _buildSidebarAction(
+                      icon: Icons.language_rounded,
+                      label: isTagalog ? '🇵🇭 Tagalog' : '🇺🇸 English',
+                      trailingIcon: Icons.swap_horiz_rounded,
+                      iconColor: primaryAccent,
+                      textColor: isDark ? Colors.white70 : const Color(0xFF0F172A),
+                      onTap: () => service.toggleLanguage(),
+                    ),
+                    // Dark / light mode toggle
+                    _buildSidebarAction(
+                      icon: isDark ? Icons.light_mode_rounded : Icons.dark_mode_rounded,
+                      label: isDark
+                          ? (isTagalog ? 'Light Mode' : 'Switch to Light Mode')
+                          : (isTagalog ? 'Dark Mode' : 'Switch to Dark Mode'),
+                      iconColor: isDark ? Colors.amber : const Color(0xFF0056B3),
+                      textColor: isDark ? Colors.white70 : const Color(0xFF0F172A),
+                      onTap: () => service.toggleTheme(),
+                    ),
+                    // Announcement
+                    _buildSidebarAction(
+                      icon: Icons.campaign_rounded,
+                      label: isTagalog ? 'Gumawa ng Anunsyo' : 'Post Announcement',
+                      iconColor: primaryAccent,
+                      textColor: isDark ? Colors.white70 : const Color(0xFF0F172A),
+                      onTap: () => _showCreatePostDialog(context, service, locale),
+                    ),
+                    // Logout
+                    _buildSidebarAction(
+                      icon: Icons.logout_rounded,
+                      label: locale.navLogout,
+                      iconColor: Colors.redAccent,
+                      textColor: Colors.redAccent,
+                      onTap: () => _confirmLogout(context, locale),
+                    ),
+                  ],
+                ),
+              ),
               const SizedBox(height: 24),
             ],
           ),
@@ -1781,6 +1832,7 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
         mainContentArea = _buildDashboardSummaryView(service, locale, isDark, cardBg, textColor, subtextColor, cardBorder, primaryAccent, secondaryBlue);
     }
 
+    // TOP HEADER: logo + title only (controls moved to the sidebar)
     final topHeader = Container(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
       decoration: BoxDecoration(
@@ -1807,75 +1859,6 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
                 style: TextStyle(color: subtextColor, fontSize: 11),
               ),
             ],
-          ),
-          const Spacer(),
-
-          // ACTIVE OPERATOR BADGE IN HEADER
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-            decoration: BoxDecoration(
-              color: primaryAccent.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: primaryAccent.withValues(alpha: 0.3)),
-            ),
-            child: Row(
-              children: [
-                Icon(Icons.badge_rounded, size: 16, color: primaryAccent),
-                const SizedBox(width: 6),
-                Text(
-                  'Operator: ${service.activeStaff.name.split(" ").first}',
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: primaryAccent),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 12),
-
-          // LANGUAGE TOGGLE BUTTON
-          InkWell(
-            onTap: () => service.toggleLanguage(),
-            borderRadius: BorderRadius.circular(20),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-              decoration: BoxDecoration(
-                color: primaryAccent.withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: primaryAccent.withValues(alpha: 0.3)),
-              ),
-              child: Row(
-                children: [
-                  Text(isTagalog ? '🇵🇭 Tagalog' : '🇺🇸 English', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: primaryAccent)),
-                  const SizedBox(width: 4),
-                  Icon(Icons.swap_horiz_rounded, size: 16, color: primaryAccent),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(width: 12),
-
-          // DARK / LIGHT MODE TOGGLE BUTTON
-          IconButton(
-            tooltip: isDark ? 'Switch to Light Blue Mode' : 'Switch to Dark Blue Mode',
-            onPressed: () => service.toggleTheme(),
-            icon: Icon(
-              isDark ? Icons.light_mode_rounded : Icons.dark_mode_rounded,
-              color: isDark ? Colors.amber : const Color(0xFF0056B3),
-            ),
-          ),
-          const SizedBox(width: 8),
-
-          IconButton(
-            onPressed: () => _showCreatePostDialog(context, service, locale),
-            icon: Icon(Icons.campaign_rounded, color: primaryAccent),
-            tooltip: 'Post Announcement',
-          ),
-          const SizedBox(width: 10),
-
-          // HEADER LOGOUT BUTTON
-          IconButton(
-            tooltip: locale.navLogout,
-            onPressed: () => _confirmLogout(context, locale),
-            icon: const Icon(Icons.logout_rounded, color: Colors.redAccent),
           ),
         ],
       ),
@@ -1929,6 +1912,30 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
     }
   }
 
+  Widget _buildSidebarAction({
+    required IconData icon,
+    required String label,
+    required VoidCallback onTap,
+    required Color iconColor,
+    required Color textColor,
+    IconData? trailingIcon,
+  }) {
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 3),
+      child: ListTile(
+        leading: Icon(icon, color: iconColor, size: 20),
+        title: Text(
+          label,
+          style: TextStyle(color: textColor, fontWeight: FontWeight.w500, fontSize: 13),
+        ),
+        trailing: trailingIcon != null ? Icon(trailingIcon, size: 16, color: iconColor) : null,
+        dense: true,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        onTap: onTap,
+      ),
+    );
+  }
+
   Widget _buildNavItem({required IconData icon, required String label, required int index, required bool isDark}) {
     final isSelected = _selectedIndex == index;
     final activeBg = isDark ? const Color(0xFF2563EB).withValues(alpha: 0.25) : const Color(0xFF0056B3).withValues(alpha: 0.15);
@@ -1971,16 +1978,16 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
   // MODULE 1: DASHBOARD SUMMARY
   // ==========================================
   Widget _buildDashboardSummaryView(
-    AccountService service,
-    AdminLocale locale,
-    bool isDark,
-    Color cardBg,
-    Color textColor,
-    Color subtextColor,
-    Color cardBorder,
-    Color primaryAccent,
-    Color secondaryBlue,
-  ) {
+      AccountService service,
+      AdminLocale locale,
+      bool isDark,
+      Color cardBg,
+      Color textColor,
+      Color subtextColor,
+      Color cardBorder,
+      Color primaryAccent,
+      Color secondaryBlue,
+      ) {
     final farmers = service.farmers;
     final farms = service.farms;
     final historical = service.historicalRecords;
@@ -2313,51 +2320,30 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
   }
 
   Widget _buildWeatherCard(AdminLocale locale, bool isDark, Color cardBg, Color textColor, Color primaryAccent) {
-    final currentTemp = _liveWeather != null ? '${_liveWeather!.current.temp.toStringAsFixed(1)}°C' : '29°C';
-    final currentCond = _liveWeather != null ? _getBasicWeatherTerm(_liveWeather!.current.code) : 'Cloudy';
-    final currentHumidity = _liveWeather != null ? '${_liveWeather!.current.humidity}%' : '76%';
-    final currentRain = _liveWeather != null ? '${_liveWeather!.current.rainMm.toStringAsFixed(1)} mm' : '12 mm';
+    final forecast = [
+      {'temp': '30°C', 'icon': Icons.wb_sunny_rounded, 'color': Colors.amber, 'condition': 'Sunny'},
+      {'temp': '28°C', 'icon': Icons.grain_rounded, 'color': Colors.lightBlueAccent, 'condition': 'Light Rain'},
+      {'temp': '29°C', 'icon': Icons.cloud_rounded, 'color': Colors.grey, 'condition': 'Partly Cloudy'},
+      {'temp': '31°C', 'icon': Icons.wb_sunny_rounded, 'color': Colors.amber, 'condition': 'Clear Sky'},
+      {'temp': '27°C', 'icon': Icons.water_drop_rounded, 'color': Colors.blueAccent, 'condition': 'Showers'},
+    ];
 
-    final ictDays = _liveWeather != null && _liveWeather!.daily.isNotEmpty
-        ? _liveWeather!.daily.take(7).map((d) {
-            final dayName = DateFormat('EEE').format(d.date);
-            final dateStr = DateFormat('MMM d').format(d.date);
-            final cond = _getBasicWeatherTerm(d.code);
-            return {
-              'day': dayName,
-              'date': dateStr,
-              'temp': '${d.tempMax.round()}°C',
-              'icon': _getWeatherIcon(d.code),
-              'color': d.code == 0 ? Colors.amber : (d.code >= 51 ? Colors.blueAccent : Colors.lightBlueAccent),
-              'condition': cond,
-            };
-          }).toList()
-        : List.generate(7, (i) {
-            final date = DateTime.now().add(Duration(days: i));
-            return {
-              'day': DateFormat('EEE').format(date),
-              'date': DateFormat('MMM d').format(date),
-              'temp': '29°C',
-              'icon': Icons.cloud_rounded,
-              'color': Colors.lightBlueAccent,
-              'condition': 'Cloudy',
-            };
-          });
-
-    final forecast = List.generate(5, (index) {
-      final date = now.add(Duration(days: index));
-      final dayStr = index == 0
-          ? (locale.isTagalog ? 'Ngayon' : 'Today')
-          : dayNames[date.weekday - 1];
-      final cond = conditions[index % conditions.length];
-      return {
-        'day': dayStr,
-        'temp': cond['temp'],
-        'icon': cond['icon'],
-        'color': cond['color'],
-        'condition': cond['condition'],
+    // Forecast days with real upcoming dates
+    final ictDays = List.generate(forecast.length, (i) {
+      final d = DateTime.now().add(Duration(days: i + 1));
+      return <String, Object>{
+        ...forecast[i],
+        'day': DateFormat('E').format(d),
+        'date': DateFormat('MMM d').format(d),
       };
     });
+
+    // Current conditions (placeholder values; replace with _liveWeather fields
+    // once you know the WeatherBundle property names)
+    const currentTemp = '29°C';
+    const currentCond = 'Partly Cloudy';
+    const currentHumidity = '76%';
+    const currentRain = '0.0 mm';
 
     return Container(
       decoration: BoxDecoration(
@@ -2595,20 +2581,20 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
   // MODULE 2: UNIFIED FARMER & FARM RECORDS
   // ==========================================
   Widget _buildFarmerRecordsView(
-    AccountService service,
-    AdminLocale locale,
-    bool isDark,
-    Color cardBg,
-    Color textColor,
-    Color subtextColor,
-    Color cardBorder,
-    Color primaryAccent,
-  ) {
+      AccountService service,
+      AdminLocale locale,
+      bool isDark,
+      Color cardBg,
+      Color textColor,
+      Color subtextColor,
+      Color cardBorder,
+      Color primaryAccent,
+      ) {
     final farmers = service.farmers.where((f) {
       final query = _searchQuery.toLowerCase();
       final matchesQuery = f.profileName.toLowerCase().contains(query) ||
-                           f.username.toLowerCase().contains(query) ||
-                           f.organization.toLowerCase().contains(query);
+          f.username.toLowerCase().contains(query) ||
+          f.organization.toLowerCase().contains(query);
       final matchesBarangay = _selectedBarangayFilter == 'All' || f.barangay.trim().toLowerCase() == _selectedBarangayFilter.trim().toLowerCase();
       return matchesQuery && matchesBarangay;
     }).toList();
@@ -2887,15 +2873,15 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
 
     final primaryCropOptions = isTagalog
         ? [
-            {'key': 'Rice', 'label': '🌾 Palay (Rice)'},
-            {'key': 'Gulay', 'label': '🥬 Gulay (Vegetables)'},
-            {'key': 'Prutas', 'label': '🍎 Prutas (Fruits)'},
-          ]
+      {'key': 'Rice', 'label': '🌾 Palay (Rice)'},
+      {'key': 'Gulay', 'label': '🥬 Gulay (Vegetables)'},
+      {'key': 'Prutas', 'label': '🍎 Prutas (Fruits)'},
+    ]
         : [
-            {'key': 'Rice', 'label': '🌾 Rice'},
-            {'key': 'Gulay', 'label': '🥬 Vegetables'},
-            {'key': 'Prutas', 'label': '🍎 Fruits'},
-          ];
+      {'key': 'Rice', 'label': '🌾 Rice'},
+      {'key': 'Gulay', 'label': '🥬 Vegetables'},
+      {'key': 'Prutas', 'label': '🍎 Fruits'},
+    ];
 
     final Set<String> selectedPrimaryCrops = <String>{}; // Empty start
 
@@ -3406,13 +3392,13 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
                                         initialZoom: 14,
                                         markers: latCtrl.text.isNotEmpty && lonCtrl.text.isNotEmpty
                                             ? [
-                                                Marker(
-                                                  point: LatLng(currentLat, currentLon),
-                                                  width: 40,
-                                                  height: 40,
-                                                  child: const Icon(Icons.location_pin, color: Colors.red, size: 36),
-                                                ),
-                                              ]
+                                          Marker(
+                                            point: LatLng(currentLat, currentLon),
+                                            width: 40,
+                                            height: 40,
+                                            child: const Icon(Icons.location_pin, color: Colors.red, size: 36),
+                                          ),
+                                        ]
                                             : [],
                                         onTap: (point) {
                                           final detectedBrgy = BarangayResolver.resolveBarangay(point);
@@ -3576,7 +3562,7 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
                           final locInput = addressCtrl.text.trim().toLowerCase();
                           if (locInput.isNotEmpty) {
                             final existingAddress = service.farmers.any((f) =>
-                                f.barangay.toLowerCase() == selectedBrgy.toLowerCase() &&
+                            f.barangay.toLowerCase() == selectedBrgy.toLowerCase() &&
                                 service.farms.any((farm) => (farm.farmerId == f.id || farm.farmerName == f.profileName) && farm.locationName.trim().toLowerCase() == locInput));
                             if (existingAddress) {
                               setDialogState(() {
@@ -3811,15 +3797,15 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
 
     final primaryCropOptions = isTagalog
         ? [
-            {'key': 'Rice', 'label': '🌾 Palay (Rice)'},
-            {'key': 'Gulay', 'label': '🥬 Gulay (Vegetables)'},
-            {'key': 'Prutas', 'label': '🍎 Prutas (Fruits)'},
-          ]
+      {'key': 'Rice', 'label': '🌾 Palay (Rice)'},
+      {'key': 'Gulay', 'label': '🥬 Gulay (Vegetables)'},
+      {'key': 'Prutas', 'label': '🍎 Prutas (Fruits)'},
+    ]
         : [
-            {'key': 'Rice', 'label': '🌾 Rice'},
-            {'key': 'Gulay', 'label': '🥬 Vegetables'},
-            {'key': 'Prutas', 'label': '🍎 Fruits'},
-          ];
+      {'key': 'Rice', 'label': '🌾 Rice'},
+      {'key': 'Gulay', 'label': '🥬 Vegetables'},
+      {'key': 'Prutas', 'label': '🍎 Fruits'},
+    ];
 
     final Set<String> selectedPrimaryCrops = <String>{}; // Empty start
 
@@ -4169,13 +4155,13 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
                                         initialZoom: 14,
                                         markers: latCtrl.text.isNotEmpty && lonCtrl.text.isNotEmpty
                                             ? [
-                                                Marker(
-                                                  point: LatLng(currentLat, currentLon),
-                                                  width: 40,
-                                                  height: 40,
-                                                  child: const Icon(Icons.location_pin, color: Colors.red, size: 36),
-                                                ),
-                                              ]
+                                          Marker(
+                                            point: LatLng(currentLat, currentLon),
+                                            width: 40,
+                                            height: 40,
+                                            child: const Icon(Icons.location_pin, color: Colors.red, size: 36),
+                                          ),
+                                        ]
                                             : [],
                                         onTap: (point) {
                                           final detectedBrgy = BarangayResolver.resolveBarangay(point);
@@ -4535,16 +4521,17 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
   // MODULE 3: HISTORICAL DATA
   // ==========================================
   Widget _buildHistoricalDataView(
-    AccountService service,
-    AdminLocale locale,
-    bool isDark,
-    Color cardBg,
-    Color textColor,
-    Color subtextColor,
-    Color cardBorder,
-    Color primaryAccent,
-  ) {
+      AccountService service,
+      AdminLocale locale,
+      bool isDark,
+      Color cardBg,
+      Color textColor,
+      Color subtextColor,
+      Color cardBorder,
+      Color primaryAccent,
+      ) {
     final records = service.historicalRecords;
+    final marketPrices = service.marketPriceRecords;
 
     return Padding(
       padding: const EdgeInsets.all(22),
@@ -4566,102 +4553,291 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
                 spacing: 8,
                 children: [
                   _buildExportImportButtons(context, 'Historical Data', locale, service),
-                  ElevatedButton.icon(
-                    onPressed: () => _showUploadCsvDialog(context, service),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: primaryAccent,
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  if (_historicalTableIndex == 0)
+                    ElevatedButton.icon(
+                      onPressed: () => _showUploadCsvDialog(context, service),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: primaryAccent,
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      ),
+                      icon: const Icon(Icons.upload_file_rounded),
+                      label: Text(locale.uploadMaoRecord, style: const TextStyle(fontWeight: FontWeight.bold)),
+                    )
+                  else
+                    ElevatedButton.icon(
+                      onPressed: () => _showAddMarketPriceDialog(context, service),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF16A34A),
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      ),
+                      icon: const Icon(Icons.add_circle_rounded),
+                      label: Text(locale.isTagalog ? 'Magdagdag ng Presyo' : 'Add Market Price', style: const TextStyle(fontWeight: FontWeight.bold)),
                     ),
-                    icon: const Icon(Icons.upload_file_rounded),
-                    label: Text(locale.uploadMaoRecord, style: const TextStyle(fontWeight: FontWeight.bold)),
-                  ),
                 ],
               ),
             ],
           ),
           const SizedBox(height: 16),
 
-          // PREDICTED PRICE & MARKET TRENDS CARD
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: isDark ? const Color(0xFF132338) : const Color(0xFFE0F2FE),
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: isDark ? const Color(0xFF1E3A8A) : const Color(0xFFBAE6FD)),
+          // TABLE SELECTION TOGGLE (2 TABLES)
+          SizedBox(
+            width: double.infinity,
+            child: SegmentedButton<int>(
+              showSelectedIcon: false,
+              segments: [
+                ButtonSegment(
+                  value: 0,
+                  label: Text(locale.isTagalog ? '1. Rekord ng Produksyon at Presyo (MAO)' : '1. Production & Price Dataset'),
+                  icon: const Icon(Icons.table_chart_rounded),
+                ),
+                ButtonSegment(
+                  value: 1,
+                  label: Text(locale.isTagalog ? '2. Presyo sa Palengke at Bukid (Gulay)' : '2. Vegetable Market & Farmgate Prices'),
+                  icon: const Icon(Icons.storefront_rounded),
+                ),
+              ],
+              selected: {_historicalTableIndex},
+              onSelectionChanged: (set) => setState(() => _historicalTableIndex = set.first),
             ),
+          ),
+          const SizedBox(height: 16),
+
+          // TABLE 1: PRODUCTION & PRICE DATASET
+          if (_historicalTableIndex == 0) ...[
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: isDark ? const Color(0xFF132338) : const Color(0xFFE0F2FE),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: isDark ? const Color(0xFF1E3A8A) : const Color(0xFFBAE6FD)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      const Icon(Icons.trending_up_rounded, color: Color(0xFF0284C7), size: 20),
+                      const SizedBox(width: 8),
+                      Text(
+                        locale.isTagalog ? '💡 Prediksyon ng Presyo at Market Trends (Price Forecasting)' : '💡 Price Prediction & Market Trend Analytics',
+                        style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: textColor),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Wrap(
+                    spacing: 12,
+                    runSpacing: 10,
+                    children: [
+                      _buildPredictionChip('Rice', service, isDark, textColor, subtextColor),
+                      _buildPredictionChip('Gulay', service, isDark, textColor, subtextColor),
+                      _buildPredictionChip('Prutas', service, isDark, textColor, subtextColor),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+            Expanded(
+              child: Container(
+                decoration: BoxDecoration(
+                  color: cardBg,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: cardBorder),
+                ),
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.vertical,
+                  child: SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: DataTable(
+                      columns: [
+                        DataColumn(label: Text('Crop', style: TextStyle(color: subtextColor))),
+                        DataColumn(label: Text('Year', style: TextStyle(color: subtextColor))),
+                        DataColumn(label: Text('Month', style: TextStyle(color: subtextColor))),
+                        DataColumn(label: Text('Barangay', style: TextStyle(color: subtextColor))),
+                        DataColumn(label: Text('Production (MT)', style: TextStyle(color: subtextColor))),
+                        DataColumn(label: Text('Price / kg (PHP)', style: TextStyle(color: subtextColor))),
+                        DataColumn(label: Text('Uploaded By', style: TextStyle(color: subtextColor))),
+                        DataColumn(label: Text('Actions', style: TextStyle(color: subtextColor))),
+                      ],
+                      rows: records.map((r) => DataRow(
+                        cells: [
+                          DataCell(Text(r.crop, style: TextStyle(fontWeight: FontWeight.bold, color: textColor))),
+                          DataCell(Text('${r.year}', style: TextStyle(color: textColor))),
+                          DataCell(Text(r.month, style: TextStyle(color: textColor))),
+                          DataCell(Text(r.barangay, style: TextStyle(color: textColor))),
+                          DataCell(Text('${r.productionMT} MT', style: TextStyle(color: textColor))),
+                          DataCell(Text('₱${r.pricePerKg.toStringAsFixed(2)}', style: TextStyle(color: textColor))),
+                          DataCell(Text(r.uploadedBy, style: TextStyle(color: textColor))),
+                          DataCell(
+                            IconButton(
+                              icon: const Icon(Icons.delete_rounded, color: Colors.redAccent, size: 20),
+                              onPressed: () => _confirmDeleteHistoricalRecord(context, service, r, locale),
+                            ),
+                          ),
+                        ],
+                      )).toList(),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ] else ...[
+            // TABLE 2: VEGETABLE MARKET & FARMGATE PRICES WITH DATES
+            Expanded(
+              child: Container(
+                decoration: BoxDecoration(
+                  color: cardBg,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: cardBorder),
+                ),
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.vertical,
+                  child: SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: DataTable(
+                      columns: [
+                        DataColumn(label: Text(locale.isTagalog ? 'Gulay / Pananim' : 'Vegetable / Crop', style: TextStyle(color: subtextColor))),
+                        DataColumn(label: Text(locale.isTagalog ? 'Presyo sa Bukid (Farmgate)' : 'Farmgate Price (₱/kg)', style: TextStyle(color: subtextColor))),
+                        DataColumn(label: Text(locale.isTagalog ? 'Presyo sa Palengke (Market)' : 'Market Price (₱/kg)', style: TextStyle(color: subtextColor))),
+                        DataColumn(label: Text(locale.isTagalog ? 'Tubo / Spread' : 'Spread', style: TextStyle(color: subtextColor))),
+                        DataColumn(label: Text(locale.isTagalog ? 'Petsa' : 'Date', style: TextStyle(color: subtextColor))),
+                        DataColumn(label: Text(locale.isTagalog ? 'Lokasyon ng Palengke' : 'Market Location', style: TextStyle(color: subtextColor))),
+                        DataColumn(label: Text(locale.isTagalog ? 'Nag-upload' : 'Uploaded By', style: TextStyle(color: subtextColor))),
+                        DataColumn(label: Text(locale.isTagalog ? 'Aksyon' : 'Actions', style: TextStyle(color: subtextColor))),
+                      ],
+                      rows: marketPrices.map((m) {
+                        final spread = m.marketPrice - m.farmgatePrice;
+                        final spreadPct = m.farmgatePrice > 0 ? (spread / m.farmgatePrice) * 100 : 0.0;
+                        return DataRow(
+                          cells: [
+                            DataCell(Text(m.vegetable, style: TextStyle(fontWeight: FontWeight.bold, color: textColor))),
+                            DataCell(Text('₱${m.farmgatePrice.toStringAsFixed(2)}', style: const TextStyle(fontWeight: FontWeight.w700, color: Color(0xFF16A34A)))),
+                            DataCell(Text('₱${m.marketPrice.toStringAsFixed(2)}', style: const TextStyle(fontWeight: FontWeight.w700, color: Color(0xFF0284C7)))),
+                            DataCell(Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                              decoration: BoxDecoration(color: Colors.amber.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(8)),
+                              child: Text('+₱${spread.toStringAsFixed(2)} (${spreadPct.toStringAsFixed(0)}%)', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.amber)),
+                            )),
+                            DataCell(Text(DateFormat('MMM dd, yyyy').format(m.date), style: TextStyle(color: textColor))),
+                            DataCell(Text(m.marketLocation, style: TextStyle(color: textColor))),
+                            DataCell(Text(m.uploadedBy, style: TextStyle(color: textColor))),
+                            DataCell(
+                              IconButton(
+                                icon: const Icon(Icons.delete_rounded, color: Colors.redAccent, size: 20),
+                                onPressed: () => _confirmDeleteMarketPriceRecord(context, service, m, locale),
+                              ),
+                            ),
+                          ],
+                        );
+                      }).toList(),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  void _showAddMarketPriceDialog(BuildContext context, AccountService service) {
+    final vegCtrl = TextEditingController(text: 'Talong (Eggplant)');
+    final farmgateCtrl = TextEditingController(text: '45.00');
+    final marketCtrl = TextEditingController(text: '70.00');
+    final locationCtrl = TextEditingController(text: 'Pagsanjan Public Market');
+    DateTime selectedDate = DateTime.now();
+
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: Text(service.isTagalog ? 'Magdagdag ng Presyo ng Gulay' : 'Add Vegetable Market & Farmgate Price'),
+          content: SingleChildScrollView(
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
               children: [
+                TextField(controller: vegCtrl, decoration: InputDecoration(labelText: service.isTagalog ? 'Pangalan ng Gulay' : 'Vegetable Name')),
+                const SizedBox(height: 8),
+                TextField(controller: farmgateCtrl, keyboardType: TextInputType.number, decoration: InputDecoration(labelText: service.isTagalog ? 'Presyo sa Bukid / Farmgate (₱/kg)' : 'Farmgate Price (₱/kg)')),
+                const SizedBox(height: 8),
+                TextField(controller: marketCtrl, keyboardType: TextInputType.number, decoration: InputDecoration(labelText: service.isTagalog ? 'Presyo sa Palengke / Market Price (₱/kg)' : 'Market Price (₱/kg)')),
+                const SizedBox(height: 8),
+                TextField(controller: locationCtrl, decoration: InputDecoration(labelText: service.isTagalog ? 'Lokasyon ng Palengke' : 'Market Location')),
+                const SizedBox(height: 12),
                 Row(
                   children: [
-                    const Icon(Icons.trending_up_rounded, color: Color(0xFF0284C7), size: 20),
-                    const SizedBox(width: 8),
-                    Text(
-                      locale.isTagalog ? '💡 Prediksyon ng Presyo at Market Trends (Price Forecasting)' : '💡 Price Prediction & Market Trend Analytics',
-                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: textColor),
+                    Text(service.isTagalog ? 'Petsa: ' : 'Date: ', style: const TextStyle(fontWeight: FontWeight.bold)),
+                    TextButton(
+                      onPressed: () async {
+                        final picked = await showDatePicker(
+                          context: context,
+                          initialDate: selectedDate,
+                          firstDate: DateTime(2020),
+                          lastDate: DateTime(2030),
+                        );
+                        if (picked != null) {
+                          setDialogState(() => selectedDate = picked);
+                        }
+                      },
+                      child: Text(DateFormat('yyyy-MM-dd').format(selectedDate)),
                     ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                Wrap(
-                  spacing: 12,
-                  runSpacing: 10,
-                  children: [
-                    _buildPredictionChip('Rice', service, isDark, textColor, subtextColor),
-                    _buildPredictionChip('Gulay', service, isDark, textColor, subtextColor),
-                    _buildPredictionChip('Prutas', service, isDark, textColor, subtextColor),
                   ],
                 ),
               ],
             ),
           ),
-          const SizedBox(height: 16),
-
-          Expanded(
-            child: Container(
-              decoration: BoxDecoration(
-                color: cardBg,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: cardBorder),
-              ),
-              child: SingleChildScrollView(
-                scrollDirection: Axis.vertical,
-                child: SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: DataTable(
-                    columns: [
-                      DataColumn(label: Text('Crop', style: TextStyle(color: subtextColor))),
-                      DataColumn(label: Text('Year', style: TextStyle(color: subtextColor))),
-                      DataColumn(label: Text('Month', style: TextStyle(color: subtextColor))),
-                      DataColumn(label: Text('Barangay', style: TextStyle(color: subtextColor))),
-                      DataColumn(label: Text('Production (MT)', style: TextStyle(color: subtextColor))),
-                      DataColumn(label: Text('Price / kg (PHP)', style: TextStyle(color: subtextColor))),
-                      DataColumn(label: Text('Uploaded By', style: TextStyle(color: subtextColor))),
-                      DataColumn(label: Text('Actions', style: TextStyle(color: subtextColor))),
-                    ],
-                    rows: records.map((r) => DataRow(
-                      cells: [
-                        DataCell(Text(r.crop, style: TextStyle(fontWeight: FontWeight.bold, color: textColor))),
-                        DataCell(Text('${r.year}', style: TextStyle(color: textColor))),
-                        DataCell(Text(r.month, style: TextStyle(color: textColor))),
-                        DataCell(Text(r.barangay, style: TextStyle(color: textColor))),
-                        DataCell(Text('${r.productionMT} MT', style: TextStyle(color: textColor))),
-                        DataCell(Text('₱${r.pricePerKg.toStringAsFixed(2)}', style: TextStyle(color: textColor))),
-                        DataCell(Text(r.uploadedBy, style: TextStyle(color: textColor))),
-                        DataCell(
-                          IconButton(
-                            icon: const Icon(Icons.delete_rounded, color: Colors.redAccent, size: 20),
-                            onPressed: () => _confirmDeleteHistoricalRecord(context, service, r, locale),
-                          ),
-                        ),
-                      ],
-                    )).toList(),
-                  ),
-                ),
-              ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context), child: Text(service.isTagalog ? 'Kanselahin' : 'Cancel')),
+            ElevatedButton(
+              onPressed: () {
+                final veg = vegCtrl.text.trim();
+                final fg = double.tryParse(farmgateCtrl.text) ?? 0.0;
+                final mp = double.tryParse(marketCtrl.text) ?? 0.0;
+                if (veg.isNotEmpty) {
+                  service.addMarketPriceRecord(
+                    vegetable: veg,
+                    farmgatePrice: fg,
+                    marketPrice: mp,
+                    date: selectedDate,
+                    marketLocation: locationCtrl.text.trim().isEmpty ? 'Pagsanjan Public Market' : locationCtrl.text.trim(),
+                    uploadedBy: service.activeUserName,
+                  );
+                  Navigator.pop(context);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text(service.isTagalog ? 'Matagumpay na naidagdag ang presyo!' : 'Market price record added successfully!')),
+                  );
+                }
+              },
+              child: Text(service.isTagalog ? 'I-save' : 'Save'),
             ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _confirmDeleteMarketPriceRecord(BuildContext context, AccountService service, MarketPriceRecord record, AdminLocale locale) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(locale.isTagalog ? 'Burahin ang Presyo?' : 'Delete Market Price Record?'),
+        content: Text(locale.isTagalog ? 'Sigurado ka bang gusto mong burahin ang rekord para sa ${record.vegetable}?' : 'Are you sure you want to delete the record for ${record.vegetable}?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: Text(locale.isTagalog ? 'Kanselahin' : 'Cancel')),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent, foregroundColor: Colors.white),
+            onPressed: () {
+              service.deleteMarketPriceRecord(record.id);
+              Navigator.pop(context);
+              ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(locale.isTagalog ? 'Nabura na ang rekord' : 'Record deleted')));
+            },
+            child: Text(locale.isTagalog ? 'Burahin' : 'Delete'),
           ),
         ],
       ),
@@ -4784,15 +4960,15 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
   // MODULE 4: INTERACTIVE MAP
   // ==========================================
   Widget _buildInteractiveMapView(
-    AccountService service,
-    AdminLocale locale,
-    bool isDark,
-    Color cardBg,
-    Color textColor,
-    Color subtextColor,
-    Color cardBorder,
-    Color primaryAccent,
-  ) {
+      AccountService service,
+      AdminLocale locale,
+      bool isDark,
+      Color cardBg,
+      Color textColor,
+      Color subtextColor,
+      Color cardBorder,
+      Color primaryAccent,
+      ) {
     final List<FarmRecord> displayedFarms = [];
     final mapMarkers = <Marker>[];
     final Map<String, int> barangayPinCounts = {};
@@ -4821,7 +4997,7 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
       final pinLng = center.longitude + (radius * math.sin(angle));
 
       FarmRecord originalFarm = service.farms.firstWhere(
-        (f) => f.farmerId == farmer.id || f.farmerName == farmer.profileName,
+            (f) => f.farmerId == farmer.id || f.farmerName == farmer.profileName,
         orElse: () => FarmRecord(
           id: 'FARM_AUTO_${farmer.id}',
           farmerId: farmer.id,
@@ -4997,87 +5173,87 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
                                 hintStyle: TextStyle(color: subtextColor, fontSize: 11),
                                 prefixIcon: Icon(Icons.search_rounded, color: subtextColor, size: 18),
                                 isDense: true,
-                              filled: true,
-                              fillColor: cardBg,
-                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: cardBorder)),
-                              contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                                filled: true,
+                                fillColor: cardBg,
+                                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: cardBorder)),
+                                contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                              ),
                             ),
-                          ),
-                          const SizedBox(height: 8),
+                            const SizedBox(height: 8),
 
-                          // BARANGAY DROPDOWN FILTER WITH AUTO-ZOOM TO SELECTED BARANGAY
-                          DropdownButtonFormField<String>(
-                            initialValue: _selectedBarangayFilter,
-                            dropdownColor: cardBg,
-                            style: TextStyle(color: textColor, fontSize: 12),
-                            decoration: InputDecoration(
-                              labelText: locale.isTagalog ? 'Filter Barangay (Auto-Zoom)' : 'Filter Barangay (Auto-Zoom)',
-                              labelStyle: TextStyle(color: subtextColor, fontSize: 11),
-                              isDense: true,
-                              filled: true,
-                              fillColor: cardBg,
-                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: cardBorder)),
-                              contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                            // BARANGAY DROPDOWN FILTER WITH AUTO-ZOOM TO SELECTED BARANGAY
+                            DropdownButtonFormField<String>(
+                              initialValue: _selectedBarangayFilter,
+                              dropdownColor: cardBg,
+                              style: TextStyle(color: textColor, fontSize: 12),
+                              decoration: InputDecoration(
+                                labelText: locale.isTagalog ? 'Filter Barangay (Auto-Zoom)' : 'Filter Barangay (Auto-Zoom)',
+                                labelStyle: TextStyle(color: subtextColor, fontSize: 11),
+                                isDense: true,
+                                filled: true,
+                                fillColor: cardBg,
+                                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide(color: cardBorder)),
+                                contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                              ),
+                              items: ['All', ...AccountService.pagsanjanBarangays].map((b) => DropdownMenuItem(value: b, child: Text(b, style: const TextStyle(fontSize: 12)))).toList(),
+                              onChanged: (val) {
+                                final brgy = val ?? 'All';
+                                setState(() {
+                                  _selectedBarangayFilter = brgy;
+                                  if (brgy == 'All') {
+                                    _mapCenter = const LatLng(14.2790, 121.4550);
+                                    _mapZoom = 13.5;
+                                  } else {
+                                    _mapCenter = _getBarangayCenter(brgy, service.farms);
+                                    _mapZoom = 15.8; // Auto zoom in directly to the barangay!
+                                  }
+                                });
+                              },
                             ),
-                            items: ['All', ...AccountService.pagsanjanBarangays].map((b) => DropdownMenuItem(value: b, child: Text(b, style: const TextStyle(fontSize: 12)))).toList(),
-                            onChanged: (val) {
-                              final brgy = val ?? 'All';
-                              setState(() {
-                                _selectedBarangayFilter = brgy;
-                                if (brgy == 'All') {
-                                  _mapCenter = const LatLng(14.2790, 121.4550);
-                                  _mapZoom = 13.5;
-                                } else {
-                                  _mapCenter = _getBarangayCenter(brgy, service.farms);
-                                  _mapZoom = 15.8; // Auto zoom in directly to the barangay!
-                                }
-                              });
-                            },
-                          ),
-                          const SizedBox(height: 10),
+                            const SizedBox(height: 10),
 
-                          // FARMER LIST ITEMS
-                          Expanded(
-                            child: displayedFarms.isEmpty
-                                ? Center(
-                                    child: Text(
-                                      locale.isTagalog ? 'Walang sakahang nahanap' : 'No farms found',
-                                      style: TextStyle(fontSize: 12, color: subtextColor),
+                            // FARMER LIST ITEMS
+                            Expanded(
+                              child: displayedFarms.isEmpty
+                                  ? Center(
+                                child: Text(
+                                  locale.isTagalog ? 'Walang sakahang nahanap' : 'No farms found',
+                                  style: TextStyle(fontSize: 12, color: subtextColor),
+                                ),
+                              )
+                                  : ListView.builder(
+                                itemCount: displayedFarms.length,
+                                itemBuilder: (context, index) {
+                                  final farm = displayedFarms[index];
+                                  return Card(
+                                    color: isDark ? const Color(0xFF1E2E4A) : Colors.white,
+                                    margin: const EdgeInsets.only(bottom: 8),
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                    child: ListTile(
+                                      leading: Container(
+                                        padding: const EdgeInsets.all(6),
+                                        decoration: const BoxDecoration(color: Color(0xFFDBEAFE), shape: BoxShape.circle),
+                                        child: const Icon(Icons.location_on_rounded, color: Color(0xFF0056B3), size: 18),
+                                      ),
+                                      title: Text(farm.farmerName, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: textColor)),
+                                      subtitle: Text('${farm.cropType} • Brgy. ${farm.barangay}', style: TextStyle(color: subtextColor, fontSize: 11)),
+                                      onTap: () {
+                                        // Auto zoom map to the selected farmer's farm area
+                                        setState(() {
+                                          _mapCenter = LatLng(farm.latitude, farm.longitude);
+                                          _mapZoom = 16.0;
+                                        });
+                                        _showFarmWeatherModal(context, farm, locale, cardBg, textColor);
+                                      },
                                     ),
-                                  )
-                                : ListView.builder(
-                                    itemCount: displayedFarms.length,
-                                    itemBuilder: (context, index) {
-                                      final farm = displayedFarms[index];
-                                      return Card(
-                                        color: isDark ? const Color(0xFF1E2E4A) : Colors.white,
-                                        margin: const EdgeInsets.only(bottom: 8),
-                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                                        child: ListTile(
-                                          leading: Container(
-                                            padding: const EdgeInsets.all(6),
-                                            decoration: const BoxDecoration(color: Color(0xFFDBEAFE), shape: BoxShape.circle),
-                                            child: const Icon(Icons.location_on_rounded, color: Color(0xFF0056B3), size: 18),
-                                          ),
-                                          title: Text(farm.farmerName, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: textColor)),
-                                          subtitle: Text('${farm.cropType} • Brgy. ${farm.barangay}', style: TextStyle(color: subtextColor, fontSize: 11)),
-                                          onTap: () {
-                                            // Auto zoom map to the selected farmer's farm area
-                                            setState(() {
-                                              _mapCenter = LatLng(farm.latitude, farm.longitude);
-                                              _mapZoom = 16.0;
-                                            });
-                                            _showFarmWeatherModal(context, farm, locale, cardBg, textColor);
-                                          },
-                                        ),
-                                      );
-                                    },
-                                  ),
-                          ),
-                        ],
+                                  );
+                                },
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
-                  ),
                 ],
               ),
             ),
@@ -5088,12 +5264,12 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
   }
 
   void _showFarmWeatherModal(
-    BuildContext context,
-    FarmRecord farm,
-    AdminLocale locale,
-    Color cardBg,
-    Color textColor,
-  ) {
+      BuildContext context,
+      FarmRecord farm,
+      AdminLocale locale,
+      Color cardBg,
+      Color textColor,
+      ) {
     final isTagalog = locale.isTagalog;
 
     showDialog(
@@ -5294,21 +5470,21 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
   // MODULE 5: FARMER ACCOUNTS
   // ==========================================
   Widget _buildFarmerAccountsView(
-    AccountService service,
-    AdminLocale locale,
-    bool isDark,
-    Color cardBg,
-    Color textColor,
-    Color subtextColor,
-    Color cardBorder,
-    Color primaryAccent,
-  ) {
+      AccountService service,
+      AdminLocale locale,
+      bool isDark,
+      Color cardBg,
+      Color textColor,
+      Color subtextColor,
+      Color cardBorder,
+      Color primaryAccent,
+      ) {
     final farmers = service.farmers.where((f) {
       final query = _searchQuery.toLowerCase();
       final matchesQuery = query.isEmpty ||
-                           f.profileName.toLowerCase().contains(query) ||
-                           f.username.toLowerCase().contains(query) ||
-                           f.organization.toLowerCase().contains(query);
+          f.profileName.toLowerCase().contains(query) ||
+          f.username.toLowerCase().contains(query) ||
+          f.organization.toLowerCase().contains(query);
       final matchesBarangay = _selectedBarangayFilter == 'All' || f.barangay.trim().toLowerCase() == _selectedBarangayFilter.trim().toLowerCase();
       return matchesQuery && matchesBarangay;
     }).toList();
@@ -5483,15 +5659,15 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
   // MODULE 6: ADMIN ACCOUNTS
   // ==========================================
   Widget _buildAdminAccountsView(
-    AccountService service,
-    AdminLocale locale,
-    bool isDark,
-    Color cardBg,
-    Color textColor,
-    Color subtextColor,
-    Color cardBorder,
-    Color primaryAccent,
-  ) {
+      AccountService service,
+      AdminLocale locale,
+      bool isDark,
+      Color cardBg,
+      Color textColor,
+      Color subtextColor,
+      Color cardBorder,
+      Color primaryAccent,
+      ) {
     final staff = service.adminStaffList;
 
     return Padding(
@@ -5611,15 +5787,15 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
   // MODULE 7: ACTIVITY LOG
   // ==========================================
   Widget _buildActivityLogView(
-    AccountService service,
-    AdminLocale locale,
-    bool isDark,
-    Color cardBg,
-    Color textColor,
-    Color subtextColor,
-    Color cardBorder,
-    Color primaryAccent,
-  ) {
+      AccountService service,
+      AdminLocale locale,
+      bool isDark,
+      Color cardBg,
+      Color textColor,
+      Color subtextColor,
+      Color cardBorder,
+      Color primaryAccent,
+      ) {
     final logs = service.activityLogs;
 
     return Padding(
@@ -5749,4 +5925,3 @@ class _TriangleClipper extends CustomClipper<Path> {
   @override
   bool shouldReclip(CustomClipper<Path> oldClipper) => false;
 }
-

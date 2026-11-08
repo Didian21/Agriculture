@@ -179,6 +179,64 @@ class AccountService extends ChangeNotifier {
   // 3. HISTORICAL DATA (Production & Price)
   final List<HistoricalDataRecord> _historicalRecords = [];
 
+  // 3b. MARKET & FARMGATE PRICES FOR VEGETABLES
+  final List<MarketPriceRecord> _marketPriceRecords = [
+    MarketPriceRecord(
+      id: 'MP001',
+      vegetable: 'Talong (Eggplant)',
+      farmgatePrice: 45.0,
+      marketPrice: 70.0,
+      date: DateTime.now().subtract(const Duration(days: 1)),
+      marketLocation: 'Pagsanjan Public Market',
+      uploadedBy: 'Ms. Jellie Masacayan',
+    ),
+    MarketPriceRecord(
+      id: 'MP002',
+      vegetable: 'Kamatis (Tomato)',
+      farmgatePrice: 50.0,
+      marketPrice: 85.0,
+      date: DateTime.now().subtract(const Duration(days: 1)),
+      marketLocation: 'Pagsanjan Public Market',
+      uploadedBy: 'Ms. Jellie Masacayan',
+    ),
+    MarketPriceRecord(
+      id: 'MP003',
+      vegetable: 'Okra',
+      farmgatePrice: 35.0,
+      marketPrice: 55.0,
+      date: DateTime.now().subtract(const Duration(days: 2)),
+      marketLocation: 'Pagsanjan Public Market',
+      uploadedBy: 'Engr. Arnel Cruz',
+    ),
+    MarketPriceRecord(
+      id: 'MP004',
+      vegetable: 'Pechay (Tagalog)',
+      farmgatePrice: 40.0,
+      marketPrice: 65.0,
+      date: DateTime.now().subtract(const Duration(days: 2)),
+      marketLocation: 'Pagsanjan Public Market',
+      uploadedBy: 'Clara Gonzales',
+    ),
+    MarketPriceRecord(
+      id: 'MP005',
+      vegetable: 'Sitaw (Yardlong Bean)',
+      farmgatePrice: 45.0,
+      marketPrice: 75.0,
+      date: DateTime.now().subtract(const Duration(days: 3)),
+      marketLocation: 'Pagsanjan Public Market',
+      uploadedBy: 'Ms. Jellie Masacayan',
+    ),
+    MarketPriceRecord(
+      id: 'MP006',
+      vegetable: 'Ampalaya (Bitter Gourd)',
+      farmgatePrice: 60.0,
+      marketPrice: 90.0,
+      date: DateTime.now().subtract(const Duration(days: 3)),
+      marketLocation: 'Pagsanjan Public Market',
+      uploadedBy: 'Engr. Arnel Cruz',
+    ),
+  ];
+
   // 4. CROP PLANTING REQUIREMENTS
   final List<CropPlantingReq> _cropRequirements = [
     CropPlantingReq(
@@ -304,6 +362,7 @@ class AccountService extends ChangeNotifier {
   List<Farmer> get farmers => List.unmodifiable(_farmers);
   List<FarmRecord> get farms => List.unmodifiable(_farms);
   List<HistoricalDataRecord> get historicalRecords => List.unmodifiable(_historicalRecords);
+  List<MarketPriceRecord> get marketPriceRecords => List.unmodifiable(_marketPriceRecords);
   List<CropPlantingReq> get cropRequirements => List.unmodifiable(_cropRequirements);
   List<AdminStaff> get adminStaffList => List.unmodifiable(_adminStaffList);
   List<ActivityLogItem> get activityLogs => List.unmodifiable(_activityLogs);
@@ -745,6 +804,43 @@ class AccountService extends ChangeNotifier {
       } catch (e) {
         debugPrint('Supabase delete error (historical): $e');
       }
+    }
+  }
+
+  // MARKET & FARMGATE PRICES CRUD
+  Future<void> addMarketPriceRecord({
+    required String vegetable,
+    required double farmgatePrice,
+    required double marketPrice,
+    required DateTime date,
+    String marketLocation = 'Pagsanjan Public Market',
+    required String uploadedBy,
+  }) async {
+    final newId = 'MP${DateTime.now().millisecondsSinceEpoch}';
+    final author = uploadedBy.isEmpty ? activeUserName : uploadedBy;
+    _marketPriceRecords.insert(
+      0,
+      MarketPriceRecord(
+        id: newId,
+        vegetable: vegetable,
+        farmgatePrice: farmgatePrice,
+        marketPrice: marketPrice,
+        date: date,
+        marketLocation: marketLocation,
+        uploadedBy: author,
+      ),
+    );
+    logActivity(author, 'UPLOAD', 'Market Prices', 'Added market & farmgate price for $vegetable (Farmgate: ₱$farmgatePrice, Market: ₱$marketPrice)');
+    notifyListeners();
+  }
+
+  Future<void> deleteMarketPriceRecord(String id) async {
+    final index = _marketPriceRecords.indexWhere((m) => m.id == id);
+    if (index != -1) {
+      final veg = _marketPriceRecords[index].vegetable;
+      _marketPriceRecords.removeAt(index);
+      logActivity(activeUserName, 'DELETE', 'Market Prices', 'Deleted market price record for $veg');
+      notifyListeners();
     }
   }
 

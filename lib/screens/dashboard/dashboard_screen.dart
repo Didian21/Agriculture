@@ -304,7 +304,6 @@ class _DashboardAppBar extends StatelessWidget implements PreferredSizeWidget {
   Widget build(BuildContext context) {
     final t = AppLocalizations.of(context)!;
     return AppBar(
-      automaticallyImplyLeading: false,
       titleSpacing: 16,
       title: Row(children: [
         const PagriLogo(height: 38),
