@@ -33,7 +33,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   // (outlined icon, filled icon) - ang mga label ay galing sa ARB
   static const _icons = [
-    (Icons.wb_sunny_outlined, Icons.wb_sunny_rounded),
+    (Icons.home_outlined, Icons.home_rounded),
     (Icons.landscape_outlined, Icons.landscape_rounded),
     (Icons.insights_outlined, Icons.insights_rounded),
     (Icons.sell_outlined, Icons.sell_rounded),
@@ -81,39 +81,28 @@ class _DashboardScreenState extends State<DashboardScreen> {
     // Ipasa sa dashboard ang mga pananim na inilagay ng farmer sa DSS (presyo, hula).
     final farm = context.watch<FarmInputProvider>();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) p.syncPlantings(farm.plantings);
+      if (mounted) {
+        p.syncPlantings(farm.plantings);
+        if (p.profile != null) {
+          farm.setFarmerInfo(
+            id: p.profile!.id,
+            name: p.profile!.name,
+            brgy: p.profile!.barangay,
+            location: p.profile!.locationName,
+          );
+        }
+      }
     });
 
     final t = AppLocalizations.of(context)!;
-    final labels = [t.navWeather, t.navFarm, t.navDss, t.navPrices, t.navSettings];
+    final labels = [t.navHome, t.navFarm, t.navDss, t.navPrices, t.navSettings];
 
     return Stack(children: [
       const Positioned.fill(child: FieldBackground()),
       Scaffold(
         backgroundColor: Colors.transparent,
         appBar: _DashboardAppBar(p: p),
-        body: Column(
-          children: [
-            if (p.weatherStale)
-              Container(
-                width: double.infinity,
-                color: Colors.orange.shade800,
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-                child: const Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.offline_bolt_rounded, color: Colors.white, size: 16),
-                    SizedBox(width: 8),
-                    Text(
-                      'Offline Mode - Viewing last cached update',
-                      style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
-                    ),
-                  ],
-                ),
-              ),
-            Expanded(child: _buildBody(p, t)),
-          ],
-        ),
+        body: _buildBody(p, t),
         bottomNavigationBar: _FloatingNav(
           selected: _tab,
           icons: _icons,

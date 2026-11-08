@@ -1432,4 +1432,171 @@ class AppLocalizationsEn extends AppLocalizations {
   String farmHistoryDeleteBody(String crop) {
     return 'The $crop harvest record will be removed.';
   }
+
+  @override
+  String get farmWxTitle => 'Weather until harvest';
+
+  @override
+  String get farmWxNoHarvest => 'Weather for the next 2 weeks';
+
+  @override
+  String get farmWxPast => 'Past';
+
+  @override
+  String get farmWxForecast => 'Forecast';
+
+  @override
+  String get farmWxTypical => 'Based on last year';
+
+  @override
+  String get farmWxToday => 'Today';
+
+  @override
+  String get farmWxHarvest => 'Harvest';
+
+  @override
+  String get farmWxLoadFail => 'Weather unavailable';
+
+  @override
+  String get farmWxRetry => 'Try again';
+
+  @override
+  String get farmWxNote =>
+      'The forecast only covers 16 days. Later dates are based on last year\'s weather.';
+
+  @override
+  String get weatherOutlookTitle => 'Weather for the next 2 months';
+
+  @override
+  String get weatherOutlookSub =>
+      'The first 16 days are accurate. The rest is only an estimate based on last year\'s weather.';
+
+  @override
+  String get cropsTitle => 'All Commodities';
+
+  @override
+  String get cropsSub => 'Tap a crop for the full guide';
+
+  @override
+  String get cropsAll => 'All';
+
+  @override
+  String get cropsGroupVeg => 'Vegetables';
+
+  @override
+  String get cropsGroupFruit => 'Fruits';
+
+  @override
+  String get cropsGroupRoot => 'Roots & Spices';
+
+  @override
+  String get cropsGroupGrain => 'Rice & Coconut';
+
+  @override
+  String get cropsSeeAll => 'See all';
+
+  @override
+  String get cropsSeeLess => 'Show less';
+
+  @override
+  String get cropAlsoCalled => 'Also called';
+
+  @override
+  String get cropStorable => 'Can be stored';
+
+  @override
+  String get cropSecBestTime => 'Best time to plant';
+
+  @override
+  String get cropBest => 'Best';
+
+  @override
+  String get cropPossible => 'Possible';
+
+  @override
+  String get cropSecHarvest => 'Time to harvest';
+
+  @override
+  String get cropDaysWord => 'days';
+
+  @override
+  String get cropMonthsWord => 'months';
+
+  @override
+  String get cropHarvestYearly =>
+      'Takes years before the first fruit, then gives harvests every year.';
+
+  @override
+  String get cropSecYield => 'Estimated yield';
+
+  @override
+  String get cropPerHa => 'per hectare';
+
+  @override
+  String get cropUnitKg => 'kg';
+
+  @override
+  String get cropUnitTali => 'bundles';
+
+  @override
+  String get cropUnitPc => 'pieces';
+
+  @override
+  String get cropSecPrice => 'Farmgate price';
+
+  @override
+  String get cropNoPrice => 'No price data yet.';
+
+  @override
+  String get cropPriceReal =>
+      'Data from the Municipal Agriculture Office (May-November).';
+
+  @override
+  String get cropPriceEstimate => 'Estimate only; no official data yet.';
+
+  @override
+  String get cropBestSell => 'Highest prices in';
+
+  @override
+  String get cropIncomeHa => 'Estimated income per hectare (before costs)';
+
+  @override
+  String get cropSecGuide => 'Farming guide';
+
+  @override
+  String get cropSecDiversify => 'Why try this crop?';
+
+  @override
+  String get cropInsPlantNow => 'A good time to plant this month.';
+
+  @override
+  String get cropInsNextPlant => 'Next good planting month:';
+
+  @override
+  String get cropInsFast => 'Quick harvest; can be grown several times a year.';
+
+  @override
+  String get cropInsPriceStable => 'Prices stay fairly steady.';
+
+  @override
+  String get cropInsPriceVolatile => 'Prices swing a lot; plan when to sell.';
+
+  @override
+  String get cropInsIncomeHigh =>
+      'One of the higher estimated incomes per hectare.';
+
+  @override
+  String get cropInsStorable =>
+      'Can be stored, so you can wait for a better price.';
+
+  @override
+  String get cropDiversifyNote =>
+      'Grow different crops so you do not depend on one price or season.';
+
+  @override
+  String get cropEstNote =>
+      'Numbers and tips are a guide only. Please verify with the Municipal Agriculture Office.';
+
+  @override
+  String get cropTryDss => 'Try in DSS';
 }

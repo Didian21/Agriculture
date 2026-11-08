@@ -14,7 +14,7 @@ import '../../../services/dss_service.dart';
 import '../../../widgets/common_widgets.dart';
 import '../../../widgets/crop_image.dart';
 import '../../../widgets/dss_common.dart';
-import '../dss/farm_map_card.dart';
+import '../../../widgets/harvest_weather_strip.dart';
 
 /// "My Farm": lahat ng makikita rito ay galing sa mga tanim na inilagay ng magsasaka sa DSS tab.
 class FarmTab extends StatelessWidget {
@@ -63,10 +63,6 @@ class FarmTab extends StatelessWidget {
       _ProfileCard(profile: profile, crops: farm.cropIds),
       const SizedBox(height: 16),
       _LandCard(total: totalLand, plantings: plantings, sqm: farm.useSqm, onSetUnit: farm.setUseSqm, onOpenDss: onOpenDss),
-      const SizedBox(height: 16),
-      SectionTitle(icon: Icons.map_rounded, text: t.dssFarmMap, subtitle: t.dssFarmMapSub),
-      const SizedBox(height: 10),
-      FarmMapCard(input: farm),
       const SizedBox(height: 16),
       if (plantings.isNotEmpty) ...[
         Row(children: [
@@ -330,7 +326,7 @@ class _LandCard extends StatelessWidget {
                 tween: Tween(begin: 0, end: sqm ? total * 10000 : total),
                 duration: const Duration(milliseconds: 1000),
                 curve: Curves.easeOutCubic,
-                builder: (_, v, _) => FittedBox(
+                builder: (context, v, child) => FittedBox(
                   fit: BoxFit.scaleDown,
                   alignment: Alignment.centerLeft,
                   child: Text(sqm ? DssFmt.group(v.round()) : v.toStringAsFixed(2),
@@ -452,7 +448,8 @@ class _CropPlotCard extends StatelessWidget {
     final percent = totalHectares > 0 ? DssFmt.percent(planting.hectares / totalHectares * 100) : '0';
     final g = guide;
     final facts = factsFor(crop);
-    final est = context.watch<FarmInputProvider>().estimateFor(planting);
+    final farm = context.watch<FarmInputProvider>();
+    final est = farm.estimateFor(planting);
     final days = DateTime.now().difference(planting.plantedOn).inDays;
     final notYet = days < 0;
     final ready = facts != null && facts.hasHarvestDays && days >= facts.minDays!;
@@ -506,21 +503,21 @@ class _CropPlotCard extends StatelessWidget {
               ),
           ]),
           const SizedBox(height: 12),
-          _InfoRow(icon: Icons.event_rounded, text: t.plantedOn(planting.plantedOn)),
-          if (facts != null && facts.hasHarvestDays && !notYet) ...[
-            const SizedBox(height: 8),
-            _GrowthBar(days: days, minDays: facts.minDays!, maxDays: facts.maxDays!),
-          ],
+          HarvestWeatherStrip(
+            plantedOn: planting.plantedOn,
+            harvestFrom: est?.harvestFrom,
+            harvestTo: est?.harvestTo,
+            lat: farm.lat,
+            lon: farm.lon,
+            summary: [
+              t.plantedOn(planting.plantedOn),
+              if (facts != null && facts.hasHarvestDays && !notYet) t.farmDaysGrown(days, facts.maxDays!),
+              if (est?.harvestFrom != null && est?.harvestTo != null)
+                t.farmExpectedHarvest(
+                    '${DateFormat.MMMd(locale).format(est!.harvestFrom!)} - ${DateFormat.MMMd(locale).format(est.harvestTo!)}'),
+            ].join('\n'),
+          ),
           if (est != null) ...[
-            if (est.harvestFrom != null && est.harvestTo != null) ...[
-              const SizedBox(height: 8),
-              _InfoRow(
-                icon: Icons.agriculture_rounded,
-                text: t.farmExpectedHarvest(
-                  '${DateFormat.MMMd(locale).format(est.harvestFrom!)} - ${DateFormat.MMMd(locale).format(est.harvestTo!)}',
-                ),
-              ),
-            ],
             const SizedBox(height: 10),
             _EstimateBox(est: est),
           ],
@@ -545,38 +542,6 @@ class _CropPlotCard extends StatelessWidget {
   }
 }
 
-class _GrowthBar extends StatelessWidget {
-  final int days;
-  final int minDays;
-  final int maxDays;
-  const _GrowthBar({required this.days, required this.minDays, required this.maxDays});
-
-  @override
-  Widget build(BuildContext context) {
-    final t = AppLocalizations.of(context)!;
-    final value = (days / maxDays).clamp(0.0, 1.0);
-    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Row(children: [
-        Expanded(
-          child: Text(t.farmDaysGrown(days, maxDays), style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 13)),
-        ),
-        Text('${(value * 100).round()}%', style: const TextStyle(fontWeight: FontWeight.w900, color: AppColors.leaf)),
-      ]),
-      const SizedBox(height: 6),
-      ClipRRect(
-        borderRadius: BorderRadius.circular(6),
-        child: LinearProgressIndicator(
-          value: value,
-          minHeight: 9,
-          backgroundColor: AppColors.mint,
-          color: days >= minDays ? AppColors.leaf : AppColors.fern,
-        ),
-      ),
-    ]);
-  }
-}
-
-/// Tantiyang ani at kita ng tanim na ito (galing sa DSS).
 class _EstimateBox extends StatelessWidget {
   final HarvestEstimate est;
   const _EstimateBox({required this.est});
@@ -645,21 +610,6 @@ class _Mini extends StatelessWidget {
         child: Text(value, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w900, color: AppColors.leaf)),
       ),
       Text(sub, style: const TextStyle(fontSize: 10.5, color: AppColors.muted), maxLines: 1, overflow: TextOverflow.ellipsis),
-    ]);
-  }
-}
-
-class _InfoRow extends StatelessWidget {
-  final IconData icon;
-  final String text;
-  const _InfoRow({required this.icon, required this.text});
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Icon(icon, size: 16, color: AppColors.soil),
-      const SizedBox(width: 8),
-      Expanded(child: Text(text, style: const TextStyle(fontSize: 13, height: 1.3))),
     ]);
   }
 }

@@ -36,12 +36,17 @@ class FarmerRepository {
         double landSize = 2.5;
         List<String> cropTypes = ['Rice', 'Eggplant', 'Tomato'];
 
+        String locationName = 'Barangay $barangay';
         final farmRes = await SupabaseService.client.from('farms').select().eq('farmer_id', farmerId);
         if (farmRes.isNotEmpty) {
           landSize = 0;
           cropTypes = [];
           for (var farm in farmRes) {
             landSize += (farm['land_area_hectares'] as num?)?.toDouble() ?? 0.0;
+            final loc = farm['location_name'] as String?;
+            if (loc != null && loc.isNotEmpty && !loc.startsWith('Pagsanjan Farm')) {
+              locationName = loc;
+            }
             final crop = farm['crop_type'] as String?;
             if (crop != null && !cropTypes.contains(crop)) {
               cropTypes.add(crop);
@@ -51,8 +56,10 @@ class FarmerRepository {
         }
 
         return FarmerProfile(
+          id: farmerId,
           name: profileName,
           barangay: barangay,
+          locationName: locationName,
           landSizeHectares: landSize,
           cropTypes: cropTypes.isEmpty ? ['Rice', 'Eggplant', 'Tomato'] : cropTypes,
         );
@@ -60,8 +67,10 @@ class FarmerRepository {
     } catch (_) {}
 
     return const FarmerProfile(
+      id: '',
       name: 'Magsasaka ng Pagsanjan',
       barangay: 'Barangay Biñan',
+      locationName: 'Barangay Biñan',
       landSizeHectares: 2.5,
       cropTypes: ['Rice', 'Eggplant', 'Tomato'],
     );

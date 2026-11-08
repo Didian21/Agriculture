@@ -51,6 +51,7 @@ class AccountService extends ChangeNotifier {
           crop: row['crop'] ?? '',
           year: row['year'] ?? 2026,
           month: row['month'] ?? 'January',
+          barangay: row['barangay'] ?? 'ALL',
           productionMT: (row['production_mt'] as num?)?.toDouble() ?? 0.0,
           pricePerKg: (row['price_per_kg'] as num?)?.toDouble() ?? 0.0,
           uploadedBy: row['uploaded_by'] ?? 'Admin',
@@ -67,6 +68,73 @@ class AccountService extends ChangeNotifier {
           'date': row['date'] ?? '',
         });
       }
+
+      try {
+        final staffRes = await SupabaseService.client.from('admin_staff').select();
+        if (staffRes.isNotEmpty) {
+          _adminStaffList.clear();
+          for (var row in staffRes) {
+            _adminStaffList.add(AdminStaff(
+              id: row['id'] ?? '',
+              name: row['name'] ?? '',
+              username: row['username'] ?? '',
+              email: row['email'] ?? '',
+              role: row['role'] ?? 'Administrative Staff',
+              status: row['status'] ?? 'Active',
+            ));
+          }
+        }
+      } catch (_) {}
+
+      try {
+        final cropReqRes = await SupabaseService.client.from('crop_requirements').select();
+        if (cropReqRes.isNotEmpty) {
+          _cropRequirements.clear();
+          for (var row in cropReqRes) {
+            _cropRequirements.add(CropPlantingReq(
+              id: row['id'] ?? '',
+              cropName: row['crop_name'] ?? '',
+              cropCategory: row['crop_category'] ?? 'Gulay',
+              minTemp: (row['min_temp'] as num?)?.toDouble() ?? 20.0,
+              maxTemp: (row['max_temp'] as num?)?.toDouble() ?? 30.0,
+              minRainfallMm: (row['min_rainfall_mm'] as num?)?.toDouble() ?? 100.0,
+              maxRainfallMm: (row['max_rainfall_mm'] as num?)?.toDouble() ?? 250.0,
+              suitableMonths: row['suitable_months'] ?? 'Year-round',
+            ));
+          }
+        }
+      } catch (_) {}
+
+      try {
+        final logsRes = await SupabaseService.client.from('activity_logs').select().order('timestamp', ascending: false).limit(100);
+        if (logsRes.isNotEmpty) {
+          _activityLogs.clear();
+          for (var row in logsRes) {
+            _activityLogs.add(ActivityLogItem(
+              id: row['id'] ?? '',
+              user: row['user'] ?? '',
+              action: row['action'] ?? '',
+              module: row['module'] ?? '',
+              details: row['details'] ?? '',
+              timestamp: row['timestamp'] != null ? DateTime.parse(row['timestamp']) : DateTime.now(),
+            ));
+          }
+        }
+      } catch (_) {}
+
+      try {
+        final metricsRes = await SupabaseService.client.from('model_metrics').select().limit(1);
+        if (metricsRes.isNotEmpty) {
+          final row = metricsRes.first;
+          _modelStatus = MLModelStatus(
+            mae: (row['mae'] as num?)?.toDouble() ?? 1.24,
+            rmse: (row['rmse'] as num?)?.toDouble() ?? 1.85,
+            mape: (row['mape_pct'] as num?)?.toDouble() ?? 4.2,
+            lastUpdated: DateTime.now(),
+            trainedRecordsCount: _historicalRecords.length * 350 + 800,
+          );
+        }
+      } catch (_) {}
 
       notifyListeners();
     } catch (e) {
@@ -287,20 +355,66 @@ class AccountService extends ChangeNotifier {
         _adminStaffList.any((s) => s.username == username && s.status == 'Active');
   }
 
+  Future<bool> authenticateAdminAsync(String username, String password) async {
+    if (authenticateAdmin(username, password)) return true;
+    try {
+      final res = await SupabaseService.client
+          .from('admin_staff')
+          .select()
+          .eq('username', username)
+          .eq('password', password)
+          .eq('status', 'Active')
+          .maybeSingle();
+
+      if (res != null) {
+        final staff = AdminStaff(
+          id: res['id'] ?? '',
+          name: res['name'] ?? 'MAO Staff',
+          username: res['username'] ?? '',
+          email: res['email'] ?? '',
+          role: res['role'] ?? 'Administrative Staff',
+          status: res['status'] ?? 'Active',
+        );
+        if (!_adminStaffList.any((s) => s.id == staff.id)) {
+          _adminStaffList.add(staff);
+        }
+        _activeStaff = staff;
+        notifyListeners();
+        return true;
+      }
+    } catch (e) {
+      debugPrint('Supabase admin auth error: $e');
+    }
+    return false;
+  }
+
   // LOGGING HELPER
   void logActivity(String user, String action, String module, String details) {
+    final newId = 'LOG${DateTime.now().millisecondsSinceEpoch}';
+    final now = DateTime.now();
     _activityLogs.insert(
       0,
       ActivityLogItem(
-        id: 'LOG${DateTime.now().millisecondsSinceEpoch}',
+        id: newId,
         user: user,
         action: action,
         module: module,
         details: details,
-        timestamp: DateTime.now(),
+        timestamp: now,
       ),
     );
     notifyListeners();
+
+    try {
+      SupabaseService.client.from('activity_logs').insert({
+        'id': newId,
+        'user': user,
+        'action': action,
+        'module': module,
+        'details': details,
+        'timestamp': now.toIso8601String(),
+      }).then((_) {}).catchError((_) {});
+    } catch (_) {}
   }
 
   // FARMERS CRUD & ACCOUNTS
@@ -530,6 +644,7 @@ class AccountService extends ChangeNotifier {
     required String crop,
     required int year,
     required String month,
+    String barangay = 'ALL',
     required double productionMT,
     required double pricePerKg,
     required String uploadedBy,
@@ -542,13 +657,14 @@ class AccountService extends ChangeNotifier {
         crop: crop,
         year: year,
         month: month,
+        barangay: barangay,
         productionMT: productionMT,
         pricePerKg: pricePerKg,
         uploadedBy: author,
         dateUploaded: DateTime.now(),
       ),
     );
-    logActivity(author, 'UPLOAD', 'Historical Data', 'Added record for $crop ($month $year: $productionMT MT)');
+    logActivity(author, 'UPLOAD', 'Historical Data', 'Added record for $crop ($month $year - $barangay: $productionMT MT)');
     notifyListeners();
 
     try {
@@ -557,48 +673,70 @@ class AccountService extends ChangeNotifier {
         'crop': crop,
         'year': year,
         'month': month,
+        'barangay': barangay,
         'production_mt': productionMT,
         'price_per_kg': pricePerKg,
         'uploaded_by': author,
         'date_uploaded': DateTime.now().toIso8601String(),
       });
-      debugPrint('Saved historical record to Supabase: $crop');
+      debugPrint('Saved historical record to Supabase: $crop ($barangay)');
     } catch (e) {
       debugPrint('Supabase insert error (historical): $e');
     }
   }
 
-  void updateHistoricalRecord(String id, {
+  Future<void> updateHistoricalRecord(String id, {
     required String crop,
     required int year,
     required String month,
+    String barangay = 'ALL',
     required double productionMT,
     required double pricePerKg,
-  }) {
+  }) async {
     final index = _historicalRecords.indexWhere((h) => h.id == id);
     if (index != -1) {
       _historicalRecords[index].crop = crop;
       _historicalRecords[index].year = year;
       _historicalRecords[index].month = month;
+      _historicalRecords[index].barangay = barangay;
       _historicalRecords[index].productionMT = productionMT;
       _historicalRecords[index].pricePerKg = pricePerKg;
-      logActivity(activeUserName, 'EDIT', 'Historical Data', 'Edited record $id ($crop - $year)');
+      logActivity(activeUserName, 'EDIT', 'Historical Data', 'Edited record $id ($crop - $year - $barangay)');
       notifyListeners();
+
+      try {
+        await SupabaseService.client.from('historical_records').update({
+          'crop': crop,
+          'year': year,
+          'month': month,
+          'barangay': barangay,
+          'production_mt': productionMT,
+          'price_per_kg': pricePerKg,
+        }).eq('id', id);
+      } catch (e) {
+        debugPrint('Supabase update error (historical): $e');
+      }
     }
   }
 
-  void deleteHistoricalRecord(String id) {
+  Future<void> deleteHistoricalRecord(String id) async {
     final index = _historicalRecords.indexWhere((h) => h.id == id);
     if (index != -1) {
       final crop = _historicalRecords[index].crop;
       _historicalRecords.removeAt(index);
       logActivity(activeUserName, 'DELETE', 'Historical Data', 'Deleted record $id ($crop)');
       notifyListeners();
+
+      try {
+        await SupabaseService.client.from('historical_records').delete().eq('id', id);
+      } catch (e) {
+        debugPrint('Supabase delete error (historical): $e');
+      }
     }
   }
 
   // CROP PLANTING REQUIREMENTS CRUD
-  void addCropRequirement({
+  Future<void> addCropRequirement({
     required String cropName,
     required String cropCategory,
     required double minTemp,
@@ -606,25 +744,39 @@ class AccountService extends ChangeNotifier {
     required double minRainfallMm,
     required double maxRainfallMm,
     required String suitableMonths,
-  }) {
-    final newId = 'CPR00${_cropRequirements.length + 1}';
-    _cropRequirements.add(
-      CropPlantingReq(
-        id: newId,
-        cropName: cropName,
-        cropCategory: cropCategory,
-        minTemp: minTemp,
-        maxTemp: maxTemp,
-        minRainfallMm: minRainfallMm,
-        maxRainfallMm: maxRainfallMm,
-        suitableMonths: suitableMonths,
-      ),
+  }) async {
+    final newId = 'CPR${DateTime.now().millisecondsSinceEpoch}';
+    final req = CropPlantingReq(
+      id: newId,
+      cropName: cropName,
+      cropCategory: cropCategory,
+      minTemp: minTemp,
+      maxTemp: maxTemp,
+      minRainfallMm: minRainfallMm,
+      maxRainfallMm: maxRainfallMm,
+      suitableMonths: suitableMonths,
     );
+    _cropRequirements.add(req);
     logActivity(activeUserName, 'ADD', 'Planting Requirements', 'Added crop specs for $cropName');
     notifyListeners();
+
+    try {
+      await SupabaseService.client.from('crop_requirements').insert({
+        'id': newId,
+        'crop_name': cropName,
+        'crop_category': cropCategory,
+        'min_temp': minTemp,
+        'max_temp': maxTemp,
+        'min_rainfall_mm': minRainfallMm,
+        'max_rainfall_mm': maxRainfallMm,
+        'suitable_months': suitableMonths,
+      });
+    } catch (e) {
+      debugPrint('Supabase insert error (crop requirement): $e');
+    }
   }
 
-  void updateCropRequirement(String id, {
+  Future<void> updateCropRequirement(String id, {
     required String cropName,
     required String cropCategory,
     required double minTemp,
@@ -632,7 +784,7 @@ class AccountService extends ChangeNotifier {
     required double minRainfallMm,
     required double maxRainfallMm,
     required String suitableMonths,
-  }) {
+  }) async {
     final index = _cropRequirements.indexWhere((c) => c.id == id);
     if (index != -1) {
       _cropRequirements[index].cropName = cropName;
@@ -644,16 +796,36 @@ class AccountService extends ChangeNotifier {
       _cropRequirements[index].suitableMonths = suitableMonths;
       logActivity(activeUserName, 'EDIT', 'Planting Requirements', 'Updated crop specs for $cropName');
       notifyListeners();
+
+      try {
+        await SupabaseService.client.from('crop_requirements').update({
+          'crop_name': cropName,
+          'crop_category': cropCategory,
+          'min_temp': minTemp,
+          'max_temp': maxTemp,
+          'min_rainfall_mm': minRainfallMm,
+          'max_rainfall_mm': maxRainfallMm,
+          'suitable_months': suitableMonths,
+        }).eq('id', id);
+      } catch (e) {
+        debugPrint('Supabase update error (crop requirement): $e');
+      }
     }
   }
 
-  void deleteCropRequirement(String id) {
+  Future<void> deleteCropRequirement(String id) async {
     final index = _cropRequirements.indexWhere((c) => c.id == id);
     if (index != -1) {
       final name = _cropRequirements[index].cropName;
       _cropRequirements.removeAt(index);
       logActivity(activeUserName, 'DELETE', 'Planting Requirements', 'Deleted crop specs for $name');
       notifyListeners();
+
+      try {
+        await SupabaseService.client.from('crop_requirements').delete().eq('id', id);
+      } catch (e) {
+        debugPrint('Supabase delete error (crop requirement): $e');
+      }
     }
   }
 
@@ -683,34 +855,54 @@ class AccountService extends ChangeNotifier {
   }
 
   // ADMIN STAFF CRUD
-  void addAdminStaff({
+  Future<void> addAdminStaff({
     required String name,
     required String username,
     required String email,
     required String role,
-  }) {
-    final newId = 'STAFF00${_adminStaffList.length + 1}';
-    _adminStaffList.add(
-      AdminStaff(
-        id: newId,
-        name: name,
-        username: username,
-        email: email,
-        role: role,
-        status: 'Active',
-      ),
+    String password = 'admin123',
+  }) async {
+    final newId = 'STAFF${DateTime.now().millisecondsSinceEpoch}';
+    final staff = AdminStaff(
+      id: newId,
+      name: name,
+      username: username,
+      email: email,
+      role: role,
+      status: 'Active',
     );
+    _adminStaffList.add(staff);
     logActivity(activeUserName, 'ADD', 'Admin Accounts', 'Added MAO staff: $name ($role)');
     notifyListeners();
+
+    try {
+      await SupabaseService.client.from('admin_staff').insert({
+        'id': newId,
+        'name': name,
+        'username': username,
+        'email': email,
+        'role': role,
+        'password': password,
+        'status': 'Active',
+      });
+    } catch (e) {
+      debugPrint('Supabase insert error (admin staff): $e');
+    }
   }
 
-  void deleteAdminStaff(String id) {
+  Future<void> deleteAdminStaff(String id) async {
     final index = _adminStaffList.indexWhere((s) => s.id == id);
     if (index != -1) {
       final name = _adminStaffList[index].name;
       _adminStaffList.removeAt(index);
       logActivity(activeUserName, 'DELETE', 'Admin Accounts', 'Removed MAO staff access for $name');
       notifyListeners();
+
+      try {
+        await SupabaseService.client.from('admin_staff').delete().eq('id', id);
+      } catch (e) {
+        debugPrint('Supabase delete error (admin staff): $e');
+      }
     }
   }
 

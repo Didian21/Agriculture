@@ -66,6 +66,11 @@ class DssService {
   /// Mababa kapag maraming ani sa buwang iyon, mataas kapag kakaunti.
   static List<double> priceIndex(String crop) {
     final f = factsFor(crop);
+    // May totoong presyo (Excel ng MAO): index = presyo ng buwan / karaniwang presyo. Walang datos (Dis-Abr) = 100.
+    if (f != null && f.monthlyPrice != null && f.basePrice != null) {
+      final avg = f.basePrice!;
+      return [for (var m = 1; m <= 12; m++) f.hasRealPrice(m) ? f.priceForMonth(m)! / avg * 100 : 100.0];
+    }
     if (f == null || !f.hasHarvestDays) return List.filled(12, 100.0);
     final supply = List.filled(12, 0.0);
     for (final m in f.bestMonths) {
@@ -85,8 +90,10 @@ class DssService {
 
   /// Presyo (PHP/kg) kada buwan = halimbawang presyo x index. Null kung walang halimbawang presyo.
   static List<double>? monthlyPrices(String crop) {
-    final base = factsFor(crop)?.basePrice;
-    if (base == null) return null;
+    final f = factsFor(crop);
+    if (f == null || f.basePrice == null) return null;
+    if (f.monthlyPrice != null) return [for (var m = 1; m <= 12; m++) f.priceForMonth(m)!];
+    final base = f.basePrice!;
     return [for (final i in priceIndex(crop)) base * i / 100];
   }
 
@@ -105,7 +112,11 @@ class DssService {
   /// Mga buwan na mataas ang inaasahang presyo (pinakamataas na 3).
   static List<int> bestSellMonths(String crop) {
     final idx = priceIndex(crop);
-    final order = List.generate(12, (i) => i)..sort((a, b) => idx[b].compareTo(idx[a]));
+    final f = factsFor(crop);
+    // Kung totoong datos ang presyo, mga buwang may datos lang ang ikukumpara.
+    final real = f?.monthlyPrice != null;
+    final order = List.generate(12, (i) => i).where((i) => !real || f!.hasRealPrice(i + 1)).toList()
+      ..sort((a, b) => idx[b].compareTo(idx[a]));
     final top = order.take(3).map((e) => e + 1).toList()..sort();
     return top;
   }

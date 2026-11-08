@@ -1444,4 +1444,173 @@ class AppLocalizationsTl extends AppLocalizations {
   String farmHistoryDeleteBody(String crop) {
     return 'Buburahin ang talaan ng ani ng $crop.';
   }
+
+  @override
+  String get farmWxTitle => 'Panahon hanggang anihan';
+
+  @override
+  String get farmWxNoHarvest => 'Panahon sa susunod na 2 linggo';
+
+  @override
+  String get farmWxPast => 'Nakalipas';
+
+  @override
+  String get farmWxForecast => 'Forecast';
+
+  @override
+  String get farmWxTypical => 'Batay sa nakaraang taon';
+
+  @override
+  String get farmWxToday => 'Ngayon';
+
+  @override
+  String get farmWxHarvest => 'Anihan';
+
+  @override
+  String get farmWxLoadFail => 'Hindi makuha ang panahon';
+
+  @override
+  String get farmWxRetry => 'Subukan muli';
+
+  @override
+  String get farmWxNote =>
+      'Hanggang 16 araw lang ang forecast. Ang mga susunod na petsa ay batay sa panahon noong nakaraang taon.';
+
+  @override
+  String get weatherOutlookTitle => 'Panahon sa susunod na 2 buwan';
+
+  @override
+  String get weatherOutlookSub =>
+      'Tumpak ang unang 16 araw. Ang natitira ay tantiya lang batay sa panahon noong nakaraang taon.';
+
+  @override
+  String get cropsTitle => 'Mga Pananim';
+
+  @override
+  String get cropsSub => 'Pindutin ang pananim para sa buong gabay';
+
+  @override
+  String get cropsAll => 'Lahat';
+
+  @override
+  String get cropsGroupVeg => 'Gulay';
+
+  @override
+  String get cropsGroupFruit => 'Prutas';
+
+  @override
+  String get cropsGroupRoot => 'Ugat at Pampalasa';
+
+  @override
+  String get cropsGroupGrain => 'Palay at Niyog';
+
+  @override
+  String get cropsSeeAll => 'Tingnan lahat';
+
+  @override
+  String get cropsSeeLess => 'Itiklop';
+
+  @override
+  String get cropAlsoCalled => 'Tinatawag ding';
+
+  @override
+  String get cropStorable => 'Kayang iimbak';
+
+  @override
+  String get cropSecBestTime => 'Pinakamagandang panahon ng pagtatanim';
+
+  @override
+  String get cropBest => 'Pinakamainam';
+
+  @override
+  String get cropPossible => 'Puwede';
+
+  @override
+  String get cropSecHarvest => 'Tagal bago maani';
+
+  @override
+  String get cropDaysWord => 'araw';
+
+  @override
+  String get cropMonthsWord => 'buwan';
+
+  @override
+  String get cropHarvestYearly =>
+      'Mga taon ang hinihintay bago mamunga, pero pagkatapos nito ay may ani taon-taon.';
+
+  @override
+  String get cropSecYield => 'Tantiyang ani';
+
+  @override
+  String get cropPerHa => 'bawat ektarya';
+
+  @override
+  String get cropUnitKg => 'kg';
+
+  @override
+  String get cropUnitTali => 'tali';
+
+  @override
+  String get cropUnitPc => 'piraso';
+
+  @override
+  String get cropSecPrice => 'Presyo sa bukid (farmgate)';
+
+  @override
+  String get cropNoPrice => 'Wala pang datos ng presyo.';
+
+  @override
+  String get cropPriceReal =>
+      'Datos mula sa Tanggapan ng Pambayang Agrikultura (Mayo-Nobyembre).';
+
+  @override
+  String get cropPriceEstimate => 'Tantiya lang; wala pang opisyal na datos.';
+
+  @override
+  String get cropBestSell => 'Pinakamataas ang presyo sa';
+
+  @override
+  String get cropIncomeHa => 'Tantiyang kita bawat ektarya (bago ang gastos)';
+
+  @override
+  String get cropSecGuide => 'Gabay sa pagtatanim';
+
+  @override
+  String get cropSecDiversify => 'Bakit subukan ito?';
+
+  @override
+  String get cropInsPlantNow => 'Magandang itanim ngayong buwan.';
+
+  @override
+  String get cropInsNextPlant => 'Susunod na magandang buwan ng pagtatanim:';
+
+  @override
+  String get cropInsFast =>
+      'Mabilis ang ani; puwedeng ilang beses sa isang taon.';
+
+  @override
+  String get cropInsPriceStable => 'Medyo matatag ang presyo sa buong panahon.';
+
+  @override
+  String get cropInsPriceVolatile =>
+      'Pabago-bago ang presyo; magplano kung kailan magbebenta.';
+
+  @override
+  String get cropInsIncomeHigh =>
+      'Isa sa mga may mataas na tantiyang kita bawat ektarya.';
+
+  @override
+  String get cropInsStorable =>
+      'Kayang iimbak, kaya puwedeng hintayin ang mas mataas na presyo.';
+
+  @override
+  String get cropDiversifyNote =>
+      'Magtanim ng iba\'t ibang pananim para hindi umasa sa iisang presyo at panahon.';
+
+  @override
+  String get cropEstNote =>
+      'Gabay lamang ang mga bilang at payo. Ipa-verify sa Tanggapan ng Pambayang Agrikultura.';
+
+  @override
+  String get cropTryDss => 'Subukan sa DSS';
 }

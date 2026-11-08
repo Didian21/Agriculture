@@ -23,15 +23,18 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
     super.dispose();
   }
 
-  void _login() {
+  Future<void> _login() async {
     final username = _usernameCtrl.text.trim();
     final password = _passwordCtrl.text.trim();
 
     final accountService = Provider.of<AccountService>(context, listen: false);
-    if (accountService.authenticateAdmin(username, password)) {
-      Navigator.pushReplacement(
+    final isValid = await accountService.authenticateAdminAsync(username, password);
+    if (!mounted) return;
+    if (isValid) {
+      Navigator.pushAndRemoveUntil(
         context,
         MaterialPageRoute(builder: (context) => const AdminDashboard()),
+        (route) => false,
       );
     } else {
       ScaffoldMessenger.of(context).showSnackBar(

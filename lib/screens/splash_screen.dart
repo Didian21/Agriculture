@@ -49,12 +49,13 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
           }
         }
 
-        Navigator.of(context).pushReplacement(
+        Navigator.of(context).pushAndRemoveUntil(
           PageRouteBuilder(
             pageBuilder: (context, anim, secondAnim) => targetScreen,
             transitionsBuilder: (context, anim, secondaryAnim, child) => FadeTransition(opacity: anim, child: child),
             transitionDuration: const Duration(milliseconds: 600),
           ),
+          (route) => false,
         );
       }
     });

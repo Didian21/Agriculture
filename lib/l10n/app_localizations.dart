@@ -2515,6 +2515,324 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'The {crop} harvest record will be removed.'**
   String farmHistoryDeleteBody(String crop);
+
+  /// No description provided for @farmWxTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Weather until harvest'**
+  String get farmWxTitle;
+
+  /// No description provided for @farmWxNoHarvest.
+  ///
+  /// In en, this message translates to:
+  /// **'Weather for the next 2 weeks'**
+  String get farmWxNoHarvest;
+
+  /// No description provided for @farmWxPast.
+  ///
+  /// In en, this message translates to:
+  /// **'Past'**
+  String get farmWxPast;
+
+  /// No description provided for @farmWxForecast.
+  ///
+  /// In en, this message translates to:
+  /// **'Forecast'**
+  String get farmWxForecast;
+
+  /// No description provided for @farmWxTypical.
+  ///
+  /// In en, this message translates to:
+  /// **'Based on last year'**
+  String get farmWxTypical;
+
+  /// No description provided for @farmWxToday.
+  ///
+  /// In en, this message translates to:
+  /// **'Today'**
+  String get farmWxToday;
+
+  /// No description provided for @farmWxHarvest.
+  ///
+  /// In en, this message translates to:
+  /// **'Harvest'**
+  String get farmWxHarvest;
+
+  /// No description provided for @farmWxLoadFail.
+  ///
+  /// In en, this message translates to:
+  /// **'Weather unavailable'**
+  String get farmWxLoadFail;
+
+  /// No description provided for @farmWxRetry.
+  ///
+  /// In en, this message translates to:
+  /// **'Try again'**
+  String get farmWxRetry;
+
+  /// No description provided for @farmWxNote.
+  ///
+  /// In en, this message translates to:
+  /// **'The forecast only covers 16 days. Later dates are based on last year\'s weather.'**
+  String get farmWxNote;
+
+  /// No description provided for @weatherOutlookTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Weather for the next 2 months'**
+  String get weatherOutlookTitle;
+
+  /// No description provided for @weatherOutlookSub.
+  ///
+  /// In en, this message translates to:
+  /// **'The first 16 days are accurate. The rest is only an estimate based on last year\'s weather.'**
+  String get weatherOutlookSub;
+
+  /// No description provided for @cropsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'All Commodities'**
+  String get cropsTitle;
+
+  /// No description provided for @cropsSub.
+  ///
+  /// In en, this message translates to:
+  /// **'Tap a crop for the full guide'**
+  String get cropsSub;
+
+  /// No description provided for @cropsAll.
+  ///
+  /// In en, this message translates to:
+  /// **'All'**
+  String get cropsAll;
+
+  /// No description provided for @cropsGroupVeg.
+  ///
+  /// In en, this message translates to:
+  /// **'Vegetables'**
+  String get cropsGroupVeg;
+
+  /// No description provided for @cropsGroupFruit.
+  ///
+  /// In en, this message translates to:
+  /// **'Fruits'**
+  String get cropsGroupFruit;
+
+  /// No description provided for @cropsGroupRoot.
+  ///
+  /// In en, this message translates to:
+  /// **'Roots & Spices'**
+  String get cropsGroupRoot;
+
+  /// No description provided for @cropsGroupGrain.
+  ///
+  /// In en, this message translates to:
+  /// **'Rice & Coconut'**
+  String get cropsGroupGrain;
+
+  /// No description provided for @cropsSeeAll.
+  ///
+  /// In en, this message translates to:
+  /// **'See all'**
+  String get cropsSeeAll;
+
+  /// No description provided for @cropsSeeLess.
+  ///
+  /// In en, this message translates to:
+  /// **'Show less'**
+  String get cropsSeeLess;
+
+  /// No description provided for @cropAlsoCalled.
+  ///
+  /// In en, this message translates to:
+  /// **'Also called'**
+  String get cropAlsoCalled;
+
+  /// No description provided for @cropStorable.
+  ///
+  /// In en, this message translates to:
+  /// **'Can be stored'**
+  String get cropStorable;
+
+  /// No description provided for @cropSecBestTime.
+  ///
+  /// In en, this message translates to:
+  /// **'Best time to plant'**
+  String get cropSecBestTime;
+
+  /// No description provided for @cropBest.
+  ///
+  /// In en, this message translates to:
+  /// **'Best'**
+  String get cropBest;
+
+  /// No description provided for @cropPossible.
+  ///
+  /// In en, this message translates to:
+  /// **'Possible'**
+  String get cropPossible;
+
+  /// No description provided for @cropSecHarvest.
+  ///
+  /// In en, this message translates to:
+  /// **'Time to harvest'**
+  String get cropSecHarvest;
+
+  /// No description provided for @cropDaysWord.
+  ///
+  /// In en, this message translates to:
+  /// **'days'**
+  String get cropDaysWord;
+
+  /// No description provided for @cropMonthsWord.
+  ///
+  /// In en, this message translates to:
+  /// **'months'**
+  String get cropMonthsWord;
+
+  /// No description provided for @cropHarvestYearly.
+  ///
+  /// In en, this message translates to:
+  /// **'Takes years before the first fruit, then gives harvests every year.'**
+  String get cropHarvestYearly;
+
+  /// No description provided for @cropSecYield.
+  ///
+  /// In en, this message translates to:
+  /// **'Estimated yield'**
+  String get cropSecYield;
+
+  /// No description provided for @cropPerHa.
+  ///
+  /// In en, this message translates to:
+  /// **'per hectare'**
+  String get cropPerHa;
+
+  /// No description provided for @cropUnitKg.
+  ///
+  /// In en, this message translates to:
+  /// **'kg'**
+  String get cropUnitKg;
+
+  /// No description provided for @cropUnitTali.
+  ///
+  /// In en, this message translates to:
+  /// **'bundles'**
+  String get cropUnitTali;
+
+  /// No description provided for @cropUnitPc.
+  ///
+  /// In en, this message translates to:
+  /// **'pieces'**
+  String get cropUnitPc;
+
+  /// No description provided for @cropSecPrice.
+  ///
+  /// In en, this message translates to:
+  /// **'Farmgate price'**
+  String get cropSecPrice;
+
+  /// No description provided for @cropNoPrice.
+  ///
+  /// In en, this message translates to:
+  /// **'No price data yet.'**
+  String get cropNoPrice;
+
+  /// No description provided for @cropPriceReal.
+  ///
+  /// In en, this message translates to:
+  /// **'Data from the Municipal Agriculture Office (May-November).'**
+  String get cropPriceReal;
+
+  /// No description provided for @cropPriceEstimate.
+  ///
+  /// In en, this message translates to:
+  /// **'Estimate only; no official data yet.'**
+  String get cropPriceEstimate;
+
+  /// No description provided for @cropBestSell.
+  ///
+  /// In en, this message translates to:
+  /// **'Highest prices in'**
+  String get cropBestSell;
+
+  /// No description provided for @cropIncomeHa.
+  ///
+  /// In en, this message translates to:
+  /// **'Estimated income per hectare (before costs)'**
+  String get cropIncomeHa;
+
+  /// No description provided for @cropSecGuide.
+  ///
+  /// In en, this message translates to:
+  /// **'Farming guide'**
+  String get cropSecGuide;
+
+  /// No description provided for @cropSecDiversify.
+  ///
+  /// In en, this message translates to:
+  /// **'Why try this crop?'**
+  String get cropSecDiversify;
+
+  /// No description provided for @cropInsPlantNow.
+  ///
+  /// In en, this message translates to:
+  /// **'A good time to plant this month.'**
+  String get cropInsPlantNow;
+
+  /// No description provided for @cropInsNextPlant.
+  ///
+  /// In en, this message translates to:
+  /// **'Next good planting month:'**
+  String get cropInsNextPlant;
+
+  /// No description provided for @cropInsFast.
+  ///
+  /// In en, this message translates to:
+  /// **'Quick harvest; can be grown several times a year.'**
+  String get cropInsFast;
+
+  /// No description provided for @cropInsPriceStable.
+  ///
+  /// In en, this message translates to:
+  /// **'Prices stay fairly steady.'**
+  String get cropInsPriceStable;
+
+  /// No description provided for @cropInsPriceVolatile.
+  ///
+  /// In en, this message translates to:
+  /// **'Prices swing a lot; plan when to sell.'**
+  String get cropInsPriceVolatile;
+
+  /// No description provided for @cropInsIncomeHigh.
+  ///
+  /// In en, this message translates to:
+  /// **'One of the higher estimated incomes per hectare.'**
+  String get cropInsIncomeHigh;
+
+  /// No description provided for @cropInsStorable.
+  ///
+  /// In en, this message translates to:
+  /// **'Can be stored, so you can wait for a better price.'**
+  String get cropInsStorable;
+
+  /// No description provided for @cropDiversifyNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Grow different crops so you do not depend on one price or season.'**
+  String get cropDiversifyNote;
+
+  /// No description provided for @cropEstNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Numbers and tips are a guide only. Please verify with the Municipal Agriculture Office.'**
+  String get cropEstNote;
+
+  /// No description provided for @cropTryDss.
+  ///
+  /// In en, this message translates to:
+  /// **'Try in DSS'**
+  String get cropTryDss;
 }
 
 class _AppLocalizationsDelegate
