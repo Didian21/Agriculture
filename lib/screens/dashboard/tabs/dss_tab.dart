@@ -3,11 +3,13 @@ import 'package:provider/provider.dart';
 
 import '../../../core/crop_data.dart';
 import '../../../core/crop_l10n.dart';
+import '../../../core/crop_names.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../main.dart';
 import '../../../models/farm_planting.dart';
 import '../../../providers/farm_input_provider.dart';
 import '../../../services/dss_service.dart';
+import '../../../widgets/crop_photo.dart';
 import '../../../widgets/common_widgets.dart';
 import '../../../widgets/dss_common.dart';
 import '../../../widgets/planting_graph.dart';
@@ -46,7 +48,7 @@ class DssTab extends StatelessWidget {
       context: context,
       builder: (ctx) => AlertDialog(
         title: Text(t.dssDeleteTitle),
-        content: Text(t.dssDeleteBody(t.cropLabel(p.crop))),
+        content: Text(t.dssDeleteBody(cropNameT(t, p.crop))),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(t.cancel)),
           FilledButton(onPressed: () => Navigator.pop(ctx, true), child: Text(t.dssDelete)),
@@ -247,7 +249,8 @@ class _InputCard extends StatelessWidget {
             children: [
               for (final p in list)
                 ChoiceChip(
-                  label: Text('${t.cropLabel(p.crop)} · ${DssFmt.area(p.hectares, sqm: input.useSqm)}'),
+                  avatar: ClipOval(child: SizedBox(width: 24, height: 24, child: CropPhoto(cropId: p.crop, emojiSize: 13))),
+                  label: Text('${cropNameT(t, p.crop)} · ${DssFmt.area(p.hectares, sqm: input.useSqm)}'),
                   selected: sel?.id == p.id,
                   onSelected: (_) => input.select(p.id),
                 ),
@@ -353,9 +356,9 @@ class _PlantingAdvisory extends StatelessWidget {
     final facts = factsFor(crop)!;
 
     final headline = switch (fit) {
-      PlantFit.best => t.dssFitBest(t.cropLabel(crop)),
-      PlantFit.possible => t.dssFitPossible(t.cropLabel(crop)),
-      PlantFit.avoid => t.dssFitAvoid(t.cropLabel(crop)),
+      PlantFit.best => t.dssFitBest(cropNameT(t, crop)),
+      PlantFit.possible => t.dssFitPossible(cropNameT(t, crop)),
+      PlantFit.avoid => t.dssFitAvoid(cropNameT(t, crop)),
     };
 
     return GlassCard(
@@ -370,11 +373,16 @@ class _PlantingAdvisory extends StatelessWidget {
                 color: _fitColor(fit),
               ),
               const SizedBox(width: 8),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(10),
+                child: SizedBox(width: 38, height: 38, child: CropPhoto(cropId: crop, emojiSize: 20)),
+              ),
+              const SizedBox(width: 8),
               Expanded(child: Text(headline, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 15, color: AppColors.ink))),
             ],
           ),
           const SizedBox(height: 4),
-          Text(t.cropAbout(crop), style: const TextStyle(fontSize: 12.5, color: AppColors.muted, height: 1.35)),
+          Text(cropAboutT(t, crop), style: const TextStyle(fontSize: 12.5, color: AppColors.muted, height: 1.35)),
           const SizedBox(height: 12),
           PlantingGraph(
             crop: crop,
@@ -440,7 +448,7 @@ class _MonthStrip extends StatelessWidget {
                     tween: Tween(begin: 0, end: heightOf?.call(m) ?? 1),
                     duration: Duration(milliseconds: 350 + m * 40),
                     curve: Curves.easeOutCubic,
-                    builder: (_, v, _) => Container(
+                    builder: (_, v, __) => Container(
                       height: 54 * v.clamp(0.12, 1.0),
                       decoration: BoxDecoration(
                         color: builder(m),
@@ -647,7 +655,7 @@ class _RangeBar extends StatelessWidget {
                   tween: Tween(begin: 0, end: pos),
                   duration: const Duration(milliseconds: 700),
                   curve: Curves.easeOutCubic,
-                  builder: (_, v, _) => Positioned(
+                  builder: (_, v, __) => Positioned(
                     left: (c.maxWidth - 18) * v,
                     child: Container(
                       width: 18,
@@ -698,7 +706,7 @@ class _PriceAdvisory extends StatelessWidget {
     final prices = DssService.monthlyPrices(crop);
 
     if (flat) {
-      return GlassCard(padding: const EdgeInsets.all(14), child: Text(t.dssPriceFlat(t.cropLabel(crop))));
+      return GlassCard(padding: const EdgeInsets.all(14), child: Text(t.dssPriceFlat(cropNameT(t, crop))));
     }
 
     final harvestMonth = facts.hasHarvestDays

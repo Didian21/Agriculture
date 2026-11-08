@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../core/crop_l10n.dart';
+import '../core/crop_names.dart';
+import 'crop_photo.dart';
 import '../l10n/app_localizations.dart';
 import '../main.dart';
 import '../providers/farm_input_provider.dart';
@@ -59,10 +61,13 @@ class DssSummaryCard extends StatelessWidget {
         children: [
           Row(
             children: [
-              const IconBubble(icon: Icons.insights_rounded),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(12),
+                child: SizedBox(width: 42, height: 42, child: CropPhoto(cropId: sel.crop, emojiSize: 22)),
+              ),
               const SizedBox(width: 12),
               Expanded(
-                child: Text('${t.dssSummaryTitle}: ${t.cropLabel(sel.crop)}',
+                child: Text('${t.dssSummaryTitle}: ${cropNameT(t, sel.crop)}',
                     style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 15.5, color: AppColors.ink)),
               ),
               Pill(fitText, color),
