@@ -72,11 +72,7 @@ flutter:
     - Pagri.jpg
     - assets/images/pagri_logo.png
     - assets/images/crops/
-    - assets/pagsanan_landuse.geojson
-    - assets/pagsanjan_waterway.geojson
-    - assets/pagsanjanroadway.geojson
-    - assets/pagsanjanmapcipped.geojson
-    - assets/Map/
+    - assets/MAP/
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images

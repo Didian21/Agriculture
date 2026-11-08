@@ -73,7 +73,7 @@ class AccountService extends ChangeNotifier {
       debugPrint('Supabase load error: $e');
     }
   }
-  // Pagsanjan Barangays
+  // Pagsanjan Barangays (All 16 Barangays)
   static const List<String> pagsanjanBarangays = [
     'Anibong',
     'Biñan',
@@ -85,12 +85,22 @@ class AccountService extends ChangeNotifier {
     'Layug',
     'Magdapio',
     'Maulawin',
+    'Pinagsanjan',
     'Poblacion Uno',
     'Poblacion Dos',
+    'Sabang',
     'Sampaloc',
     'San Isidro',
-    'Sabang',
   ];
+
+  static String normalizeBarangay(String input) {
+    final clean = input.trim().toLowerCase();
+    for (final b in pagsanjanBarangays) {
+      if (b.toLowerCase() == clean) return b;
+    }
+    if (input.isEmpty) return 'Biñan';
+    return input[0].toUpperCase() + input.substring(1);
+  }
 
   // 1. FARMERS
   final List<Farmer> _farmers = [];
@@ -314,19 +324,20 @@ class AccountService extends ChangeNotifier {
     required String organization,
     String status = 'Active',
   }) async {
+    final normBrgy = normalizeBarangay(barangay);
     final newId = id ?? 'F${DateTime.now().millisecondsSinceEpoch}';
     final farmer = Farmer(
       id: newId,
       username: username,
       password: password,
       profileName: profileName,
-      barangay: barangay,
+      barangay: normBrgy,
       contactNumber: contactNumber,
       organization: organization,
       status: status,
     );
     _farmers.add(farmer);
-    logActivity(activeUserName, 'ADD', 'Farmer Records', 'Added farmer $profileName ($barangay)');
+    logActivity(activeUserName, 'ADD', 'Farmer Records', 'Added farmer $profileName ($normBrgy)');
     notifyListeners();
 
     try {
@@ -335,7 +346,7 @@ class AccountService extends ChangeNotifier {
         'username': username,
         'password': password,
         'profile_name': profileName,
-        'barangay': barangay,
+        'barangay': normBrgy,
         'contact_number': contactNumber,
         'organization': organization,
         'status': status,
@@ -355,10 +366,11 @@ class AccountService extends ChangeNotifier {
     required String organization,
     required String status,
   }) async {
+    final normBrgy = normalizeBarangay(barangay);
     final index = _farmers.indexWhere((f) => f.id == id);
     if (index != -1) {
       _farmers[index].profileName = profileName;
-      _farmers[index].barangay = barangay;
+      _farmers[index].barangay = normBrgy;
       _farmers[index].contactNumber = contactNumber;
       _farmers[index].organization = organization;
       _farmers[index].status = status;
@@ -368,7 +380,7 @@ class AccountService extends ChangeNotifier {
       try {
         await SupabaseService.client.from('farmers').update({
           'profile_name': profileName,
-          'barangay': barangay,
+          'barangay': normBrgy,
           'contact_number': contactNumber,
           'organization': organization,
           'status': status,
@@ -437,6 +449,7 @@ class AccountService extends ChangeNotifier {
     required String cropType,
     required String barangay,
   }) async {
+    final normBrgy = normalizeBarangay(barangay);
     final newId = 'FARM${DateTime.now().millisecondsSinceEpoch}';
     final farm = FarmRecord(
       id: newId,
@@ -448,10 +461,10 @@ class AccountService extends ChangeNotifier {
       landAreaHectares: landAreaHectares,
       tenureStatus: tenureStatus,
       cropType: cropType,
-      barangay: barangay,
+      barangay: normBrgy,
     );
     _farms.add(farm);
-    logActivity(activeUserName, 'ADD', 'Farm Records', 'Added farm record for $farmerName in $barangay ($landAreaHectares ha)');
+    logActivity(activeUserName, 'ADD', 'Farm Records', 'Added farm record for $farmerName in $normBrgy ($landAreaHectares ha)');
     notifyListeners();
 
     try {
@@ -465,7 +478,7 @@ class AccountService extends ChangeNotifier {
         'land_area_hectares': landAreaHectares,
         'tenure_status': tenureStatus,
         'crop_type': cropType,
-        'barangay': barangay,
+        'barangay': normBrgy,
       });
       debugPrint('Saved farm record to Supabase: $locationName');
     } catch (e) {
@@ -714,21 +727,26 @@ class AccountService extends ChangeNotifier {
     }
   }
 
-  Future<void> addPost(String title, String content) async {
-    final dateStr = DateFormat('MMM dd, yyyy').format(DateTime.now());
+  Future<void> addPost(String title, String content, {String category = 'General Advisory', String scheduleTime = 'Immediate'}) async {
+    final dateStr = DateFormat('MMM dd, yyyy HH:mm').format(DateTime.now());
+    final displayDate = scheduleTime == 'Immediate' ? dateStr : scheduleTime;
     _posts.insert(0, {
       'title': title,
       'content': content,
-      'date': dateStr,
+      'date': displayDate,
+      'category': category,
+      'status': scheduleTime == 'Immediate' ? 'Published' : 'Scheduled',
     });
-    logActivity(activeUserName, 'POST', 'Announcements', 'Created post: $title');
+    logActivity(activeUserName, 'POST', 'Announcements', 'Created post [$category] (Schedule: $scheduleTime): $title');
     notifyListeners();
 
     try {
       await SupabaseService.client.from('announcements').insert({
         'title': title,
         'content': content,
-        'date': dateStr,
+        'date': displayDate,
+        'category': category,
+        'status': scheduleTime == 'Immediate' ? 'Published' : 'Scheduled',
       });
       debugPrint('Saved post to Supabase: $title');
     } catch (e) {
