@@ -1787,6 +1787,13 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
                       textColor: isDark ? Colors.white70 : const Color(0xFF0F172A),
                       onTap: () => _showCreatePostDialog(context, service, locale),
                     ),
+                    _buildSidebarAction(
+                      icon: Icons.article_rounded,
+                      label: isTagalog ? 'Pamahalaan ang Anunsyo' : 'Manage Announcements',
+                      iconColor: primaryAccent,
+                      textColor: isDark ? Colors.white70 : const Color(0xFF0F172A),
+                      onTap: () => _showManagePostsDialog(context, service, locale),
+                    ),
                     // Logout
                     _buildSidebarAction(
                       icon: Icons.logout_rounded,
@@ -2671,7 +2678,21 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
               itemCount: farmers.length,
               itemBuilder: (context, index) {
                 final farmer = farmers[index];
-                final farmerFarms = service.farms.where((f) => f.farmerId == farmer.id || f.farmerName == farmer.profileName).toList();
+                final farmerFarms = service.farms.where((f) {
+                  final fid = f.farmerId.trim().toLowerCase();
+                  final fname = f.farmerName.trim().toLowerCase();
+                  final pid = farmer.id.trim().toLowerCase();
+                  final pname = farmer.profileName.trim().toLowerCase();
+                  final puname = farmer.username.trim().toLowerCase();
+
+                  return (fid.isNotEmpty && (fid == pid || fid == puname)) ||
+                      (fname.isNotEmpty && (fname == pname || fname == puname));
+                }).toList();
+
+                final allFarmerCrops = <String>{
+                  ...farmer.records,
+                  ...farmerFarms.map((f) => f.cropType),
+                }.where((c) => c.trim().isNotEmpty).toList();
 
                 return Card(
                   color: cardBg,
@@ -2717,6 +2738,36 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
                                   const SizedBox(height: 2),
                                   Text('Username: @${farmer.username} • Barangay: ${farmer.barangay} • Contact: ${farmer.contactNumber}', style: TextStyle(fontSize: 12, color: subtextColor)),
                                   Text('Organization: ${farmer.organization}', style: TextStyle(fontSize: 12, color: subtextColor)),
+                                  if (allFarmerCrops.isNotEmpty) ...[
+                                    const SizedBox(height: 6),
+                                    Wrap(
+                                      spacing: 6,
+                                      runSpacing: 4,
+                                      crossAxisAlignment: WrapCrossAlignment.center,
+                                      children: [
+                                        Text(
+                                          locale.isTagalog ? 'Mga Na-save na Tanim: ' : 'All Saved Crops: ',
+                                          style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: primaryAccent),
+                                        ),
+                                        ...allFarmerCrops.map((c) => Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                          decoration: BoxDecoration(
+                                            color: const Color(0xFF16A34A).withValues(alpha: 0.15),
+                                            borderRadius: BorderRadius.circular(8),
+                                            border: Border.all(color: const Color(0xFF16A34A).withValues(alpha: 0.3)),
+                                          ),
+                                          child: Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              const Icon(Icons.eco_rounded, size: 12, color: Color(0xFF16A34A)),
+                                              const SizedBox(width: 4),
+                                              Text(c, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF16A34A))),
+                                            ],
+                                          ),
+                                        )),
+                                      ],
+                                    ),
+                                  ],
                                 ],
                               ),
                             ),
@@ -2781,7 +2832,7 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
                             decoration: BoxDecoration(
                               color: isDark ? const Color(0xFF0A111E) : Colors.blue.shade50.withValues(alpha: 0.5),
                               borderRadius: BorderRadius.circular(10),
-                              border: Border.all(color: isDark ? const Color(0xFF1E2E4A) : Colors.blue.shade200),
+                              border: Border.all(color: isDark ? const Color(0xFF1E3A8A) : Colors.blue.shade200),
                             ),
                             child: Row(
                               children: [
@@ -2794,7 +2845,12 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
                                       Row(
                                         children: [
                                           Text(
-                                            'Crop: ${farm.cropType}',
+                                            'Farmer: ${farmer.profileName}',
+                                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: primaryAccent),
+                                          ),
+                                          const SizedBox(width: 8),
+                                          Text(
+                                            '• Crop: ${farm.cropType}',
                                             style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: textColor),
                                           ),
                                           const SizedBox(width: 8),
@@ -5885,6 +5941,11 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
     DateTime scheduleDate = DateTime.now().add(const Duration(days: 1));
     TimeOfDay scheduleTime = const TimeOfDay(hour: 9, minute: 0);
 
+    // Optional Event Start Date Calendar Picker
+    bool hasEventDate = false;
+    DateTime eventDate = DateTime.now().add(const Duration(days: 2));
+    TimeOfDay eventTime = const TimeOfDay(hour: 8, minute: 30);
+
     showDialog(
       context: context,
       builder: (context) => StatefulBuilder(
@@ -5893,7 +5954,17 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
             children: [
               const Icon(Icons.campaign_rounded, color: Color(0xFF0056B3)),
               const SizedBox(width: 8),
-              Text(locale.isTagalog ? 'Gumawa ng Opisyal na Anunsyo' : 'Create Official Announcement'),
+              Expanded(
+                child: Text(locale.isTagalog ? 'Gumawa ng Opisyal na Anunsyo' : 'Create Official Announcement'),
+              ),
+              IconButton(
+                icon: const Icon(Icons.article_rounded, color: Color(0xFF0056B3)),
+                tooltip: locale.isTagalog ? 'Tingnan ang Lahat ng Post' : 'View All Posts',
+                onPressed: () {
+                  Navigator.pop(context);
+                  _showManagePostsDialog(context, service, locale);
+                },
+              ),
             ],
           ),
           content: SingleChildScrollView(
@@ -5933,18 +6004,90 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
                     border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
                   ),
                 ),
-                const SizedBox(height: 16),
+                const SizedBox(height: 14),
+
+                // OPTIONAL EVENT START DATE & TIME CALENDAR
+                Row(
+                  children: [
+                    Checkbox(
+                      value: hasEventDate,
+                      onChanged: (val) => setDialogState(() => hasEventDate = val ?? false),
+                    ),
+                    Expanded(
+                      child: Text(
+                        locale.isTagalog
+                            ? 'May Petsa/Oras ng Simula ng Event o Pulong (Opsyonal Calendar)'
+                            : 'Set Event Start Date & Time (Optional Calendar)',
+                        style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600),
+                      ),
+                    ),
+                  ],
+                ),
+                if (hasEventDate) ...[
+                  const SizedBox(height: 6),
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF16A34A).withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: const Color(0xFF16A34A).withValues(alpha: 0.3)),
+                    ),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            onPressed: () async {
+                              final pickedDate = await showDatePicker(
+                                context: context,
+                                initialDate: eventDate,
+                                firstDate: DateTime.now().subtract(const Duration(days: 30)),
+                                lastDate: DateTime.now().add(const Duration(days: 365)),
+                              );
+                              if (pickedDate != null) {
+                                setDialogState(() => eventDate = pickedDate);
+                              }
+                            },
+                            icon: const Icon(Icons.event_rounded, size: 16, color: Color(0xFF16A34A)),
+                            label: Text(DateFormat('MMM dd, yyyy').format(eventDate), style: const TextStyle(fontSize: 12)),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: OutlinedButton.icon(
+                            onPressed: () async {
+                              final pickedTime = await showTimePicker(
+                                context: context,
+                                initialTime: eventTime,
+                              );
+                              if (pickedTime != null) {
+                                setDialogState(() => eventTime = pickedTime);
+                              }
+                            },
+                            icon: const Icon(Icons.access_time_filled_rounded, size: 16, color: Color(0xFF16A34A)),
+                            label: Text(eventTime.format(context), style: const TextStyle(fontSize: 12)),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 12),
+
+                // SCHEDULE POST PUBLICATION FOR LATER
                 Row(
                   children: [
                     Checkbox(
                       value: isScheduled,
                       onChanged: (val) => setDialogState(() => isScheduled = val ?? false),
                     ),
-                    Text(locale.isTagalog ? 'I-iskedyul ang Pag-publish (Schedule Post)' : 'Schedule Post for Later'),
+                    Text(
+                      locale.isTagalog ? 'I-iskedyul ang Pag-publish (Schedule Post)' : 'Schedule Post Publication for Later',
+                      style: const TextStyle(fontSize: 12.5),
+                    ),
                   ],
                 ),
                 if (isScheduled) ...[
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 6),
                   Row(
                     children: [
                       Expanded(
@@ -5998,7 +6141,16 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
                   final scheduleStr = isScheduled
                       ? '${DateFormat('MMM dd, yyyy').format(scheduleDate)} ${scheduleTime.format(context)}'
                       : 'Immediate';
-                  service.addPost(titleCtrl.text, contentCtrl.text, category: selectedCategory, scheduleTime: scheduleStr);
+                  final eventStr = hasEventDate
+                      ? '${DateFormat('MMM dd, yyyy').format(eventDate)} ${eventTime.format(context)}'
+                      : '';
+                  service.addPost(
+                    titleCtrl.text,
+                    contentCtrl.text,
+                    category: selectedCategory,
+                    scheduleTime: scheduleStr,
+                    eventDate: eventStr,
+                  );
                   Navigator.pop(context);
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
@@ -6014,6 +6166,173 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
               },
               icon: const Icon(Icons.send_rounded, size: 16),
               label: Text(locale.isTagalog ? 'I-broadcast (Post)' : 'Broadcast Post'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // DIALOG TO VIEW AND DELETE ANNOUNCEMENT POSTS
+  void _showManagePostsDialog(BuildContext context, AccountService service, AdminLocale locale) {
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) {
+          final posts = service.posts;
+          return AlertDialog(
+            title: Row(
+              children: [
+                const Icon(Icons.campaign_rounded, color: Color(0xFF0056B3)),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    locale.isTagalog ? 'Mga Naipost na Anunsyo (${posts.length})' : 'Office Announcements & Posts (${posts.length})',
+                    style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ],
+            ),
+            content: SizedBox(
+              width: 550,
+              height: 450,
+              child: posts.isEmpty
+                  ? Center(
+                      child: Text(
+                        locale.isTagalog ? 'Walang pang naipost na anunsyo.' : 'No announcements posted yet.',
+                        style: const TextStyle(color: Colors.grey),
+                      ),
+                    )
+                  : ListView.separated(
+                      itemCount: posts.length,
+                      separatorBuilder: (context, index) => const SizedBox(height: 12),
+                      itemBuilder: (context, index) {
+                        final p = posts[index];
+                        final title = p['title'] ?? 'No Title';
+                        final content = p['content'] ?? '';
+                        final category = p['category'] ?? 'General Advisory';
+                        final date = p['date'] ?? '';
+                        final eventDate = p['eventDate'] ?? '';
+
+                        return Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: Colors.blue.withValues(alpha: 0.05),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: Colors.blue.withValues(alpha: 0.2)),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFF0056B3).withValues(alpha: 0.15),
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: Text(
+                                      category,
+                                      style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Color(0xFF0056B3)),
+                                    ),
+                                  ),
+                                  const Spacer(),
+                                  Text(
+                                    date,
+                                    style: const TextStyle(fontSize: 11, color: Colors.grey),
+                                  ),
+                                  const SizedBox(width: 4),
+                                  IconButton(
+                                    icon: const Icon(Icons.delete_rounded, color: Colors.redAccent, size: 20),
+                                    tooltip: locale.isTagalog ? 'Burahin ang Post' : 'Delete Post',
+                                    onPressed: () {
+                                      _confirmDeletePost(context, service, p, locale, () {
+                                        setDialogState(() {});
+                                      });
+                                    },
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 6),
+                              Text(
+                                title,
+                                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                              ),
+                              if (eventDate.isNotEmpty) ...[
+                                const SizedBox(height: 4),
+                                Row(
+                                  children: [
+                                    const Icon(Icons.event_available_rounded, size: 14, color: Color(0xFF16A34A)),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      '${locale.isTagalog ? "Simula ng Event: " : "Event Start: "}$eventDate',
+                                      style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold, color: Color(0xFF16A34A)),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                              const SizedBox(height: 6),
+                              Text(
+                                content,
+                                maxLines: 3,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(fontSize: 12.5, color: Colors.black87),
+                              ),
+                            ],
+                          ),
+                        );
+                      },
+                    ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: Text(locale.isTagalog ? 'Isara' : 'Close'),
+              ),
+              ElevatedButton.icon(
+                style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0056B3), foregroundColor: Colors.white),
+                onPressed: () {
+                  Navigator.pop(context);
+                  _showCreatePostDialog(context, service, locale);
+                },
+                icon: const Icon(Icons.add_comment_rounded, size: 16),
+                label: Text(locale.isTagalog ? 'Gumawa ng Bagong Post' : 'Create New Post'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  void _confirmDeletePost(BuildContext context, AccountService service, Map<String, String> post, AdminLocale locale, VoidCallback onDeleted) {
+    final title = post['title'] ?? '';
+    final idOrTitle = post['id']?.isNotEmpty == true ? post['id']! : title;
+
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: Text(locale.isTagalog ? 'Burahin ang Anunsyo?' : 'Delete Announcement?'),
+          content: Text(
+            locale.isTagalog
+                ? 'Sigurado ka bang gusto mong burahin ang anunsyo na "$title"?'
+                : 'Are you sure you want to delete the announcement "$title"?',
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context), child: Text(locale.isTagalog ? 'Kanselahin' : 'Cancel')),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent, foregroundColor: Colors.white),
+              onPressed: () {
+                service.deletePost(idOrTitle);
+                Navigator.pop(context);
+                onDeleted();
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text(locale.isTagalog ? 'Nabura na ang anunsyo.' : 'Announcement deleted successfully.')),
+                );
+              },
+              child: Text(locale.isTagalog ? 'Burahin' : 'Delete'),
             ),
           ],
         ),

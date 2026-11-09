@@ -1,14 +1,27 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../models/farmer.dart';
 import 'supabase_service.dart';
 
 class AccountService extends ChangeNotifier {
+  Timer? _autoSyncTimer;
+
   AccountService() {
     loadFromSupabase();
+    // Auto sync with Supabase every 10 seconds for real-time automatic updates across devices
+    _autoSyncTimer = Timer.periodic(const Duration(seconds: 10), (_) {
+      loadFromSupabase(silent: true);
+    });
   }
 
-  Future<void> loadFromSupabase() async {
+  @override
+  void dispose() {
+    _autoSyncTimer?.cancel();
+    super.dispose();
+  }
+
+  Future<void> loadFromSupabase({bool silent = false}) async {
     try {
       final farmersRes = await SupabaseService.client.from('farmers').select();
       _farmers.clear();
@@ -59,14 +72,43 @@ class AccountService extends ChangeNotifier {
         ));
       }
 
-      final postsRes = await SupabaseService.client.from('announcements').select();
-      _posts.clear();
-      for (var row in postsRes) {
-        _posts.add({
-          'title': row['title'] ?? '',
-          'content': row['content'] ?? '',
-          'date': row['date'] ?? '',
-        });
+      try {
+        final postsRes = await SupabaseService.client.from('announcements').select().order('created_at', ascending: false);
+        _posts.clear();
+        for (var row in postsRes) {
+          _posts.add({
+            'id': row['id']?.toString() ?? '',
+            'title': row['title'] ?? '',
+            'content': row['content'] ?? '',
+            'date': row['date'] ?? '',
+            'category': row['category'] ?? 'General Advisory',
+            'status': row['status'] ?? 'Published',
+            'eventDate': row['event_date'] ?? '',
+          });
+        }
+      } catch (_) {}
+
+      if (_posts.isEmpty) {
+        _posts.addAll([
+          {
+            'id': 'p1',
+            'title': 'Pamamahagi ng Libreng Binhi at Abono sa Pagsanjan',
+            'content': 'Inaanyayahan ang lahat ng rehistradong magsasaka sa Pamahalaang Bayan para sa libreng palay seeds at fertilizer distribution.',
+            'date': DateFormat('MMM dd, yyyy HH:mm').format(DateTime.now().subtract(const Duration(hours: 3))),
+            'category': 'Subsidy & Distribution',
+            'status': 'Published',
+            'eventDate': DateFormat('MMM dd, yyyy 08:30').format(DateTime.now().add(const Duration(days: 3))),
+          },
+          {
+            'id': 'p2',
+            'title': 'Ulat sa Panahon: Pag-iingat sa Inaasahang Ulan',
+            'content': 'Pinapayuhan ang mga magsasaka ng Pechay at Kamatis na linisin ang mga kanal ng patubig dahil sa inaasahang malakas na ulan ngayong linggo.',
+            'date': DateFormat('MMM dd, yyyy HH:mm').format(DateTime.now().subtract(const Duration(days: 1))),
+            'category': 'Weather Advisory',
+            'status': 'Published',
+            'eventDate': '',
+          },
+        ]);
       }
 
       try {
@@ -1015,30 +1057,85 @@ class AccountService extends ChangeNotifier {
     }
   }
 
-  Future<void> addPost(String title, String content, {String category = 'General Advisory', String scheduleTime = 'Immediate'}) async {
+  Future<void> addPost(
+    String title,
+    String content, {
+    String category = 'General Advisory',
+    String scheduleTime = 'Immediate',
+    String eventDate = '',
+  }) async {
+    final newId = 'post_${DateTime.now().millisecondsSinceEpoch}';
     final dateStr = DateFormat('MMM dd, yyyy HH:mm').format(DateTime.now());
     final displayDate = scheduleTime == 'Immediate' ? dateStr : scheduleTime;
-    _posts.insert(0, {
+    final postMap = {
+      'id': newId,
       'title': title,
       'content': content,
       'date': displayDate,
       'category': category,
       'status': scheduleTime == 'Immediate' ? 'Published' : 'Scheduled',
-    });
+      'eventDate': eventDate,
+    };
+    _posts.insert(0, postMap);
     logActivity(activeUserName, 'POST', 'Announcements', 'Created post [$category] (Schedule: $scheduleTime): $title');
     notifyListeners();
 
     try {
-      await SupabaseService.client.from('announcements').insert({
+      final res = await SupabaseService.client.from('announcements').insert({
         'title': title,
         'content': content,
         'date': displayDate,
         'category': category,
         'status': scheduleTime == 'Immediate' ? 'Published' : 'Scheduled',
-      });
+        'event_date': eventDate,
+      }).select().maybeSingle();
+
+      if (res != null && res['id'] != null) {
+        postMap['id'] = res['id'].toString();
+      }
       debugPrint('Saved post to Supabase: $title');
     } catch (e) {
-      debugPrint('Supabase insert error (post): $e');
+      try {
+        final res = await SupabaseService.client.from('announcements').insert({
+          'title': title,
+          'content': content,
+          'date': displayDate,
+        }).select().maybeSingle();
+
+        if (res != null && res['id'] != null) {
+          postMap['id'] = res['id'].toString();
+        }
+      } catch (err) {
+        debugPrint('Supabase insert error (post): $err');
+      }
+    }
+  }
+
+  Future<void> deletePost(String titleOrId) async {
+    final index = _posts.indexWhere((p) => p['id'] == titleOrId || p['title'] == titleOrId);
+    if (index != -1) {
+      final title = _posts[index]['title'] ?? '';
+      final id = _posts[index]['id'] ?? '';
+      _posts.removeAt(index);
+      logActivity(activeUserName, 'DELETE', 'Announcements', 'Deleted announcement: $title');
+      notifyListeners();
+
+      try {
+        if (id.isNotEmpty && !id.startsWith('post_') && !id.startsWith('p')) {
+          await SupabaseService.client.from('announcements').delete().eq('id', id);
+        } else if (title.isNotEmpty) {
+          await SupabaseService.client.from('announcements').delete().eq('title', title);
+        }
+      } catch (e) {
+        debugPrint('Supabase delete error by id: $e');
+        try {
+          if (title.isNotEmpty) {
+            await SupabaseService.client.from('announcements').delete().eq('title', title);
+          }
+        } catch (err) {
+          debugPrint('Supabase delete error by title: $err');
+        }
+      }
     }
   }
 }

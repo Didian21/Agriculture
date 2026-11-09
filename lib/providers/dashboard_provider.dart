@@ -10,6 +10,7 @@ import '../models/farm_advice.dart';
 import '../models/farm_models.dart';
 import '../models/farm_planting.dart';
 import '../models/planting_guide.dart';
+import '../models/price_insight.dart';
 import '../models/price_prediction.dart';
 import '../models/weather_models.dart';
 import '../services/advice_service.dart';
@@ -163,7 +164,7 @@ class DashboardProvider extends ChangeNotifier {
     if (a == b) return;
     posts = List.of(list);
     _rebuildDerived();
-    notifyListeners();
+    Future.microtask(() => notifyListeners());
   }
 
   /// Tinatawag kapag nagbago ang mga tanim sa DSS, para sumunod ang presyo, payo at mga abiso.
@@ -173,15 +174,19 @@ class DashboardProvider extends ChangeNotifier {
     if (a == b) return;
     farmPlantings = List.of(list);
     _rebuildDerived();
-    notifyListeners();
+    Future.microtask(() => notifyListeners());
   }
 
-  /// Mga datos na nakadepende sa panahon at sa mga tanim ng farmer.
+  /// Mga datos na nakadepende sa panahon, mga anunsyo at mga tanim ng farmer.
   void _rebuildDerived() {
     final w = weather;
-    if (w == null) return;
-    predictions = _pricing.predict(farmCrops, w.daily);
-    final insights = PriceInsightService().build(crops: farmCrops, days: w.daily, guides: guides);
+    if (w != null) {
+      predictions = _pricing.predict(farmCrops, w.daily);
+    }
+    final insights = w != null
+        ? PriceInsightService().build(crops: farmCrops, days: w.daily, guides: guides)
+        : <PriceInsight>[];
+
     notifications = _notifService.build(
       weather: w,
       plantings: farmPlantings,
@@ -212,20 +217,24 @@ class DashboardProvider extends ChangeNotifier {
       for (final g in guides) {
         setCropCalendar(g.crop, g.bestMonths, g.possibleMonths);
       }
-      weather = await _weather.fetch();
-      advice = _advice.build(weather!);
+      try {
+        weather = await _weather.fetch();
+        if (weather != null) {
+          advice = _advice.build(weather!);
+        }
+        weatherStale = false;
+      } catch (wxErr) {
+        debugPrint('Weather fetch error: $wxErr');
+        weatherStale = true;
+      }
       _rebuildDerived();
-
       lastUpdated = DateTime.now();
-      weatherStale = false;
     } catch (e, st) {
-      // Ipinapakita ang tunay na dahilan sa Run/Debug console (para madaling hanapin ang problema).
       debugPrint('PAGRI load error: $e\n$st');
       if (weather == null) {
         hasError = true;
-      } else {
-        weatherStale = true;
       }
+      _rebuildDerived();
     }
     isLoading = false;
     notifyListeners();
