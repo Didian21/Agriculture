@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 
 import '../core/crop_data.dart';
@@ -8,6 +7,7 @@ import '../l10n/app_localizations.dart';
 import '../main.dart';
 import '../services/dss_service.dart';
 import 'common_widgets.dart';
+import 'crop_photo.dart';
 
 /// "Mga Pananim" - grid ng litrato ng bawat commodity. Pindutin para sa buong detalye.
 /// Mga litrato: ilagay sa assets/images/crops/ (png, jpg o webp; pangalan hal. eggplant.png).
@@ -118,19 +118,6 @@ String _groupLabel(AppLocalizations t, CropGroup g) {
   }
 }
 
-Color _groupColor(CropGroup g) {
-  switch (g) {
-    case CropGroup.veg:
-      return const Color(0xFF7DBE86);
-    case CropGroup.fruit:
-      return const Color(0xFFE9C46A);
-    case CropGroup.root:
-      return const Color(0xFFC9A27E);
-    case CropGroup.grain:
-      return const Color(0xFFD8CB7A);
-  }
-}
-
 class _FilterChip extends StatelessWidget {
   final String label;
   final bool selected;
@@ -166,82 +153,6 @@ class _FilterChip extends StatelessWidget {
   }
 }
 
-/// Hinahanap ang litrato sa assets/images/crops/ (o assets/crops/) (png, jpg, jpeg, webp). Hindi mahalaga ang laki ng titik.
-/// Tinatanggap na pangalan: slug (hal. string_beans), ID, pangalang Ingles o Tagalog.
-class _CropPhotos {
-  static Future<Map<String, String>>? _future;
-
-  static Future<Map<String, String>> load() => _future ??= _read();
-
-  static String norm(String s) => s.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
-
-  static Future<Map<String, String>> _read() async {
-    final out = <String, String>{};
-    try {
-      final manifest = await AssetManifest.loadFromAssetBundle(rootBundle);
-      for (final a in manifest.listAssets()) {
-        if (!a.startsWith('assets/images/crops/') && !a.startsWith('assets/crops/')) continue;
-        final low = a.toLowerCase();
-        if (!(low.endsWith('.png') || low.endsWith('.jpg') || low.endsWith('.jpeg') || low.endsWith('.webp'))) continue;
-        final file = a.substring(a.lastIndexOf('/') + 1);
-        out[norm(file.substring(0, file.lastIndexOf('.')))] = a;
-      }
-    } catch (_) {
-      // walang manifest o walang litrato: emoji ang gagamitin
-    }
-    return out;
-  }
-
-  static String? find(Map<String, String> m, CropInfo i) {
-    for (final k in [i.slug, i.id, i.nameEn, i.nameTl]) {
-      final p = m[norm(k)];
-      if (p != null) return p;
-    }
-    return null;
-  }
-}
-
-/// Litrato ng pananim; emoji sa kulay ng grupo kung walang litrato sa assets.
-class _CropPhoto extends StatelessWidget {
-  final CropInfo info;
-  final double emojiSize;
-  const _CropPhoto({required this.info, required this.emojiSize});
-
-  Widget _fallback() {
-    final c = _groupColor(info.group);
-    return Container(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [c.withValues(alpha: 0.35), c.withValues(alpha: 0.75)],
-        ),
-      ),
-      alignment: Alignment.center,
-      child: Text(info.emoji, style: TextStyle(fontSize: emojiSize)),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return FutureBuilder<Map<String, String>>(
-      future: _CropPhotos.load(),
-      builder: (context, snap) {
-        final path = snap.hasData ? _CropPhotos.find(snap.data!, info) : null;
-        if (path == null) return _fallback();
-        return Image.asset(
-          path,
-          fit: BoxFit.cover,
-          width: double.infinity,
-          height: double.infinity,
-          cacheWidth: 800,
-          errorBuilder: (context, error, stack) => _fallback(),
-        );
-      },
-    );
-  }
-}
-
 class _CropTile extends StatelessWidget {
   final CropInfo info;
   final bool tl;
@@ -264,7 +175,7 @@ class _CropTile extends StatelessWidget {
           child: ClipRRect(
             borderRadius: BorderRadius.circular(16.5),
             child: Stack(fit: StackFit.expand, children: [
-              _CropPhoto(info: info, emojiSize: 38),
+              CropPhoto(cropId: info.id, emojiSize: 38),
               Positioned(
                 left: 0,
                 right: 0,
@@ -388,7 +299,7 @@ class _CropDetailSheet extends StatelessWidget {
                 ),
                 ClipRRect(
                   borderRadius: BorderRadius.circular(22),
-                  child: SizedBox(height: 190, child: _CropPhoto(info: info, emojiSize: 78)),
+                  child: SizedBox(height: 190, child: CropPhoto(cropId: info.id, emojiSize: 78)),
                 ),
                 const SizedBox(height: 14),
                 Text(info.name(tl), style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w900, color: AppColors.ink)),
@@ -396,7 +307,7 @@ class _CropDetailSheet extends StatelessWidget {
                 Text('${t.cropAlsoCalled}: ${info.altName(tl)}', style: const TextStyle(fontSize: 13.5, color: AppColors.muted, fontWeight: FontWeight.w700)),
                 const SizedBox(height: 8),
                 Wrap(spacing: 8, runSpacing: 6, children: [
-                  _Pill(text: _groupLabel(t, info.group), color: _groupColor(info.group)),
+                  _Pill(text: _groupLabel(t, info.group), color: cropGroupColor(info.group)),
                   if (f.storable) _Pill(text: t.cropStorable, color: AppColors.leaf),
                 ]),
                 const SizedBox(height: 10),

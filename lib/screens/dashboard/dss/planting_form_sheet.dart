@@ -3,10 +3,12 @@ import 'package:provider/provider.dart';
 
 import '../../../core/crop_data.dart';
 import '../../../core/crop_l10n.dart';
+import '../../../core/crop_names.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../main.dart';
 import '../../../models/farm_planting.dart';
 import '../../../providers/farm_input_provider.dart';
+import '../../../widgets/crop_photo.dart';
 import '../../../widgets/dss_common.dart';
 
 /// Form: pananim, sukat ng lupa, petsa ng pagtatanim, at (opsyonal) ani.
@@ -160,7 +162,8 @@ class _PlantingFormState extends State<_PlantingForm> {
               children: [
                 for (final c in kCropFacts.keys)
                   ChoiceChip(
-                    label: Text(t.cropLabel(c)),
+                    avatar: ClipOval(child: SizedBox(width: 24, height: 24, child: CropPhoto(cropId: c, emojiSize: 13))),
+                    label: Text(cropNameT(t, c)),
                     selected: _crop == c,
                     onSelected: (_) => setState(() => _crop = c),
                   ),

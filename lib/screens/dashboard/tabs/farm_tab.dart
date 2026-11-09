@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 
 import '../../../core/crop_data.dart';
 import '../../../core/crop_l10n.dart';
+import '../../../core/crop_names.dart';
 import '../../../dashboard_data.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../main.dart';
@@ -11,6 +12,7 @@ import '../../../models/farm_planting.dart';
 import '../../../models/harvest_record.dart';
 import '../../../providers/farm_input_provider.dart';
 import '../../../services/dss_service.dart';
+import '../../../widgets/crop_photo.dart';
 import '../../../widgets/common_widgets.dart';
 import '../../../widgets/crop_image.dart';
 import '../../../widgets/dss_common.dart';
@@ -35,7 +37,7 @@ class FarmTab extends StatelessWidget {
       context: context,
       builder: (ctx) => AlertDialog(
         title: Text(t.farmHistoryDeleteTitle),
-        content: Text(t.farmHistoryDeleteBody(t.cropLabel(r.crop))),
+        content: Text(t.farmHistoryDeleteBody(cropNameT(t, r.crop))),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(t.cancel)),
           FilledButton(onPressed: () => Navigator.pop(ctx, true), child: Text(t.dssDelete)),
@@ -174,7 +176,7 @@ class _HistoryCard extends StatelessWidget {
         const SizedBox(width: 12),
         Expanded(
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(t.cropLabel(r.crop), style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 15.5)),
+            Text(cropNameT(t, r.crop), style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 15.5)),
             Text(t.harvestedOn(r.harvestedOn), style: const TextStyle(fontSize: 12, color: AppColors.muted)),
             const SizedBox(height: 6),
             Text('${DssFmt.kg(r.yieldKg)} × ${DssFmt.pesoKg(r.pricePerKg)} = ${DssFmt.peso(r.income)}',
@@ -265,8 +267,8 @@ class _ProfileCard extends StatelessWidget {
                 runSpacing: 6,
                 children: crops
                     .map((c) => Chip(
-                  avatar: Icon(Icons.eco, size: 16, color: AppColors.forCrop(c)),
-                  label: Text(t.cropLabel(c), style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 12)),
+                  avatar: ClipOval(child: SizedBox(width: 24, height: 24, child: CropPhoto(cropId: c, emojiSize: 13))),
+                  label: Text(cropNameT(t, c), style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 12)),
                   backgroundColor: AppColors.mint,
                   side: BorderSide.none,
                 ))
@@ -372,7 +374,7 @@ class _LandCard extends StatelessWidget {
                 Row(mainAxisSize: MainAxisSize.min, children: [
                   Container(width: 12, height: 12, decoration: BoxDecoration(color: AppColors.forCrop(pl.crop), shape: BoxShape.circle)),
                   const SizedBox(width: 5),
-                  Text('${t.cropLabel(pl.crop)} ${DssFmt.percent(pl.hectares / total * 100)}% · ${DssFmt.area(pl.hectares, sqm: sqm)}',
+                  Text('${cropNameT(t, pl.crop)} ${DssFmt.percent(pl.hectares / total * 100)}% · ${DssFmt.area(pl.hectares, sqm: sqm)}',
                       style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700)),
                 ]),
               if (free > 0.00001)
@@ -444,7 +446,6 @@ class _CropPlotCard extends StatelessWidget {
     final t = AppLocalizations.of(context)!;
     final locale = Localizations.localeOf(context).languageCode;
     final crop = planting.crop;
-    final color = AppColors.forCrop(crop);
     final percent = totalHectares > 0 ? DssFmt.percent(planting.hectares / totalHectares * 100) : '0';
     final g = guide;
     final facts = factsFor(crop);
@@ -465,15 +466,13 @@ class _CropPlotCard extends StatelessWidget {
               child: SizedBox(
                 width: 84,
                 height: 84,
-                child: g != null
-                    ? CropImage(guide: g)
-                    : Container(color: color.withValues(alpha: 0.15), child: Icon(Icons.eco_rounded, color: color, size: 36)),
+                child: CropPhoto(cropId: crop, emojiSize: 34, fallback: g != null ? CropImage(guide: g) : null),
               ),
             ),
             const SizedBox(width: 12),
             Expanded(
               child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                Text(t.cropLabel(crop), style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 17)),
+                Text(cropNameT(t, crop), style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 17)),
                 const SizedBox(height: 2),
                 Text('${DssFmt.area(planting.hectares, sqm: sqm)} • ${t.farmShare(percent)}',
                     style: const TextStyle(color: AppColors.muted, fontSize: 12.5)),
@@ -531,7 +530,7 @@ class _CropPlotCard extends StatelessWidget {
                 const Icon(Icons.lightbulb_rounded, size: 18, color: AppColors.soil),
                 const SizedBox(width: 8),
                 Expanded(
-                  child: Text(t.cropTip(crop), style: const TextStyle(fontSize: 12.5, height: 1.35)),
+                  child: Text(cropTipT(t, crop), style: const TextStyle(fontSize: 12.5, height: 1.35)),
                 ),
               ]),
             ),

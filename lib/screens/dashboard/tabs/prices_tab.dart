@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 import '../../../core/crop_l10n.dart';
+import '../../../core/crop_names.dart';
 import '../../../dashboard_data.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../main.dart';
@@ -10,6 +11,7 @@ import '../../../models/farm_planting.dart';
 import '../../../models/price_insight.dart';
 import '../../../providers/farm_input_provider.dart';
 import '../../../services/price_insight_service.dart';
+import '../../../widgets/crop_photo.dart';
 import '../../../widgets/common_widgets.dart';
 import '../../../widgets/crop_image.dart';
 import '../../../widgets/price_graph.dart';
@@ -149,14 +151,16 @@ class _PriceCard extends StatelessWidget {
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           // Pangalan at pagbabago
           Row(children: [
-            if (guide != null) ...[
-              ClipRRect(
-                borderRadius: BorderRadius.circular(12),
-                child: SizedBox(width: 44, height: 44, child: CropImage(guide: guide!)),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: SizedBox(
+                width: 44,
+                height: 44,
+                child: CropPhoto(cropId: i.crop, emojiSize: 24, fallback: guide != null ? CropImage(guide: guide!) : null),
               ),
-              const SizedBox(width: 10),
-            ],
-            Expanded(child: Text(t.cropLabel(i.crop), style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 18))),
+            ),
+            const SizedBox(width: 10),
+            Expanded(child: Text(cropNameT(t, i.crop), style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 18))),
             Pill('${up ? '+' : ''}${i.changePercent.toStringAsFixed(1)}%', color,
                 icon: up ? Icons.trending_up_rounded : Icons.trending_down_rounded),
           ]),
@@ -177,7 +181,7 @@ class _PriceCard extends StatelessWidget {
                 tween: Tween(begin: i.currentPrice, end: i.predictedPrice),
                 duration: const Duration(milliseconds: 900),
                 curve: Curves.easeOutCubic,
-                builder: (_, v, _) => Text('₱${v.toStringAsFixed(2)}',
+                builder: (_, v, __) => Text('₱${v.toStringAsFixed(2)}',
                     style: TextStyle(fontSize: 26, fontWeight: FontWeight.w900, color: color)),
               ),
             ]),
