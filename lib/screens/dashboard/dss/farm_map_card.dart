@@ -7,6 +7,7 @@ import '../../../l10n/app_localizations.dart';
 import '../../../main.dart';
 import '../../../models/farmer.dart';
 import '../../../providers/farm_input_provider.dart';
+import '../../../providers/dashboard_provider.dart';
 import '../../../services/account_service.dart';
 import '../../../services/farm_weather_service.dart';
 import '../../../widgets/common_widgets.dart';
@@ -140,6 +141,9 @@ class _FarmMapCardState extends State<FarmMapCard> {
     final t = AppLocalizations.of(context)!;
     final point = LatLng(widget.input.lat, widget.input.lon);
     final accountService = Provider.of<AccountService>(context);
+    final dashboardProvider = Provider.of<DashboardProvider>(context, listen: false);
+    final currentFarmerId = dashboardProvider.profile?.id ?? '';
+    final currentFarmerName = dashboardProvider.profile?.name ?? '';
     final allFarms = accountService.farms;
 
     final allMarkers = <Marker>[
@@ -151,7 +155,13 @@ class _FarmMapCardState extends State<FarmMapCard> {
           alignment: Alignment.topCenter,
           child: GestureDetector(
             onTap: () => _showFarmDetailsDialog(context, f),
-            child: const Icon(Icons.location_pin, size: 36, color: Color(0xFF16A34A)),
+            child: Icon(
+              Icons.location_pin,
+              size: 38,
+              color: (f.farmerId == currentFarmerId || f.farmerName.trim().toLowerCase() == currentFarmerName.trim().toLowerCase())
+                  ? const Color(0xFF0056B3)
+                  : const Color(0xFF16A34A),
+            ),
           ),
         ),
       Marker(
@@ -159,7 +169,7 @@ class _FarmMapCardState extends State<FarmMapCard> {
         width: 48,
         height: 54,
         alignment: Alignment.topCenter,
-        child: const Icon(Icons.location_on_rounded, size: 48, color: AppColors.down),
+        child: const Icon(Icons.location_on_rounded, size: 48, color: Color(0xFF0056B3)),
       ),
     ];
 

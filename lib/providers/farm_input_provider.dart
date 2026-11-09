@@ -160,6 +160,10 @@ class FarmInputProvider extends ChangeNotifier {
               hectares: (row['land_area_hectares'] as num?)?.toDouble() ?? 1.0,
               plantedOn: DateTime.now().subtract(const Duration(days: 30)),
             ));
+            if (row['latitude'] != null && row['longitude'] != null) {
+              lat = (row['latitude'] as num).toDouble();
+              lon = (row['longitude'] as num).toDouble();
+            }
           }
           if (fetchedFarms.isNotEmpty) {
             plantings = fetchedFarms;
