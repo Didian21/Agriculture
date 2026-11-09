@@ -109,6 +109,8 @@ extension AppL10nData on AppLocalizations {
         return notifMarketDownTitle(c);
       case NotificationType.plantingNow:
         return notifPlantingNowTitle(c);
+      case NotificationType.announcement:
+        return n.announcementTitle ?? 'Anunsyo mula sa MAO';
     }
   }
 
@@ -131,6 +133,8 @@ extension AppL10nData on AppLocalizations {
         return notifMarketDownMsg(c, n.value);
       case NotificationType.plantingNow:
         return notifPlantingNowMsg(c);
+      case NotificationType.announcement:
+        return n.announcementContent ?? '';
     }
   }
 

@@ -16,10 +16,23 @@ class NotificationService {
     required List<FarmPlanting> plantings,
     required List<PlantingGuide> guides,
     required List<PriceInsight> insights,
+    List<Map<String, String>> posts = const [],
   }) {
     final now = DateTime.now();
     final morning = DateTime(now.year, now.month, now.day, 6);
     final out = <AppNotification>[];
+
+    // Mga anunsyo mula sa MAO/Admin
+    for (final p in posts) {
+      out.add(AppNotification(
+        type: NotificationType.announcement,
+        icon: Icons.campaign_rounded,
+        time: now,
+        announcementTitle: p['title'] ?? 'Anunsyo ng MAO',
+        announcementContent: p['content'] ?? '',
+        category: p['category'] ?? 'General Advisory',
+      ));
+    }
 
     // Panahon
     if (weather.current.code >= 95) {

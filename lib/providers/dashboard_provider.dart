@@ -154,6 +154,18 @@ class DashboardProvider extends ChangeNotifier {
 
   List<WeatherDay> get forecast => weather?.daily ?? [];
 
+  List<Map<String, String>> posts = [];
+
+  /// Tinatawag kapag nagbago ang mga anunsyo mula sa Admin/MAO.
+  void syncPosts(List<Map<String, String>> list) {
+    final a = posts.map((e) => '${e['title']}|${e['content']}|${e['date']}').join(';');
+    final b = list.map((e) => '${e['title']}|${e['content']}|${e['date']}').join(';');
+    if (a == b) return;
+    posts = List.of(list);
+    _rebuildDerived();
+    notifyListeners();
+  }
+
   /// Tinatawag kapag nagbago ang mga tanim sa DSS, para sumunod ang presyo, payo at mga abiso.
   void syncPlantings(List<FarmPlanting> list) {
     final a = farmPlantings.map((e) => '${e.id}|${e.crop}|${e.plantedOn}|${e.hectares}|${e.lastYieldKg}').join(';');
@@ -170,7 +182,13 @@ class DashboardProvider extends ChangeNotifier {
     if (w == null) return;
     predictions = _pricing.predict(farmCrops, w.daily);
     final insights = PriceInsightService().build(crops: farmCrops, days: w.daily, guides: guides);
-    notifications = _notifService.build(weather: w, plantings: farmPlantings, guides: guides, insights: insights);
+    notifications = _notifService.build(
+      weather: w,
+      plantings: farmPlantings,
+      guides: guides,
+      insights: insights,
+      posts: posts,
+    );
     for (final n in notifications) {
       n.isRead = _readIds.contains(n.id);
     }

@@ -4533,7 +4533,7 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
     final records = service.historicalRecords;
     final marketPrices = service.marketPriceRecords;
 
-    return Padding(
+    return SingleChildScrollView(
       padding: const EdgeInsets.all(22),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -4642,7 +4642,8 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
               ),
             ),
             const SizedBox(height: 16),
-            Expanded(
+            SizedBox(
+              height: 480,
               child: Container(
                 decoration: BoxDecoration(
                   color: cardBg,
@@ -4688,7 +4689,8 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
             ),
           ] else ...[
             // TABLE 2: VEGETABLE MARKET & FARMGATE PRICES WITH DATES
-            Expanded(
+            SizedBox(
+              height: 480,
               child: Container(
                 decoration: BoxDecoration(
                   color: cardBg,
@@ -5878,34 +5880,143 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
   void _showCreatePostDialog(BuildContext context, AccountService service, AdminLocale locale) {
     final titleCtrl = TextEditingController();
     final contentCtrl = TextEditingController();
+    String selectedCategory = 'General Advisory';
+    bool isScheduled = false;
+    DateTime scheduleDate = DateTime.now().add(const Duration(days: 1));
+    TimeOfDay scheduleTime = const TimeOfDay(hour: 9, minute: 0);
 
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Text(locale.isTagalog ? 'Gumawa ng Anunsyo' : 'Create Office Announcement'),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: Row(
             children: [
-              TextField(controller: titleCtrl, decoration: InputDecoration(labelText: locale.isTagalog ? 'Pamagat' : 'Title')),
-              const SizedBox(height: 8),
-              TextField(controller: contentCtrl, decoration: InputDecoration(labelText: locale.isTagalog ? 'Lalamanin' : 'Content'), maxLines: 3),
+              const Icon(Icons.campaign_rounded, color: Color(0xFF0056B3)),
+              const SizedBox(width: 8),
+              Text(locale.isTagalog ? 'Gumawa ng Opisyal na Anunsyo' : 'Create Official Announcement'),
             ],
           ),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: Text(locale.isTagalog ? 'Kanselahin' : 'Cancel')),
-          ElevatedButton(
-            onPressed: () {
-              if (titleCtrl.text.isNotEmpty && contentCtrl.text.isNotEmpty) {
-                service.addPost(titleCtrl.text, contentCtrl.text);
-                Navigator.pop(context);
-                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(locale.isTagalog ? 'Naipost na ang anunsyo!' : 'Announcement posted successfully!')));
-              }
-            },
-            child: Text(locale.isTagalog ? 'I-post' : 'Post'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                DropdownButtonFormField<String>(
+                  initialValue: selectedCategory,
+                  decoration: InputDecoration(
+                    labelText: locale.isTagalog ? 'Kategorya ng Anunsyo' : 'Announcement Category',
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                  items: [
+                    DropdownMenuItem(value: 'General Advisory', child: Text(locale.isTagalog ? 'Pangkalahatang Payo (General Advisory)' : 'General Advisory')),
+                    DropdownMenuItem(value: 'Weather Advisory', child: Text(locale.isTagalog ? 'Ulat ng Panahon at Bagyo (Weather)' : 'Weather Advisory')),
+                    DropdownMenuItem(value: 'Market Price Update', child: Text(locale.isTagalog ? 'Balita sa Presyo sa Pamilihan (Market Price)' : 'Market Price Update')),
+                    DropdownMenuItem(value: 'Farmers Meeting & Training', child: Text(locale.isTagalog ? 'Pulong o Pagsasanay ng Magsasaka (Meeting/Training)' : 'Farmers Meeting & Training')),
+                    DropdownMenuItem(value: 'Subsidy & Distribution', child: Text(locale.isTagalog ? 'Distribusyon ng Binhi / Abono (Subsidy)' : 'Subsidy & Fertilizer Distribution')),
+                  ],
+                  onChanged: (val) => setDialogState(() => selectedCategory = val ?? 'General Advisory'),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: titleCtrl,
+                  decoration: InputDecoration(
+                    labelText: locale.isTagalog ? 'Pamagat ng Anunsyo' : 'Announcement Title',
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: contentCtrl,
+                  maxLines: 4,
+                  decoration: InputDecoration(
+                    labelText: locale.isTagalog ? 'Detalyadong Nilalaman ng Mensahe' : 'Detailed Content / Message',
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    Checkbox(
+                      value: isScheduled,
+                      onChanged: (val) => setDialogState(() => isScheduled = val ?? false),
+                    ),
+                    Text(locale.isTagalog ? 'I-iskedyul ang Pag-publish (Schedule Post)' : 'Schedule Post for Later'),
+                  ],
+                ),
+                if (isScheduled) ...[
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: () async {
+                            final pickedDate = await showDatePicker(
+                              context: context,
+                              initialDate: scheduleDate,
+                              firstDate: DateTime.now(),
+                              lastDate: DateTime.now().add(const Duration(days: 365)),
+                            );
+                            if (pickedDate != null) {
+                              setDialogState(() => scheduleDate = pickedDate);
+                            }
+                          },
+                          icon: const Icon(Icons.calendar_today_rounded, size: 16),
+                          label: Text(DateFormat('MMM dd, yyyy').format(scheduleDate)),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: () async {
+                            final pickedTime = await showTimePicker(
+                              context: context,
+                              initialTime: scheduleTime,
+                            );
+                            if (pickedTime != null) {
+                              setDialogState(() => scheduleTime = pickedTime);
+                            }
+                          },
+                          icon: const Icon(Icons.access_time_rounded, size: 16),
+                          label: Text(scheduleTime.format(context)),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ],
+            ),
           ),
-        ],
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: Text(locale.isTagalog ? 'Kanselahin' : 'Cancel'),
+            ),
+            ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0056B3), foregroundColor: Colors.white),
+              onPressed: () {
+                if (titleCtrl.text.isNotEmpty && contentCtrl.text.isNotEmpty) {
+                  final scheduleStr = isScheduled
+                      ? '${DateFormat('MMM dd, yyyy').format(scheduleDate)} ${scheduleTime.format(context)}'
+                      : 'Immediate';
+                  service.addPost(titleCtrl.text, contentCtrl.text, category: selectedCategory, scheduleTime: scheduleStr);
+                  Navigator.pop(context);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        isScheduled
+                            ? (locale.isTagalog ? 'Naka-iskedyul na ang anunsyo!' : 'Announcement scheduled successfully!')
+                            : (locale.isTagalog ? 'Naipost na ang anunsyo sa lahat ng magsasaka!' : 'Announcement posted successfully to all farmers!'),
+                      ),
+                      backgroundColor: Colors.green,
+                    ),
+                  );
+                }
+              },
+              icon: const Icon(Icons.send_rounded, size: 16),
+              label: Text(locale.isTagalog ? 'I-broadcast (Post)' : 'Broadcast Post'),
+            ),
+          ],
+        ),
       ),
     );
   }
