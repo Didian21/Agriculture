@@ -1,26 +1,171 @@
 crop,model,MAE,RMSE,MAPE_%
-Banana,SeasonalNaive,0.875,1.113,2.798
-Banana,ARIMA,1.138,1.348,3.716
-Banana,ElasticNet,0.831,0.917,2.615
-Banana,RandomForest,1.368,1.685,4.301
-Banana,Ensemble,0.967,1.159,3.067
-Eggplant,SeasonalNaive,1.58,1.88,2.842
-Eggplant,ARIMA,2.14,2.507,3.729
-Eggplant,ElasticNet,1.492,1.725,2.568
-Eggplant,RandomForest,1.36,1.636,2.442
-Eggplant,Ensemble,1.539,1.778,2.7
-Okra,SeasonalNaive,1.824,2.332,4.152
-Okra,ARIMA,1.433,1.905,3.238
-Okra,ElasticNet,1.627,2.076,3.669
-Okra,RandomForest,1.847,2.017,4.155
-Okra,Ensemble,1.628,1.924,3.671
-Rice,SeasonalNaive,1.989,2.334,7.946
-Rice,ARIMA,1.531,1.749,6.124
-Rice,ElasticNet,2.01,2.291,8.048
-Rice,RandomForest,1.619,1.739,6.48
-Rice,Ensemble,1.72,1.896,6.884
-Tomato,SeasonalNaive,1.645,2.247,3.344
-Tomato,ARIMA,1.348,1.956,2.796
-Tomato,ElasticNet,1.306,1.709,2.616
-Tomato,RandomForest,1.94,2.425,3.855
-Tomato,Ensemble,1.395,1.875,2.818
+Ampalaya (Bitter Gourd),SeasonalNaive,0.0,0.0,0.0
+Ampalaya (Bitter Gourd),ARIMA,0.014,0.016,0.021
+Ampalaya (Bitter Gourd),ElasticNet,0.923,1.014,1.346
+Ampalaya (Bitter Gourd),RandomForest,1.268,1.436,1.842
+Ampalaya (Bitter Gourd),Ensemble,0.53,0.581,0.768
+Bawang (Garlic),SeasonalNaive,0.0,0.0,0.0
+Bawang (Garlic),ARIMA,0.015,0.016,0.017
+Bawang (Garlic),ElasticNet,1.175,1.292,1.356
+Bawang (Garlic),RandomForest,1.579,1.815,1.814
+Bawang (Garlic),Ensemble,0.656,0.728,0.752
+Beans,SeasonalNaive,0.0,0.0,0.0
+Beans,ARIMA,0.015,0.016,0.02
+Beans,ElasticNet,1.036,1.138,1.346
+Beans,RandomForest,1.414,1.611,1.831
+Beans,Ensemble,0.597,0.654,0.771
+Bell Pepper,SeasonalNaive,0.0,0.0,0.0
+Bell Pepper,ARIMA,0.021,0.024,0.021
+Bell Pepper,ElasticNet,1.443,1.587,1.37
+Bell Pepper,RandomForest,1.919,2.185,1.815
+Bell Pepper,Ensemble,0.801,0.88,0.757
+Carrot,SeasonalNaive,0.0,0.0,0.0
+Carrot,ARIMA,0.012,0.014,0.017
+Carrot,ElasticNet,0.983,1.08,1.342
+Carrot,RandomForest,1.327,1.517,1.805
+Carrot,Ensemble,0.56,0.617,0.76
+Celery,SeasonalNaive,0.0,0.0,0.0
+Celery,ARIMA,0.019,0.021,0.019
+Celery,ElasticNet,1.369,1.506,1.367
+Celery,RandomForest,1.807,2.073,1.799
+Celery,Ensemble,0.76,0.838,0.754
+Coconut,SeasonalNaive,0.0,0.0,0.0
+Coconut,ARIMA,0.003,0.004,0.019
+Coconut,ElasticNet,0.227,0.248,1.309
+Coconut,RandomForest,0.319,0.364,1.832
+Coconut,Ensemble,0.139,0.152,0.799
+Gabi (Taro),SeasonalNaive,0.0,0.0,0.0
+Gabi (Taro),ARIMA,0.01,0.011,0.019
+Gabi (Taro),ElasticNet,0.719,0.788,1.352
+Gabi (Taro),RandomForest,0.948,1.084,1.778
+Gabi (Taro),Ensemble,0.407,0.446,0.762
+Kalabasa (Squash),SeasonalNaive,0.0,0.0,0.0
+Kalabasa (Squash),ARIMA,0.006,0.006,0.02
+Kalabasa (Squash),ElasticNet,0.403,0.441,1.331
+Kalabasa (Squash),RandomForest,0.557,0.641,1.833
+Kalabasa (Squash),Ensemble,0.241,0.265,0.792
+Kalamansi,SeasonalNaive,0.0,0.0,0.0
+Kalamansi,ARIMA,0.014,0.015,0.024
+Kalamansi,ElasticNet,0.809,0.888,1.354
+Kalamansi,RandomForest,1.09,1.237,1.821
+Kalamansi,Ensemble,0.466,0.513,0.776
+Kamatis (Tomato),SeasonalNaive,0.0,0.0,0.0
+Kamatis (Tomato),ARIMA,0.012,0.013,0.02
+Kamatis (Tomato),ElasticNet,0.826,0.907,1.353
+Kamatis (Tomato),RandomForest,1.107,1.273,1.805
+Kamatis (Tomato),Ensemble,0.476,0.525,0.774
+Kangkong,SeasonalNaive,0.0,0.0,0.0
+Kangkong,ARIMA,0.004,0.004,0.036
+Kangkong,ElasticNet,0.134,0.147,1.276
+Kangkong,RandomForest,0.193,0.22,1.836
+Kangkong,Ensemble,0.088,0.096,0.839
+Labanos (Radish),SeasonalNaive,0.0,0.0,0.0
+Labanos (Radish),ARIMA,0.012,0.014,0.021
+Labanos (Radish),ElasticNet,0.813,0.892,1.354
+Labanos (Radish),RandomForest,1.109,1.259,1.839
+Labanos (Radish),Ensemble,0.468,0.512,0.774
+Luya (Ginger),SeasonalNaive,0.0,0.0,0.0
+Luya (Ginger),ARIMA,0.014,0.016,0.017
+Luya (Ginger),ElasticNet,1.183,1.3,1.356
+Luya (Ginger),RandomForest,1.568,1.798,1.792
+Luya (Ginger),Ensemble,0.663,0.728,0.757
+Mustasa (Mustard),SeasonalNaive,0.0,0.0,0.0
+Mustasa (Mustard),ARIMA,0.012,0.014,0.016
+Mustasa (Mustard),ElasticNet,1.044,1.147,1.346
+Mustasa (Mustard),RandomForest,1.443,1.637,1.854
+Mustasa (Mustard),Ensemble,0.603,0.667,0.773
+Okra,SeasonalNaive,0.0,0.0,0.0
+Okra,ARIMA,0.009,0.01,0.02
+Okra,ElasticNet,0.597,0.655,1.34
+Okra,RandomForest,0.808,0.915,1.808
+Okra,Ensemble,0.342,0.375,0.763
+Patatas (Potato),SeasonalNaive,0.0,0.0,0.0
+Patatas (Potato),ARIMA,0.011,0.013,0.014
+Patatas (Potato),ElasticNet,1.107,1.216,1.351
+Patatas (Potato),RandomForest,1.499,1.731,1.822
+Patatas (Potato),Ensemble,0.63,0.701,0.764
+Patola (Luffa),SeasonalNaive,0.0,0.0,0.0
+Patola (Luffa),ARIMA,0.006,0.007,0.019
+Patola (Luffa),ElasticNet,0.471,0.516,1.335
+Patola (Luffa),RandomForest,0.636,0.722,1.797
+Patola (Luffa),Ensemble,0.273,0.299,0.77
+Pechay (Tagalog),SeasonalNaive,0.0,0.0,0.0
+Pechay (Tagalog),ARIMA,0.011,0.013,0.016
+Pechay (Tagalog),ElasticNet,0.954,1.048,1.344
+Pechay (Tagalog),RandomForest,1.289,1.482,1.806
+Pechay (Tagalog),Ensemble,0.552,0.608,0.772
+Petchay (Baguio),SeasonalNaive,0.0,0.0,0.0
+Petchay (Baguio),ARIMA,0.015,0.017,0.018
+Petchay (Baguio),ElasticNet,1.189,1.307,1.357
+Petchay (Baguio),RandomForest,1.649,1.876,1.876
+Petchay (Baguio),Ensemble,0.677,0.745,0.769
+Pipino (Cucumber),SeasonalNaive,0.0,0.0,0.0
+Pipino (Cucumber),ARIMA,0.009,0.01,0.024
+Pipino (Cucumber),ElasticNet,0.542,0.594,1.338
+Pipino (Cucumber),RandomForest,0.747,0.851,1.838
+Pipino (Cucumber),Ensemble,0.318,0.35,0.781
+Repolyo (Cabbage),SeasonalNaive,0.0,0.0,0.0
+Repolyo (Cabbage),ARIMA,0.015,0.017,0.022
+Repolyo (Cabbage),ElasticNet,0.918,1.008,1.346
+Repolyo (Cabbage),RandomForest,1.257,1.441,1.835
+Repolyo (Cabbage),Ensemble,0.522,0.576,0.761
+Rice,SeasonalNaive,0.0,0.0,0.0
+Rice,ARIMA,0.004,0.004,0.016
+Rice,ElasticNet,0.322,0.352,1.324
+Rice,RandomForest,0.438,0.504,1.794
+Rice,Ensemble,0.193,0.211,0.788
+Saging (Lakatan),SeasonalNaive,0.0,0.0,0.0
+Saging (Lakatan),ARIMA,0.013,0.015,0.02
+Saging (Lakatan),ElasticNet,0.907,0.996,1.347
+Saging (Lakatan),RandomForest,1.233,1.403,1.821
+Saging (Lakatan),Ensemble,0.517,0.57,0.763
+Saging (Latundan),SeasonalNaive,0.0,0.0,0.0
+Saging (Latundan),ARIMA,0.009,0.01,0.02
+Saging (Latundan),ElasticNet,0.632,0.693,1.347
+Saging (Latundan),RandomForest,0.856,0.986,1.818
+Saging (Latundan),Ensemble,0.365,0.401,0.773
+Saging (Saba),SeasonalNaive,0.0,0.0,0.0
+Saging (Saba),ARIMA,0.007,0.007,0.021
+Saging (Saba),ElasticNet,0.436,0.477,1.333
+Saging (Saba),RandomForest,0.599,0.682,1.827
+Saging (Saba),Ensemble,0.258,0.281,0.783
+Sayote (Chayote),SeasonalNaive,0.0,0.0,0.0
+Sayote (Chayote),ARIMA,0.011,0.012,0.02
+Sayote (Chayote),ElasticNet,0.743,0.815,1.352
+Sayote (Chayote),RandomForest,1.0,1.135,1.812
+Sayote (Chayote),Ensemble,0.42,0.463,0.761
+Sibuyas (Onion),SeasonalNaive,0.0,0.0,0.0
+Sibuyas (Onion),ARIMA,0.013,0.014,0.015
+Sibuyas (Onion),ElasticNet,1.151,1.265,1.354
+Sibuyas (Onion),RandomForest,1.556,1.792,1.823
+Sibuyas (Onion),Ensemble,0.655,0.723,0.766
+Sili (Hot Chili),SeasonalNaive,0.0,0.0,0.0
+Sili (Hot Chili),ARIMA,0.023,0.025,0.02
+Sili (Hot Chili),ElasticNet,1.586,1.745,1.376
+Sili (Hot Chili),RandomForest,2.084,2.362,1.802
+Sili (Hot Chili),Ensemble,0.863,0.951,0.745
+Sili (Panigang),SeasonalNaive,0.0,0.0,0.0
+Sili (Panigang),ARIMA,0.012,0.013,0.02
+Sili (Panigang),ElasticNet,0.819,0.899,1.354
+Sili (Panigang),RandomForest,1.098,1.259,1.807
+Sili (Panigang),Ensemble,0.471,0.518,0.773
+Sitaw (Yardlong Bean),SeasonalNaive,0.0,0.0,0.0
+Sitaw (Yardlong Bean),ARIMA,0.01,0.011,0.016
+Sitaw (Yardlong Bean),ElasticNet,0.877,0.963,1.349
+Sitaw (Yardlong Bean),RandomForest,1.199,1.38,1.834
+Sitaw (Yardlong Bean),Ensemble,0.505,0.56,0.772
+Sweet Potato (Kamote),SeasonalNaive,0.0,0.0,0.0
+Sweet Potato (Kamote),ARIMA,0.011,0.012,0.02
+Sweet Potato (Kamote),ElasticNet,0.779,0.855,1.353
+Sweet Potato (Kamote),RandomForest,1.057,1.201,1.834
+Sweet Potato (Kamote),Ensemble,0.451,0.494,0.779
+Talong (Eggplant),SeasonalNaive,0.0,0.0,0.0
+Talong (Eggplant),ARIMA,0.01,0.011,0.015
+Talong (Eggplant),ElasticNet,0.861,0.945,1.35
+Talong (Eggplant),RandomForest,1.149,1.316,1.794
+Talong (Eggplant),Ensemble,0.49,0.537,0.764
+Upo (Bottle Gourd),SeasonalNaive,0.0,0.0,0.0
+Upo (Bottle Gourd),ARIMA,0.006,0.006,0.02
+Upo (Bottle Gourd),ElasticNet,0.383,0.42,1.329
+Upo (Bottle Gourd),RandomForest,0.525,0.603,1.812
+Upo (Bottle Gourd),Ensemble,0.226,0.248,0.778

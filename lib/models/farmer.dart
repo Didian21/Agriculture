@@ -99,8 +99,9 @@ class AdminStaff {
   String name;
   String username;
   String email;
-  String role; // 'Municipal Agriculturist', 'Administrative Staff', 'Agricultural Technician'
+  String role; // 'Municipal Agriculturist', 'Administrative Staff', 'Agricultural Technician', 'Main Admin'
   String status; // 'Active', 'Inactive'
+  String password;
 
   AdminStaff({
     required this.id,
@@ -109,6 +110,7 @@ class AdminStaff {
     required this.email,
     required this.role,
     this.status = 'Active',
+    this.password = 'admin123',
   });
 }
 

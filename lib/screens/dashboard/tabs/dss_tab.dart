@@ -13,7 +13,6 @@ import '../../../widgets/crop_photo.dart';
 import '../../../widgets/common_widgets.dart';
 import '../../../widgets/dss_common.dart';
 import '../../../widgets/planting_graph.dart';
-import '../dss/farm_map_card.dart';
 import '../dss/harvest_record_sheet.dart';
 import '../dss/planting_form_sheet.dart';
 import '../dss/total_land_sheet.dart';
@@ -90,10 +89,6 @@ class DssTab extends StatelessWidget {
         const SizedBox(height: 10),
         _PriceAdvisory(planting: sel),
       ],
-      const SizedBox(height: 18),
-      SectionTitle(icon: Icons.map_rounded, text: t.dssFarmMap, subtitle: t.dssFarmMapSub),
-      const SizedBox(height: 10),
-      FarmMapCard(input: input),
       const SizedBox(height: 14),
       Text(t.dssMyDisclaimer, style: const TextStyle(fontSize: 12, color: AppColors.muted, height: 1.4)),
       const SizedBox(height: 90),
@@ -353,7 +348,7 @@ class _PlantingAdvisory extends StatelessWidget {
     final now = DateTime.now().month;
     final fit = DssService.fitFor(crop, now);
     final next = DssService.nextBestMonths(crop, now, count: 2);
-    final facts = factsFor(crop)!;
+    final facts = factsFor(crop) ?? kCropFacts.values.first;
 
     final headline = switch (fit) {
       PlantFit.best => t.dssFitBest(cropNameT(t, crop)),
@@ -700,7 +695,7 @@ class _PriceAdvisory extends StatelessWidget {
     final crop = planting.crop;
     final idx = DssService.priceIndex(crop);
     final sell = DssService.bestSellMonths(crop);
-    final facts = factsFor(crop)!;
+    final facts = factsFor(crop) ?? kCropFacts.values.first;
     final flat = idx.every((v) => (v - 100).abs() < 0.01);
     final now = DateTime.now().month;
     final prices = DssService.monthlyPrices(crop);
@@ -709,8 +704,10 @@ class _PriceAdvisory extends StatelessWidget {
       return GlassCard(padding: const EdgeInsets.all(14), child: Text(t.dssPriceFlat(cropNameT(t, crop))));
     }
 
+    final minD = facts.minDays ?? 60;
+    final maxD = facts.maxDays ?? 90;
     final harvestMonth = facts.hasHarvestDays
-        ? (planting.plantedOn.add(Duration(days: ((facts.minDays! + facts.maxDays!) ~/ 2))).month)
+        ? (planting.plantedOn.add(Duration(days: ((minD + maxD) ~/ 2))).month)
         : now;
     final harvestHigh = idx[harvestMonth - 1] >= 100;
 

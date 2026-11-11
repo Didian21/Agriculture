@@ -229,7 +229,7 @@ class _CropDetailSheet extends StatelessWidget {
     final t = AppLocalizations.of(context)!;
     final locale = Localizations.localeOf(context).languageCode;
     final tl = locale == 'tl';
-    final f = factsFor(info.id) ?? kCropFacts[info.id]!;
+    final f = factsFor(info.id) ?? kCropFacts[info.id] ?? kCropFacts.values.first;
     final nowMonth = DateTime.now().month;
     final nf = NumberFormat.decimalPattern(locale);
     String month(int m) => DateFormat.MMM(locale).format(DateTime(2024, m));
@@ -362,33 +362,71 @@ class _CropDetailSheet extends StatelessWidget {
                 ),
 
                 // Presyo
-                _Block(
-                  icon: Icons.sell_rounded,
-                  title: t.cropSecPrice,
-                  child: avg == null
-                      ? Text(t.cropNoPrice, style: const TextStyle(fontSize: 14, color: AppColors.muted))
-                      : Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    if (real && pMin != null && pMax != null)
-                      Text('₱${_p(pMin)} - ₱${_p(pMax)} / $unit',
-                          style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: AppColors.ink))
-                    else
-                      Text('≈ ₱${_p(avg)} / $unit',
-                          style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: AppColors.ink)),
-                    const SizedBox(height: 2),
-                    Text(real ? t.cropPriceReal : t.cropPriceEstimate,
-                        style: const TextStyle(fontSize: 12.5, color: AppColors.muted, fontWeight: FontWeight.w700)),
-                    if (sell.isNotEmpty) ...[
-                      const SizedBox(height: 8),
-                      Text('${t.cropBestSell}: ${sell.map(month).join(', ')}',
-                          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: AppColors.ink)),
-                    ],
-                    if (incomeMid != null) ...[
-                      const SizedBox(height: 8),
-                      Text('${t.cropIncomeHa}: ≈ ₱${nf.format((incomeMid / 1000).round() * 1000)}',
-                          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: AppColors.leaf)),
-                    ],
-                  ]),
-                ),
+                Builder(builder: (context) {
+                  final fg = farmgatePrice(info.id, nowMonth) ?? avg;
+                  final mp = getLiveMarketPrice(info.id);
+                  final ml = getLiveMlForecastPrice(info.id);
+                  final mlModel = getLiveMlModelName(info.id);
+
+                  return _Block(
+                    icon: Icons.sell_rounded,
+                    title: t.cropSecPrice,
+                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      if (fg != null)
+                        Text('₱${_p(fg)} / $unit',
+                            style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: AppColors.ink))
+                      else if (real && pMin != null && pMax != null)
+                        Text('₱${_p(pMin)} - ₱${_p(pMax)} / $unit',
+                            style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: AppColors.ink))
+                      else
+                        Text('≈ ₱${_p(avg ?? 35.0)} / $unit',
+                            style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: AppColors.ink)),
+                      const SizedBox(height: 2),
+                      Text(
+                        fg != null ? (tl ? 'Live Presyo sa Bukid (Supabase)' : 'Live Farmgate Price (Supabase)') : (real ? t.cropPriceReal : t.cropPriceEstimate),
+                        style: const TextStyle(fontSize: 12.5, color: AppColors.muted, fontWeight: FontWeight.w700),
+                      ),
+                      if (mp != null) ...[
+                        const SizedBox(height: 6),
+                        Row(
+                          children: [
+                            const Icon(Icons.storefront_rounded, size: 16, color: AppColors.leaf),
+                            const SizedBox(width: 4),
+                            Text(
+                              tl ? 'Presyo sa Palengke: ₱${_p(mp)} / $unit' : 'Market Price: ₱${_p(mp)} / $unit',
+                              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: AppColors.ink),
+                            ),
+                          ],
+                        ),
+                      ],
+                      if (ml != null) ...[
+                        const SizedBox(height: 6),
+                        Row(
+                          children: [
+                            const Icon(Icons.psychology_rounded, size: 16, color: Color(0xFF0284C7)),
+                            const SizedBox(width: 4),
+                            Expanded(
+                              child: Text(
+                                tl ? 'ML Prediction (Hula): ₱${_p(ml)} (${mlModel ?? "ML Model"})' : 'ML Forecast: ₱${_p(ml)} (${mlModel ?? "ML Model"})',
+                                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w900, color: Color(0xFF0284C7)),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                      if (sell.isNotEmpty) ...[
+                        const SizedBox(height: 8),
+                        Text('${t.cropBestSell}: ${sell.map(month).join(', ')}',
+                            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: AppColors.ink)),
+                      ],
+                      if (incomeMid != null) ...[
+                        const SizedBox(height: 8),
+                        Text('${t.cropIncomeHa}: ≈ ₱${nf.format((incomeMid / 1000).round() * 1000)}',
+                            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: AppColors.leaf)),
+                      ],
+                    ]),
+                  );
+                }),
 
                 // Gabay
                 _Block(

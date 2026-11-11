@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
-import '../../../core/crop_l10n.dart';
+import '../../../core/crop_data.dart';
 import '../../../core/crop_names.dart';
 import '../../../dashboard_data.dart';
 import '../../../l10n/app_localizations.dart';
@@ -110,13 +110,20 @@ class _SummaryTile extends StatelessWidget {
   Widget build(BuildContext context) {
     return GlassCard(
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
         child: Row(children: [
-          Icon(icon, color: color, size: 28),
-          const SizedBox(width: 10),
-          Text(value, style: TextStyle(fontWeight: FontWeight.w900, fontSize: 24, color: color)),
+          Icon(icon, color: color, size: 22),
           const SizedBox(width: 8),
-          Expanded(child: Text(label, style: const TextStyle(fontSize: 12.5, color: AppColors.muted, fontWeight: FontWeight.w700))),
+          Text(value, style: TextStyle(fontWeight: FontWeight.w900, fontSize: 20, color: color)),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(
+              label,
+              style: const TextStyle(fontSize: 11, color: AppColors.muted, fontWeight: FontWeight.w700),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
         ]),
       ),
     );
@@ -160,32 +167,160 @@ class _PriceCard extends StatelessWidget {
               ),
             ),
             const SizedBox(width: 10),
-            Expanded(child: Text(cropNameT(t, i.crop), style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 18))),
-            Pill('${up ? '+' : ''}${i.changePercent.toStringAsFixed(1)}%', color,
-                icon: up ? Icons.trending_up_rounded : Icons.trending_down_rounded),
+            Expanded(child: Text(cropNameT(t, i.crop), style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 18), overflow: TextOverflow.ellipsis)),
+            const SizedBox(width: 6),
+            FittedBox(
+              child: Pill('${up ? '+' : ''}${i.changePercent.toStringAsFixed(1)}%', color,
+                  icon: up ? Icons.trending_up_rounded : Icons.trending_down_rounded),
+            ),
           ]),
           const SizedBox(height: 12),
 
           // Ngayon -> Inaasahan
-          Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
-            Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(t.now, style: const TextStyle(fontSize: 12, color: AppColors.muted)),
-              Text('₱${i.currentPrice.toStringAsFixed(2)}', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
-            ]),
-            const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-                child: Icon(Icons.arrow_forward_rounded, color: AppColors.muted)),
-            Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(t.expected, style: const TextStyle(fontSize: 12, color: AppColors.muted)),
-              TweenAnimationBuilder<double>(
-                tween: Tween(begin: i.currentPrice, end: i.predictedPrice),
-                duration: const Duration(milliseconds: 900),
-                curve: Curves.easeOutCubic,
-                builder: (_, v, __) => Text('₱${v.toStringAsFixed(2)}',
-                    style: TextStyle(fontSize: 26, fontWeight: FontWeight.w900, color: color)),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Expanded(
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text(t.now, style: const TextStyle(fontSize: 12, color: AppColors.muted)),
+                  FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.centerLeft,
+                    child: Text('₱${i.currentPrice.toStringAsFixed(2)}', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+                  ),
+                ]),
               ),
-            ]),
-          ]),
+              const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                child: Icon(Icons.arrow_forward_rounded, color: AppColors.muted, size: 18),
+              ),
+              Expanded(
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text(t.expected, style: const TextStyle(fontSize: 12, color: AppColors.muted)),
+                  TweenAnimationBuilder<double>(
+                    tween: Tween(begin: i.currentPrice, end: i.predictedPrice),
+                    duration: const Duration(milliseconds: 900),
+                    curve: Curves.easeOutCubic,
+                    builder: (_, v, __) => FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.centerLeft,
+                      child: Text('₱${v.toStringAsFixed(2)}', style: TextStyle(fontSize: 24, fontWeight: FontWeight.w900, color: color)),
+                    ),
+                  ),
+                ]),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+
+          // LIVE SUPABASE & ML PREDICTION CARD
+          Builder(builder: (context) {
+            final fgPrice = farmgatePrice(i.crop, today.month) ?? i.currentPrice;
+            final mpPrice = getLiveMarketPrice(i.crop) ?? (fgPrice * 1.35);
+            final mlPrice = getLiveMlForecastPrice(i.crop) ?? i.predictedPrice;
+            final mlModel = getLiveMlModelName(i.crop) ?? 'Ensemble ML';
+
+            return Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: const Color(0xFFEFF6FF),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: const Color(0xFFBFDBFE)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      const Icon(Icons.cloud_sync_rounded, size: 16, color: Color(0xFF0284C7)),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          locale == 'tl' ? 'Live Presyo & ML Prediction' : 'Live Supabase Price & ML Forecast',
+                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Color(0xFF0369A1)),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(color: const Color(0xFF0284C7), borderRadius: BorderRadius.circular(6)),
+                        child: Text(
+                          mlModel,
+                          style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.white),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              locale == 'tl' ? 'Presyo sa Bukid' : 'Farmgate Price',
+                              style: const TextStyle(fontSize: 11, color: Color(0xFF0369A1)),
+                            ),
+                            FittedBox(
+                              fit: BoxFit.scaleDown,
+                              alignment: Alignment.centerLeft,
+                              child: Text(
+                                '₱${fgPrice.toStringAsFixed(2)} / kg',
+                                style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.bold, color: Color(0xFF0C4A6E)),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              locale == 'tl' ? 'Presyo sa Palengke' : 'Market Price',
+                              style: const TextStyle(fontSize: 11, color: Color(0xFF0369A1)),
+                            ),
+                            FittedBox(
+                              fit: BoxFit.scaleDown,
+                              alignment: Alignment.centerLeft,
+                              child: Text(
+                                '₱${mpPrice.toStringAsFixed(2)} / kg',
+                                style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.bold, color: Color(0xFF0C4A6E)),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: [
+                            Text(
+                              locale == 'tl' ? 'ML Forecast' : 'ML Forecast',
+                              style: const TextStyle(fontSize: 11, color: Color(0xFF0369A1)),
+                            ),
+                            FittedBox(
+                              fit: BoxFit.scaleDown,
+                              alignment: Alignment.centerRight,
+                              child: Text(
+                                '₱${mlPrice.toStringAsFixed(2)}',
+                                style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w900, color: Color(0xFF16A34A)),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            );
+          }),
           const SizedBox(height: 14),
 
           // Line graph

@@ -215,6 +215,10 @@ class _PagsanjanMapWidgetState extends State<PagsanjanMapWidget> {
               },
             ),
             children: [
+              TileLayer(
+                urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                userAgentPackageName: 'com.example.agriculture',
+              ),
               if (_polygons.isNotEmpty)
                 PolygonLayer(polygons: _polygons),
               if (allMarkers.isNotEmpty)
