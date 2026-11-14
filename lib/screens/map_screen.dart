@@ -129,9 +129,9 @@ class _PagsanjanMapWidgetState extends State<PagsanjanMapWidget> {
                   parsed.add(
                     Polygon(
                       points: points,
-                      color: const Color(0xFFDBEAFE),
-                      borderColor: const Color(0xFF0056B3),
-                      borderStrokeWidth: 2.5,
+                      color: Colors.transparent, // Transparent interior to reveal satellite imagery
+                      borderColor: const Color(0xFF22C55E), // Neon green boundary outline matching screenshot
+                      borderStrokeWidth: 3.0,
                     ),
                   );
                 }
@@ -150,9 +150,9 @@ class _PagsanjanMapWidgetState extends State<PagsanjanMapWidget> {
                     parsed.add(
                       Polygon(
                         points: points,
-                        color: const Color(0xFFDBEAFE),
-                        borderColor: const Color(0xFF0056B3),
-                        borderStrokeWidth: 2.5,
+                        color: Colors.transparent,
+                        borderColor: const Color(0xFF22C55E),
+                        borderStrokeWidth: 3.0,
                       ),
                     );
                   }
@@ -165,25 +165,25 @@ class _PagsanjanMapWidgetState extends State<PagsanjanMapWidget> {
               parsedLabels.add(
                 Marker(
                   point: center,
-                  width: 120,
-                  height: 40,
+                  width: 130,
+                  height: 44,
                   child: Center(
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                       decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.95),
-                        borderRadius: BorderRadius.circular(6),
-                        border: Border.all(color: const Color(0xFF0056B3), width: 1.5),
+                        color: Colors.black.withValues(alpha: 0.85), // Dark styled badge matching screenshot
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: const Color(0xFF22C55E), width: 1.5),
                         boxShadow: const [
-                          BoxShadow(color: Colors.black26, blurRadius: 4, offset: Offset(0, 2)),
+                          BoxShadow(color: Colors.black54, blurRadius: 6, offset: Offset(0, 3)),
                         ],
                       ),
                       child: Text(
                         brgyName,
                         style: const TextStyle(
-                          fontSize: 10,
+                          fontSize: 12,
                           fontWeight: FontWeight.bold,
-                          color: Color(0xFF0056B3),
+                          color: Colors.white, // White bold text matching screenshot
                         ),
                         textAlign: TextAlign.center,
                         maxLines: 1,
@@ -212,7 +212,7 @@ class _PagsanjanMapWidgetState extends State<PagsanjanMapWidget> {
   Widget build(BuildContext context) {
     final allMarkers = [..._barangayLabelMarkers, ...widget.markers];
     return Container(
-      color: const Color(0xFFF1F5F9),
+      color: const Color(0xFF0F172A),
       child: Stack(
         children: [
           FlutterMap(
@@ -220,12 +220,12 @@ class _PagsanjanMapWidgetState extends State<PagsanjanMapWidget> {
             options: MapOptions(
               initialCenter: widget.initialCenter,
               initialZoom: widget.initialZoom,
-              minZoom: 11.0,
+              minZoom: 12.5,
               maxZoom: 18.0,
               cameraConstraint: CameraConstraint.contain(
                 bounds: LatLngBounds(
-                  const LatLng(14.2000, 121.3600),
-                  const LatLng(14.3600, 121.5500),
+                  const LatLng(14.1000, 121.2500),
+                  const LatLng(14.4500, 121.6000),
                 ),
               ),
               onTap: (tapPosition, point) {
@@ -233,41 +233,13 @@ class _PagsanjanMapWidgetState extends State<PagsanjanMapWidget> {
               },
             ),
             children: [
-              if (_isSatelliteMode) ...[
-                TileLayer(
-                  urlTemplate: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
-                  userAgentPackageName: 'com.example.agriculture',
-                  maxZoom: 18,
-                  maxNativeZoom: 18,
-                ),
-                TileLayer(
-                  urlTemplate: 'https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Transportation/MapServer/tile/{z}/{y}/{x}',
-                  userAgentPackageName: 'com.example.agriculture',
-                  maxZoom: 18,
-                  maxNativeZoom: 18,
-                ),
-              ] else ...[
-                TileLayer(
-                  urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                  userAgentPackageName: 'com.example.agriculture',
-                  maxZoom: 18,
-                  maxNativeZoom: 18,
-                ),
-              ],
-              if (_polygons.isNotEmpty || widget.extraPolygons.isNotEmpty)
-                PolygonLayer(
-                  polygons: [
-                    ..._polygons.map((p) => Polygon(
-                      points: p.points,
-                      color: _isSatelliteMode
-                          ? Colors.blue.withValues(alpha: 0.12)
-                          : const Color(0xFFDBEAFE).withValues(alpha: 0.35),
-                      borderColor: _isSatelliteMode ? Colors.amberAccent : const Color(0xFF0056B3),
-                      borderStrokeWidth: _isSatelliteMode ? 3.0 : 2.8,
-                    )),
-                    ...widget.extraPolygons,
-                  ],
-                ),
+              // Satellite Imagery Tile Layer (Esri World Imagery)
+              TileLayer(
+                urlTemplate: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+                userAgentPackageName: 'com.example.agriculture',
+              ),
+              if (_polygons.isNotEmpty)
+                PolygonLayer(polygons: _polygons),
               if (allMarkers.isNotEmpty)
                 MarkerLayer(markers: allMarkers),
             ],
@@ -342,7 +314,7 @@ class PagsanjanMapScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Pagsanjan Official Municipal Boundary Map'),
+        title: const Text('Pagsanjan Official Municipal Boundary Map (Satellite)'),
         backgroundColor: const Color(0xFF0056B3),
       ),
       body: PagsanjanMapWidget(
@@ -366,7 +338,7 @@ class BoundaryPagsanjanScreenState extends State<BoundaryPagsanjanScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Pagsanjan Official Municipal Boundary Map'),
+        title: const Text('Pagsanjan Official Municipal Boundary Map (Satellite)'),
         backgroundColor: const Color(0xFF0056B3),
       ),
       body: const PagsanjanMapWidget(

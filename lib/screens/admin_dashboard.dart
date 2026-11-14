@@ -94,6 +94,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
   // Filters for Dashboard Summary
   String _selectedCropFilter = 'All';
   String _selectedBarangayFilter = 'All';
+  String _selectedOrganizationFilter = 'All';
   String _selectedTimePeriodFilter = 'All';
 
   // Interactive Map State
@@ -349,36 +350,45 @@ class _AdminDashboardState extends State<AdminDashboard> {
       point: LatLng(farm.latitude, farm.longitude),
       width: 44,
       height: 48,
-      child: GestureDetector(
-        onTap: onTap,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              padding: const EdgeInsets.all(6),
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [primaryBlue, primaryBlue.withValues(alpha: 0.85)],
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
+      child: Tooltip(
+        message: 'Owner: ${farm.farmerName}\nCrop: ${farm.cropType} (${farm.landAreaHectares} ha)',
+        preferBelow: false,
+        decoration: BoxDecoration(
+          color: const Color(0xFF0F172A),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        textStyle: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+        child: GestureDetector(
+          onTap: onTap,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(6),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [primaryBlue, primaryBlue.withValues(alpha: 0.85)],
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                  ),
+                  shape: BoxShape.circle,
+                  border: Border.all(color: Colors.white, width: 2),
+                  boxShadow: const [
+                    BoxShadow(color: Colors.black26, blurRadius: 6, offset: Offset(0, 3)),
+                  ],
                 ),
-                shape: BoxShape.circle,
-                border: Border.all(color: Colors.white, width: 2),
-                boxShadow: const [
-                  BoxShadow(color: Colors.black26, blurRadius: 6, offset: Offset(0, 3)),
-                ],
+                child: Icon(cropIcon, color: Colors.white, size: 18),
               ),
-              child: Icon(cropIcon, color: Colors.white, size: 18),
-            ),
-            ClipPath(
-              clipper: _TriangleClipper(),
-              child: Container(
-                width: 8,
-                height: 6,
-                color: primaryBlue,
+              ClipPath(
+                clipper: _TriangleClipper(),
+                child: Container(
+                  width: 8,
+                  height: 6,
+                  color: primaryBlue,
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -1678,24 +1688,6 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
           ),
         ),
 
-        // SINGLE DIRECT IMPORT BUTTON
-        if (showImport)
-          ElevatedButton.icon(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF0284C7),
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-            ),
-            onPressed: () {
-              _showImportDialog(context, moduleName, service, locale);
-            },
-            icon: const Icon(Icons.file_upload_rounded, size: 18),
-            label: Text(
-              isTagalog ? 'I-import ang CSV' : 'Import CSV',
-              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
-            ),
-          ),
       ],
     );
   }
@@ -3468,14 +3460,15 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
       Color cardBorder,
       Color primaryAccent,
       ) {
+    final orgs = ['All', ...service.farmers.map((f) => f.organization).where((o) => o.trim().isNotEmpty).toSet().toList()];
     final farmers = service.farmers.where((f) {
       final query = _searchQuery.toLowerCase();
       final matchesQuery = f.profileName.toLowerCase().contains(query) ||
           f.username.toLowerCase().contains(query) ||
           f.organization.toLowerCase().contains(query);
       final matchesBarangay = _selectedBarangayFilter == 'All' || f.barangay.trim().toLowerCase() == _selectedBarangayFilter.trim().toLowerCase();
-      final matchesAssoc = _selectedAssociationFilter == 'All' || f.organization.trim().toLowerCase() == _selectedAssociationFilter.trim().toLowerCase();
-      return matchesQuery && matchesBarangay && matchesAssoc;
+      final matchesOrg = _selectedOrganizationFilter == 'All' || f.organization.trim().toLowerCase() == _selectedOrganizationFilter.trim().toLowerCase();
+      return matchesQuery && matchesBarangay && matchesOrg;
     }).toList();
 
     farmers.sort((a, b) {
@@ -3547,7 +3540,7 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
               ),
               const SizedBox(width: 10),
               SizedBox(
-                width: 140,
+                width: 180,
                 child: DropdownButtonFormField<String>(
                   initialValue: _selectedBarangayFilter,
                   dropdownColor: cardBg,
@@ -3564,26 +3557,23 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
                   onChanged: (val) => setState(() => _selectedBarangayFilter = val ?? 'All'),
                 ),
               ),
-              const SizedBox(width: 10),
+              const SizedBox(width: 12),
               SizedBox(
-                width: 210,
+                width: 200,
                 child: DropdownButtonFormField<String>(
-                  isExpanded: true,
-                  initialValue: _selectedAssociationFilter,
+                  initialValue: _selectedOrganizationFilter,
                   dropdownColor: cardBg,
-                  style: TextStyle(color: textColor, fontSize: 12.5),
+                  style: TextStyle(color: textColor, fontSize: 13),
                   decoration: InputDecoration(
-                    labelText: locale.isTagalog ? 'Samahan' : 'Association',
-                    labelStyle: TextStyle(color: subtextColor, fontSize: 11.5),
+                    labelText: locale.isTagalog ? 'Samahan' : 'Organization',
+                    labelStyle: TextStyle(color: subtextColor),
                     filled: true,
                     fillColor: cardBg,
                     border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: cardBorder)),
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                   ),
-                  items: ['All', 'Not Associated', ...getUniqueOrganizations(service)]
-                      .map((org) => DropdownMenuItem(value: org, child: Text(org, overflow: TextOverflow.ellipsis, maxLines: 1)))
-                      .toList(),
-                  onChanged: (val) => setState(() => _selectedAssociationFilter = val ?? 'All'),
+                  items: orgs.map((o) => DropdownMenuItem(value: o, child: Text(o))).toList(),
+                  onChanged: (val) => setState(() => _selectedOrganizationFilter = val ?? 'All'),
                 ),
               ),
             ],
@@ -6973,101 +6963,10 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFEFF6FF),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: const Color(0xFFBFDBFE)),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Row(
-                          children: [
-                            Icon(Icons.info_outline_rounded, size: 16, color: Color(0xFF0284C7)),
-                            SizedBox(width: 6),
-                            Text(
-                              'CSV Layout / Structure Format:',
-                              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Color(0xFF0369A1)),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 6),
-                        Text(
-                          'Columns: vegetable, farmgate_price, market_price, date (YYYY-MM-DD), market_location\n'
-                          'Example:\n'
-                          'Talong (Eggplant), 45.00, 70.00, 2026-06-15, Pagsanjan Public Market',
-                          style: TextStyle(fontSize: 11, color: Colors.blue.shade900, fontFamily: 'monospace'),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 14),
-
-                  // DOWNLOAD CSV TEMPLATE BUTTON
-                  SizedBox(
-                    width: double.infinity,
-                    child: OutlinedButton.icon(
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: const Color(0xFF0284C7),
-                        side: const BorderSide(color: Color(0xFF0284C7)),
-                        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 14),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                      ),
-                      onPressed: () async {
-                        const templateCsv = 'vegetable,farmgate_price,market_price,date,market_location\n'
-                            'Ampalaya (Bitter Gourd),60.00,90.00,2026-06-15,Pagsanjan Public Market\n'
-                            'Talong (Eggplant),45.00,70.00,2026-06-15,Pagsanjan Public Market\n'
-                            'Kamatis (Tomato),50.00,85.00,2026-06-15,Pagsanjan Public Market\n'
-                            'Sitaw (Yardlong Bean),45.00,75.00,2026-06-15,Pagsanjan Public Market\n'
-                            'Saging (Saba),35.00,55.00,2026-06-15,Pagsanjan Public Market\n'
-                            'Okra,35.00,55.00,2026-06-15,Pagsanjan Public Market\n'
-                            'Pechay (Tagalog),40.00,65.00,2026-06-15,Pagsanjan Public Market\n';
-                        const targetFileName = 'pagsanjan_market_farmgate_prices_template.csv';
-
-                        try {
-                          String userProfile = Platform.environment['USERPROFILE'] ?? 'C:\\Users\\Public';
-                          String downloadsPath = '$userProfile\\Downloads\\$targetFileName';
-                          final file = File(downloadsPath);
-                          await file.writeAsString(templateCsv);
-
-                          setDialogState(() {
-                            fileNameCtrl.text = downloadsPath;
-                            csvContentCtrl.text = templateCsv;
-                          });
-
-                          if (ctx.mounted) {
-                            ScaffoldMessenger.of(ctx).showSnackBar(
-                              SnackBar(
-                                content: Text(
-                                  service.isTagalog
-                                      ? 'Matagumpay na na-save ang blank template sa Downloads folder: $targetFileName'
-                                      : 'Saved blank template to Downloads folder: $targetFileName',
-                                ),
-                                backgroundColor: const Color(0xFF0284C7),
-                              ),
-                            );
-                          }
-                        } catch (e) {
-                          setDialogState(() {
-                            csvContentCtrl.text = templateCsv;
-                          });
-                        }
-                      },
-                      icon: const Icon(Icons.download_rounded, size: 18),
-                      label: Text(
-                        service.isTagalog ? '📄 Kumuha ng Blank CSV Template (Download Template)' : '📄 Download Blank Market Prices CSV Template',
-                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-
-                  // BROWSE FILE EXPLORER BUTTON
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton.icon(
+                  _buildExportImportButtons(context, 'Historical Data', locale, service),
+                  if (_historicalTableIndex == 1)
+                    ElevatedButton.icon(
+                      onPressed: () => _showAddMarketPriceDialog(context, service),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: const Color(0xFF0284C7),
                         foregroundColor: Colors.white,
@@ -8894,6 +8793,95 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
                   );
                 },
               ),
+            ),
+          ),
+          const SizedBox(height: 24),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                locale.isTagalog ? '⏳ Mga Nakabinbing Akawnt (Pending Approvals)' : '⏳ Pending Account Approvals',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: textColor),
+              ),
+              Badge(
+                label: Text('${service.pendingFarmers.length}'),
+                backgroundColor: Colors.orange,
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            height: 180,
+            child: Container(
+              decoration: BoxDecoration(
+                color: cardBg,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: cardBorder),
+              ),
+              child: service.pendingFarmers.isEmpty
+                  ? Center(
+                      child: Text(
+                        locale.isTagalog ? 'Walang nakabinbing akawnt.' : 'No pending account requests.',
+                        style: TextStyle(color: subtextColor, fontSize: 13),
+                      ),
+                    )
+                  : ListView.separated(
+                      padding: const EdgeInsets.all(8),
+                      itemCount: service.pendingFarmers.length,
+                      separatorBuilder: (context, index) => Divider(height: 1, color: cardBorder),
+                      itemBuilder: (context, index) {
+                        final farmer = service.pendingFarmers[index];
+                        return ListTile(
+                          leading: CircleAvatar(
+                            backgroundColor: Colors.orange.shade100,
+                            foregroundColor: Colors.orange.shade800,
+                            child: const Icon(Icons.person_add_rounded, size: 18),
+                          ),
+                          title: Text(farmer.profileName, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: textColor)),
+                          subtitle: Text('Username: @${farmer.username} • Brgy: ${farmer.barangay} • Org: ${farmer.organization}', style: TextStyle(color: subtextColor, fontSize: 11)),
+                          trailing: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              ElevatedButton.icon(
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: const Color(0xFF16A34A),
+                                  foregroundColor: Colors.white,
+                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                  minimumSize: Size.zero,
+                                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                ),
+                                onPressed: () {
+                                  service.approveFarmer(farmer.id);
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(content: Text(locale.isTagalog ? 'Tinanggap ang akawnt ni ${farmer.profileName}!' : 'Accepted account for ${farmer.profileName}!'), backgroundColor: Colors.green),
+                                  );
+                                },
+                                icon: const Icon(Icons.check_rounded, size: 14),
+                                label: Text(locale.isTagalog ? 'Accept' : 'Accept', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                              ),
+                              const SizedBox(width: 8),
+                              ElevatedButton.icon(
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.redAccent,
+                                  foregroundColor: Colors.white,
+                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                  minimumSize: Size.zero,
+                                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                ),
+                                onPressed: () {
+                                  service.rejectFarmer(farmer.id);
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(content: Text(locale.isTagalog ? 'Tinanggihan ang akawnt ni ${farmer.profileName}.' : 'Declined account for ${farmer.profileName}.'), backgroundColor: Colors.redAccent),
+                                  );
+                                },
+                                icon: const Icon(Icons.close_rounded, size: 14),
+                                label: Text(locale.isTagalog ? 'Decline' : 'Decline', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                              ),
+                            ],
+                          ),
+                        );
+                      },
+                    ),
             ),
           ),
         ],
