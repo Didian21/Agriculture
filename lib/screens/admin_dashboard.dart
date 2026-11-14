@@ -6963,10 +6963,101 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _buildExportImportButtons(context, 'Historical Data', locale, service),
-                  if (_historicalTableIndex == 1)
-                    ElevatedButton.icon(
-                      onPressed: () => _showAddMarketPriceDialog(context, service),
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFEFF6FF),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: const Color(0xFFBFDBFE)),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Row(
+                          children: [
+                            Icon(Icons.info_outline_rounded, size: 16, color: Color(0xFF0284C7)),
+                            SizedBox(width: 6),
+                            Text(
+                              'CSV Layout / Structure Format:',
+                              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Color(0xFF0369A1)),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          'Columns: vegetable, farmgate_price, market_price, date (YYYY-MM-DD), market_location\n'
+                          'Example:\n'
+                          'Talong (Eggplant), 45.00, 70.00, 2026-06-15, Pagsanjan Public Market',
+                          style: TextStyle(fontSize: 11, color: Colors.blue.shade900, fontFamily: 'monospace'),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+
+                  // DOWNLOAD CSV TEMPLATE BUTTON
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: const Color(0xFF0284C7),
+                        side: const BorderSide(color: Color(0xFF0284C7)),
+                        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 14),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      ),
+                      onPressed: () async {
+                        const templateCsv = 'vegetable,farmgate_price,market_price,date,market_location\n'
+                            'Ampalaya (Bitter Gourd),60.00,90.00,2026-06-15,Pagsanjan Public Market\n'
+                            'Talong (Eggplant),45.00,70.00,2026-06-15,Pagsanjan Public Market\n'
+                            'Kamatis (Tomato),50.00,85.00,2026-06-15,Pagsanjan Public Market\n'
+                            'Sitaw (Yardlong Bean),45.00,75.00,2026-06-15,Pagsanjan Public Market\n'
+                            'Saging (Saba),35.00,55.00,2026-06-15,Pagsanjan Public Market\n'
+                            'Okra,35.00,55.00,2026-06-15,Pagsanjan Public Market\n'
+                            'Pechay (Tagalog),40.00,65.00,2026-06-15,Pagsanjan Public Market\n';
+                        const targetFileName = 'pagsanjan_market_farmgate_prices_template.csv';
+
+                        try {
+                          String userProfile = Platform.environment['USERPROFILE'] ?? 'C:\\Users\\Public';
+                          String downloadsPath = '$userProfile\\Downloads\\$targetFileName';
+                          final file = File(downloadsPath);
+                          await file.writeAsString(templateCsv);
+
+                          setDialogState(() {
+                            fileNameCtrl.text = downloadsPath;
+                            csvContentCtrl.text = templateCsv;
+                          });
+
+                          if (ctx.mounted) {
+                            ScaffoldMessenger.of(ctx).showSnackBar(
+                              SnackBar(
+                                content: Text(
+                                  service.isTagalog
+                                      ? 'Matagumpay na na-save ang blank template sa Downloads folder: $targetFileName'
+                                      : 'Saved blank template to Downloads folder: $targetFileName',
+                                ),
+                                backgroundColor: const Color(0xFF0284C7),
+                              ),
+                            );
+                          }
+                        } catch (e) {
+                          setDialogState(() {
+                            csvContentCtrl.text = templateCsv;
+                          });
+                        }
+                      },
+                      icon: const Icon(Icons.download_rounded, size: 18),
+                      label: Text(
+                        service.isTagalog ? '📄 Kumuha ng Blank CSV Template (Download Template)' : '📄 Download Blank Market Prices CSV Template',
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+
+                  // BROWSE FILE EXPLORER BUTTON
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton.icon(
                       style: ElevatedButton.styleFrom(
                         backgroundColor: const Color(0xFF0284C7),
                         foregroundColor: Colors.white,

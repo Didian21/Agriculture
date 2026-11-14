@@ -247,6 +247,9 @@ class AccountService extends ChangeNotifier {
   final List<ActivityLogItem> _activityLogs = [];
 
   // 8. ML MODEL STATUS
+  final Map<String, double> _supabasePriceForecasts = {};
+  final Map<String, String> _supabaseForecastModels = {};
+
   final MLModelStatus _modelStatus = MLModelStatus(
     mae: 1.24,
     rmse: 1.85,
@@ -601,14 +604,17 @@ class AccountService extends ChangeNotifier {
     required String marketLocation,
     required String uploadedBy,
   }) async {
+    final newId = 'MP${DateTime.now().millisecondsSinceEpoch}';
+    final author = uploadedBy.isEmpty ? activeUserName : uploadedBy;
+
     _marketPriceRecords.add(MarketPriceRecord(
-      id: 'MP${DateTime.now().millisecondsSinceEpoch}',
+      id: newId,
       vegetable: vegetable,
       farmgatePrice: farmgatePrice,
       marketPrice: marketPrice,
       date: date,
       marketLocation: marketLocation,
-      uploadedBy: uploadedBy,
+      uploadedBy: author,
     ));
     notifyListeners();
 
@@ -656,6 +662,7 @@ class AccountService extends ChangeNotifier {
     required String username,
     required String email,
     required String role,
+    String password = 'admin123',
   }) async {
     _adminStaffList.add(AdminStaff(
       id: 'STAFF${DateTime.now().millisecondsSinceEpoch}',
@@ -664,6 +671,7 @@ class AccountService extends ChangeNotifier {
       email: email,
       role: role,
       status: 'Active',
+      password: password,
     ));
     notifyListeners();
   }
