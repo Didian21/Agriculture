@@ -1,0 +1,59 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 760" width="1200" height="760" style="background-color: #ffffff; font-family: 'Segoe UI', Arial, sans-serif;">
+  <defs>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="4" stdDeviation="6" flood-opacity="0.12" />
+    </filter>
+  </defs>
+
+  <!-- Title -->
+  <text x="600" y="45" text-anchor="middle" font-size="24" font-weight="bold" fill="#0F172A">AGILE METHODOLOGY WITH RAPID PROTOTYPING</text>
+  <text x="600" y="70" text-anchor="middle" font-size="14" font-weight="600" fill="#64748B">PAGRI: Pagsanjan Agricultural Decision Support System</text>
+
+  <!-- Center Circle -->
+  <circle cx="600" cy="380" r="125" fill="#FFFFFF" filter="url(#shadow)" />
+  <text x="600" y="368" text-anchor="middle" font-size="22" font-weight="900" fill="#0284C7" letter-spacing="1">AGILE</text>
+  <text x="600" y="390" text-anchor="middle" font-size="14" font-weight="bold" fill="#334155">Methodology</text>
+  <text x="600" y="408" text-anchor="middle" font-size="11" font-weight="600" fill="#64748B">with rapid prototyping</text>
+
+  <path d="M 615.3464242237076 160.5359089428387 A 220 220 0 0 1 809.2324335849338 312.01626123751157 L 723.6373471183699 339.82779073125687 A 130 130 0 0 0 609.0683415867363 250.31667346622285 Z" fill="#16A34A" />
+  <text x="707.7407581819903" y="247.09811811882363" text-anchor="middle" font-size="15" font-weight="bold" fill="#FFFFFF">Planning</text>
+  <circle cx="707.7407581819903" cy="242.09811811882363" r="16" fill="#FFFFFF" stroke="#16A34A" stroke-width="3" />
+  <text x="707.7407581819903" y="247.09811811882363" text-anchor="middle" font-size="13" font-weight="bold" fill="#16A34A">1</text>
+  <line x1="707.7407581819903" y1="242.09811811882363" x2="920" y2="242.09811811882363" stroke="#94A3B8" stroke-width="1.5" stroke-dasharray="4,4" />
+  <text x="920" y="120" text-anchor="start" font-size="12" fill="#334155">Problem validated;</text>
+  <text x="920" y="138" text-anchor="start" font-size="12" fill="#334155">farmer and MAO admin</text>
+  <text x="920" y="156" text-anchor="start" font-size="12" fill="#334155">needs identified</text>
+  <path d="M 813.4650597807192 326.7771829680731 A 220 220 0 0 1 729.3127555043441 557.9837387624884 L 676.4120827980215 485.1722092687432 A 130 130 0 0 0 726.1384444158796 348.5501535720432 Z" fill="#0284C7" />
+  <text x="764.446208637534" y="439.853525081992" text-anchor="middle" font-size="15" font-weight="bold" fill="#FFFFFF">Design</text>
+  <circle cx="764.446208637534" cy="439.853525081992" r="16" fill="#FFFFFF" stroke="#0284C7" stroke-width="3" />
+  <text x="764.446208637534" y="444.853525081992" text-anchor="middle" font-size="13" font-weight="bold" fill="#0284C7">2</text>
+  <line x1="764.446208637534" y1="439.853525081992" x2="920" y2="439.853525081992" stroke="#94A3B8" stroke-width="1.5" stroke-dasharray="4,4" />
+  <text x="920" y="420" text-anchor="start" font-size="12" fill="#334155">Flowcharts, database,</text>
+  <text x="920" y="438" text-anchor="start" font-size="12" fill="#334155">user interface, and</text>
+  <text x="920" y="456" text-anchor="start" font-size="12" fill="#334155">advisory workflow</text>
+  <path d="M 716.5822381313051 566.5705811544137 A 220 220 0 0 1 470.68724449565593 557.9837387624884 L 523.5879172019785 485.1722092687432 A 130 130 0 0 0 668.8895043503167 490.2462525003354 Z" fill="#1E293B" />
+  <text x="593.8925880770623" y="549.8933947283417" text-anchor="middle" font-size="15" font-weight="bold" fill="#FFFFFF">Development</text>
+  <circle cx="593.8925880770623" cy="554.8933947283417" r="16" fill="#FFFFFF" stroke="#1E293B" stroke-width="3" />
+  <text x="593.8925880770623" y="559.8933947283417" text-anchor="middle" font-size="13" font-weight="bold" fill="#1E293B">3</text>
+  <line x1="593.8925880770623" y1="554.8933947283417" x2="593.8925880770623" y2="610" stroke="#94A3B8" stroke-width="1.5" stroke-dasharray="4,4" />
+  <text x="600" y="680" text-anchor="middle" font-size="12" fill="#334155">Machine Learning modules (RandomForest, ARIMA, ElasticNet, Ensemble), Supabase cloud database,</text>
+  <text x="600" y="698" text-anchor="middle" font-size="12" fill="#334155">Flutter web and mobile portals, and security features (RLS, encryption, activity logs) built in iterations</text>
+  <path d="M 458.58672586896137 548.5297774861751 A 220 220 0 0 1 390.7675664150662 312.01626123751157 L 476.36265288163 339.82779073125687 A 130 130 0 0 0 516.4376107407498 479.5857776054671 Z" fill="#EA580C" />
+  <text x="431.7792032107942" y="428.2365372679749" text-anchor="middle" font-size="15" font-weight="bold" fill="#FFFFFF">Testing</text>
+  <circle cx="431.7792032107942" cy="428.2365372679749" r="16" fill="#FFFFFF" stroke="#EA580C" stroke-width="3" />
+  <text x="431.7792032107942" y="433.2365372679749" text-anchor="middle" font-size="13" font-weight="bold" fill="#EA580C">4</text>
+  <line x1="431.7792032107942" y1="428.2365372679749" x2="280" y2="428.2365372679749" stroke="#94A3B8" stroke-width="1.5" stroke-dasharray="4,4" />
+  <text x="280" y="420" text-anchor="end" font-size="12" fill="#334155">Functional, security,</text>
+  <text x="280" y="438" text-anchor="end" font-size="12" fill="#334155">performance testing;</text>
+  <text x="280" y="456" text-anchor="end" font-size="12" fill="#334155">defects fixed before</text>
+  <text x="280" y="474" text-anchor="end" font-size="12" fill="#334155">each release</text>
+  <path d="M 396.01955199530676 297.58654944849934 A 220 220 0 0 1 600.0 160.0 L 600.0 250.0 A 130 130 0 0 0 479.46609890631765 331.30114285593146 Z" fill="#D97706" />
+  <text x="502.14124189261935" y="239.9184248028677" text-anchor="middle" font-size="15" font-weight="bold" fill="#FFFFFF">Deployment</text>
+  <circle cx="502.14124189261935" cy="234.9184248028677" r="16" fill="#FFFFFF" stroke="#D97706" stroke-width="3" />
+  <text x="502.14124189261935" y="239.9184248028677" text-anchor="middle" font-size="13" font-weight="bold" fill="#D97706">5</text>
+  <line x1="502.14124189261935" y1="234.9184248028677" x2="280" y2="234.9184248028677" stroke="#94A3B8" stroke-width="1.5" stroke-dasharray="4,4" />
+  <text x="280" y="120" text-anchor="end" font-size="12" fill="#334155">Released to users and</text>
+  <text x="280" y="138" text-anchor="end" font-size="12" fill="#334155">evaluated with ISO/IEC</text>
+  <text x="280" y="156" text-anchor="end" font-size="12" fill="#334155">25010:2011 quality</text>
+  <text x="280" y="174" text-anchor="end" font-size="12" fill="#334155">model</text>
+</svg>

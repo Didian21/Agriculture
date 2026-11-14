@@ -34,8 +34,7 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
       Navigator.pushAndRemoveUntil(
         context,
         MaterialPageRoute(builder: (context) => const AdminDashboard()),
-        (route) => false,
-      );
+        (route) => false      );
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Invalid Admin Username or Password')),

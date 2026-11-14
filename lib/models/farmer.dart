@@ -1,3 +1,5 @@
+import 'package:latlong2/latlong.dart';
+
 class Farmer {
   final String id;
   final String username;
@@ -7,6 +9,7 @@ class Farmer {
   String contactNumber;
   String organization;
   String status; // 'Active', 'Pending', 'Deactivated'
+  String? employerName; // Landowner / Employer for Hired Farmworkers
   final List<String> records;
 
   Farmer({
@@ -18,6 +21,7 @@ class Farmer {
     this.contactNumber = '09171234567',
     this.organization = 'Pagsanjan Farmers Association',
     this.status = 'Active',
+    this.employerName,
     this.records = const [],
   });
 }
@@ -30,9 +34,12 @@ class FarmRecord {
   double latitude;
   double longitude;
   double landAreaHectares;
-  String tenureStatus; // 'Owner', 'Tenant', 'Lease', 'CLT'
+  String tenureStatus; // 'Owner', 'Tenant', 'Lease', 'CLT', 'Hired Farmworkers'
   String cropType; // 'Rice', 'Prutas', 'Gulay'
   String barangay;
+  String? landownerId;
+  String? landownerName;
+  List<LatLng> boundaryPoints;
 
   FarmRecord({
     required this.id,
@@ -45,6 +52,9 @@ class FarmRecord {
     required this.tenureStatus,
     required this.cropType,
     required this.barangay,
+    this.landownerId,
+    this.landownerName,
+    this.boundaryPoints = const [],
   });
 }
 
@@ -99,8 +109,9 @@ class AdminStaff {
   String name;
   String username;
   String email;
-  String role; // 'Municipal Agriculturist', 'Administrative Staff', 'Agricultural Technician'
+  String role; // 'Municipal Agriculturist', 'Administrative Staff', 'Agricultural Technician', 'Main Admin'
   String status; // 'Active', 'Inactive'
+  String password;
 
   AdminStaff({
     required this.id,
@@ -109,6 +120,7 @@ class AdminStaff {
     required this.email,
     required this.role,
     this.status = 'Active',
+    this.password = 'admin123',
   });
 }
 
@@ -145,6 +157,26 @@ class MLModelStatus {
     required this.lastUpdated,
     required this.trainedRecordsCount,
     this.isTraining = false,
+  });
+}
+
+class MarketPriceRecord {
+  final String id;
+  String vegetable;
+  double farmgatePrice; // PHP per kg
+  double marketPrice; // PHP per kg
+  DateTime date;
+  String marketLocation; // Barangay or Market Name
+  String uploadedBy;
+
+  MarketPriceRecord({
+    required this.id,
+    required this.vegetable,
+    required this.farmgatePrice,
+    required this.marketPrice,
+    required this.date,
+    this.marketLocation = 'Pagsanjan Public Market',
+    required this.uploadedBy,
   });
 }
 

@@ -7,6 +7,7 @@ import '../../dashboard_data.dart';
 import '../../l10n/app_localizations.dart';
 import '../../main.dart';
 import '../../providers/farm_input_provider.dart';
+import '../../services/account_service.dart';
 import '../../widgets/common_widgets.dart';
 import '../../widgets/field_background.dart';
 import '../login_screen.dart';
@@ -78,11 +79,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final p = context.watch<DashboardProvider>();
     if (!p.isLoggedIn) return LoginScreen(p: p);
 
-    // Ipasa sa dashboard ang mga pananim na inilagay ng farmer sa DSS (presyo, hula).
+    // Ipasa sa dashboard ang mga pananim at mga anunsyo mula sa MAO (presyo, hula, abiso).
     final farm = context.watch<FarmInputProvider>();
+    final accountService = context.watch<AccountService>();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
         p.syncPlantings(farm.plantings);
+        p.syncPosts(accountService.posts);
         if (p.profile != null) {
           farm.setFarmerInfo(
             id: p.profile!.id,
@@ -304,7 +307,6 @@ class _DashboardAppBar extends StatelessWidget implements PreferredSizeWidget {
   Widget build(BuildContext context) {
     final t = AppLocalizations.of(context)!;
     return AppBar(
-      automaticallyImplyLeading: false,
       titleSpacing: 16,
       title: Row(children: [
         const PagriLogo(height: 38),

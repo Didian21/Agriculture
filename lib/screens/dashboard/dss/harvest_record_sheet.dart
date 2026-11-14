@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../core/crop_data.dart';
 import '../../../core/crop_l10n.dart';
+import '../../../core/crop_names.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../main.dart';
 import '../../../models/farm_planting.dart';
@@ -133,7 +134,7 @@ class _HarvestFormState extends State<_HarvestForm> {
               ),
             ),
             const SizedBox(height: 14),
-            Text(t.dssRecordTitle(t.cropLabel(widget.planting.crop)),
+            Text(t.dssRecordTitle(cropNameT(t, widget.planting.crop)),
                 style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w900, color: AppColors.ink)),
             const SizedBox(height: 4),
             Text(t.dssRecordSub, style: const TextStyle(color: AppColors.muted, height: 1.35)),

@@ -12,36 +12,51 @@ import '../models/weather_models.dart';
 /// Walang gawa-gawang balita. Ang mga anunsyo ng LGU/admin ay idadagdag kapag may API na.
 class NotificationService {
   List<AppNotification> build({
-    required WeatherBundle weather,
+    WeatherBundle? weather,
     required List<FarmPlanting> plantings,
     required List<PlantingGuide> guides,
     required List<PriceInsight> insights,
+    List<Map<String, String>> posts = const [],
   }) {
     final now = DateTime.now();
     final morning = DateTime(now.year, now.month, now.day, 6);
     final out = <AppNotification>[];
 
+    // Mga anunsyo mula sa MAO/Admin
+    for (final p in posts) {
+      out.add(AppNotification(
+        type: NotificationType.announcement,
+        icon: Icons.campaign_rounded,
+        time: now,
+        announcementTitle: p['title'] ?? 'Anunsyo ng MAO',
+        announcementContent: p['content'] ?? '',
+        category: p['category'] ?? 'General Advisory',
+      ));
+    }
+
     // Panahon
-    if (weather.current.code >= 95) {
-      out.add(AppNotification(type: NotificationType.stormAlert, icon: Icons.thunderstorm_rounded, time: now));
-    }
-    final rain3 = weather.daily.take(3).fold<double>(0, (s, d) => s + d.rainMm);
-    if (rain3 >= 30) {
-      out.add(AppNotification(
-        type: NotificationType.rainAlert,
-        icon: Icons.umbrella_rounded,
-        time: now,
-        value: rain3.round(),
-      ));
-    }
-    final peak = weather.daily.isEmpty ? null : weather.daily.first.heatPeak;
-    if (peak != null && peak.level.index >= HeatLevel.danger.index) {
-      out.add(AppNotification(
-        type: NotificationType.heatAlert,
-        icon: Icons.device_thermostat_rounded,
-        time: now,
-        value: peak.celsius.round(),
-      ));
+    if (weather != null) {
+      if (weather.current.code >= 95) {
+        out.add(AppNotification(type: NotificationType.stormAlert, icon: Icons.thunderstorm_rounded, time: now));
+      }
+      final rain3 = weather.daily.take(3).fold<double>(0, (s, d) => s + d.rainMm);
+      if (rain3 >= 30) {
+        out.add(AppNotification(
+          type: NotificationType.rainAlert,
+          icon: Icons.umbrella_rounded,
+          time: now,
+          value: rain3.round(),
+        ));
+      }
+      final peak = weather.daily.isEmpty ? null : weather.daily.first.heatPeak;
+      if (peak != null && peak.level.index >= HeatLevel.danger.index) {
+        out.add(AppNotification(
+          type: NotificationType.heatAlert,
+          icon: Icons.device_thermostat_rounded,
+          time: now,
+          value: peak.celsius.round(),
+        ));
+      }
     }
 
     // Ani

@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 
 import '../core/crop_data.dart';
@@ -8,6 +7,7 @@ import '../l10n/app_localizations.dart';
 import '../main.dart';
 import '../services/dss_service.dart';
 import 'common_widgets.dart';
+import 'crop_photo.dart';
 
 /// "Mga Pananim" - grid ng litrato ng bawat commodity. Pindutin para sa buong detalye.
 /// Mga litrato: ilagay sa assets/images/crops/ (png, jpg o webp; pangalan hal. eggplant.png).
@@ -118,19 +118,6 @@ String _groupLabel(AppLocalizations t, CropGroup g) {
   }
 }
 
-Color _groupColor(CropGroup g) {
-  switch (g) {
-    case CropGroup.veg:
-      return const Color(0xFF7DBE86);
-    case CropGroup.fruit:
-      return const Color(0xFFE9C46A);
-    case CropGroup.root:
-      return const Color(0xFFC9A27E);
-    case CropGroup.grain:
-      return const Color(0xFFD8CB7A);
-  }
-}
-
 class _FilterChip extends StatelessWidget {
   final String label;
   final bool selected;
@@ -166,82 +153,6 @@ class _FilterChip extends StatelessWidget {
   }
 }
 
-/// Hinahanap ang litrato sa assets/images/crops/ (o assets/crops/) (png, jpg, jpeg, webp). Hindi mahalaga ang laki ng titik.
-/// Tinatanggap na pangalan: slug (hal. string_beans), ID, pangalang Ingles o Tagalog.
-class _CropPhotos {
-  static Future<Map<String, String>>? _future;
-
-  static Future<Map<String, String>> load() => _future ??= _read();
-
-  static String norm(String s) => s.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '');
-
-  static Future<Map<String, String>> _read() async {
-    final out = <String, String>{};
-    try {
-      final manifest = await AssetManifest.loadFromAssetBundle(rootBundle);
-      for (final a in manifest.listAssets()) {
-        if (!a.startsWith('assets/images/crops/') && !a.startsWith('assets/crops/')) continue;
-        final low = a.toLowerCase();
-        if (!(low.endsWith('.png') || low.endsWith('.jpg') || low.endsWith('.jpeg') || low.endsWith('.webp'))) continue;
-        final file = a.substring(a.lastIndexOf('/') + 1);
-        out[norm(file.substring(0, file.lastIndexOf('.')))] = a;
-      }
-    } catch (_) {
-      // walang manifest o walang litrato: emoji ang gagamitin
-    }
-    return out;
-  }
-
-  static String? find(Map<String, String> m, CropInfo i) {
-    for (final k in [i.slug, i.id, i.nameEn, i.nameTl]) {
-      final p = m[norm(k)];
-      if (p != null) return p;
-    }
-    return null;
-  }
-}
-
-/// Litrato ng pananim; emoji sa kulay ng grupo kung walang litrato sa assets.
-class _CropPhoto extends StatelessWidget {
-  final CropInfo info;
-  final double emojiSize;
-  const _CropPhoto({required this.info, required this.emojiSize});
-
-  Widget _fallback() {
-    final c = _groupColor(info.group);
-    return Container(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [c.withValues(alpha: 0.35), c.withValues(alpha: 0.75)],
-        ),
-      ),
-      alignment: Alignment.center,
-      child: Text(info.emoji, style: TextStyle(fontSize: emojiSize)),
-    );
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return FutureBuilder<Map<String, String>>(
-      future: _CropPhotos.load(),
-      builder: (context, snap) {
-        final path = snap.hasData ? _CropPhotos.find(snap.data!, info) : null;
-        if (path == null) return _fallback();
-        return Image.asset(
-          path,
-          fit: BoxFit.cover,
-          width: double.infinity,
-          height: double.infinity,
-          cacheWidth: 800,
-          errorBuilder: (context, error, stack) => _fallback(),
-        );
-      },
-    );
-  }
-}
-
 class _CropTile extends StatelessWidget {
   final CropInfo info;
   final bool tl;
@@ -264,7 +175,7 @@ class _CropTile extends StatelessWidget {
           child: ClipRRect(
             borderRadius: BorderRadius.circular(16.5),
             child: Stack(fit: StackFit.expand, children: [
-              _CropPhoto(info: info, emojiSize: 38),
+              CropPhoto(cropId: info.id, emojiSize: 38),
               Positioned(
                 left: 0,
                 right: 0,
@@ -318,7 +229,7 @@ class _CropDetailSheet extends StatelessWidget {
     final t = AppLocalizations.of(context)!;
     final locale = Localizations.localeOf(context).languageCode;
     final tl = locale == 'tl';
-    final f = factsFor(info.id) ?? kCropFacts[info.id]!;
+    final f = factsFor(info.id) ?? kCropFacts[info.id] ?? kCropFacts.values.first;
     final nowMonth = DateTime.now().month;
     final nf = NumberFormat.decimalPattern(locale);
     String month(int m) => DateFormat.MMM(locale).format(DateTime(2024, m));
@@ -388,7 +299,7 @@ class _CropDetailSheet extends StatelessWidget {
                 ),
                 ClipRRect(
                   borderRadius: BorderRadius.circular(22),
-                  child: SizedBox(height: 190, child: _CropPhoto(info: info, emojiSize: 78)),
+                  child: SizedBox(height: 190, child: CropPhoto(cropId: info.id, emojiSize: 78)),
                 ),
                 const SizedBox(height: 14),
                 Text(info.name(tl), style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w900, color: AppColors.ink)),
@@ -396,7 +307,7 @@ class _CropDetailSheet extends StatelessWidget {
                 Text('${t.cropAlsoCalled}: ${info.altName(tl)}', style: const TextStyle(fontSize: 13.5, color: AppColors.muted, fontWeight: FontWeight.w700)),
                 const SizedBox(height: 8),
                 Wrap(spacing: 8, runSpacing: 6, children: [
-                  _Pill(text: _groupLabel(t, info.group), color: _groupColor(info.group)),
+                  _Pill(text: _groupLabel(t, info.group), color: cropGroupColor(info.group)),
                   if (f.storable) _Pill(text: t.cropStorable, color: AppColors.leaf),
                 ]),
                 const SizedBox(height: 10),
@@ -451,33 +362,71 @@ class _CropDetailSheet extends StatelessWidget {
                 ),
 
                 // Presyo
-                _Block(
-                  icon: Icons.sell_rounded,
-                  title: t.cropSecPrice,
-                  child: avg == null
-                      ? Text(t.cropNoPrice, style: const TextStyle(fontSize: 14, color: AppColors.muted))
-                      : Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                    if (real && pMin != null && pMax != null)
-                      Text('₱${_p(pMin)} - ₱${_p(pMax)} / $unit',
-                          style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: AppColors.ink))
-                    else
-                      Text('≈ ₱${_p(avg)} / $unit',
-                          style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: AppColors.ink)),
-                    const SizedBox(height: 2),
-                    Text(real ? t.cropPriceReal : t.cropPriceEstimate,
-                        style: const TextStyle(fontSize: 12.5, color: AppColors.muted, fontWeight: FontWeight.w700)),
-                    if (sell.isNotEmpty) ...[
-                      const SizedBox(height: 8),
-                      Text('${t.cropBestSell}: ${sell.map(month).join(', ')}',
-                          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: AppColors.ink)),
-                    ],
-                    if (incomeMid != null) ...[
-                      const SizedBox(height: 8),
-                      Text('${t.cropIncomeHa}: ≈ ₱${nf.format((incomeMid / 1000).round() * 1000)}',
-                          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: AppColors.leaf)),
-                    ],
-                  ]),
-                ),
+                Builder(builder: (context) {
+                  final fg = farmgatePrice(info.id, nowMonth) ?? avg;
+                  final mp = getLiveMarketPrice(info.id);
+                  final ml = getLiveMlForecastPrice(info.id);
+                  final mlModel = getLiveMlModelName(info.id);
+
+                  return _Block(
+                    icon: Icons.sell_rounded,
+                    title: t.cropSecPrice,
+                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                      if (fg != null)
+                        Text('₱${_p(fg)} / $unit',
+                            style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: AppColors.ink))
+                      else if (real && pMin != null && pMax != null)
+                        Text('₱${_p(pMin)} - ₱${_p(pMax)} / $unit',
+                            style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: AppColors.ink))
+                      else
+                        Text('≈ ₱${_p(avg ?? 35.0)} / $unit',
+                            style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: AppColors.ink)),
+                      const SizedBox(height: 2),
+                      Text(
+                        fg != null ? (tl ? 'Live Presyo sa Bukid (Supabase)' : 'Live Farmgate Price (Supabase)') : (real ? t.cropPriceReal : t.cropPriceEstimate),
+                        style: const TextStyle(fontSize: 12.5, color: AppColors.muted, fontWeight: FontWeight.w700),
+                      ),
+                      if (mp != null) ...[
+                        const SizedBox(height: 6),
+                        Row(
+                          children: [
+                            const Icon(Icons.storefront_rounded, size: 16, color: AppColors.leaf),
+                            const SizedBox(width: 4),
+                            Text(
+                              tl ? 'Presyo sa Palengke: ₱${_p(mp)} / $unit' : 'Market Price: ₱${_p(mp)} / $unit',
+                              style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: AppColors.ink),
+                            ),
+                          ],
+                        ),
+                      ],
+                      if (ml != null) ...[
+                        const SizedBox(height: 6),
+                        Row(
+                          children: [
+                            const Icon(Icons.psychology_rounded, size: 16, color: Color(0xFF0284C7)),
+                            const SizedBox(width: 4),
+                            Expanded(
+                              child: Text(
+                                tl ? 'ML Prediction (Hula): ₱${_p(ml)} (${mlModel ?? "ML Model"})' : 'ML Forecast: ₱${_p(ml)} (${mlModel ?? "ML Model"})',
+                                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w900, color: Color(0xFF0284C7)),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                      if (sell.isNotEmpty) ...[
+                        const SizedBox(height: 8),
+                        Text('${t.cropBestSell}: ${sell.map(month).join(', ')}',
+                            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: AppColors.ink)),
+                      ],
+                      if (incomeMid != null) ...[
+                        const SizedBox(height: 8),
+                        Text('${t.cropIncomeHa}: ≈ ₱${nf.format((incomeMid / 1000).round() * 1000)}',
+                            style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: AppColors.leaf)),
+                      ],
+                    ]),
+                  );
+                }),
 
                 // Gabay
                 _Block(
