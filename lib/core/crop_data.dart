@@ -199,6 +199,18 @@ double? farmgatePrice(String crop, int month) {
   return kCropFacts[crop]?.priceForMonth(month) ?? kCropFacts[crop]?.basePrice;
 }
 
+/// Kuhaning Primary Crop Category (Rice, Gulay, Prutas) para sa farms table sa Supabase.
+String getPrimaryCropCategory(String crop) {
+  final clean = crop.trim().toLowerCase();
+  if (clean.contains('rice') || clean.contains('palay')) {
+    return 'Rice';
+  } else if (clean.contains('prutas') || clean.contains('fruit') || clean.contains('banana') || clean.contains('saging') || clean.contains('calamansi') || clean.contains('kalamansi') || clean.contains('mango') || clean.contains('mangga') || clean.contains('pineapple') || clean.contains('pinya') || clean.contains('papaya') || clean.contains('watermelon') || clean.contains('pakwan')) {
+    return 'Prutas';
+  } else {
+    return 'Gulay';
+  }
+}
+
 /// Kuhaning live Presyo sa Palengke (Market Price) mula sa Supabase market_farmgate_prices.
 double? getLiveMarketPrice(String crop) {
   final clean = crop.trim().toLowerCase();

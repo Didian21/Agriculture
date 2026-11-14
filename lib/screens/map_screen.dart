@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
 import 'package:flutter_map/flutter_map.dart';
@@ -42,6 +43,7 @@ class PagsanjanMapWidget extends StatefulWidget {
   final LatLng initialCenter;
   final double initialZoom;
   final List<Marker> markers;
+  final List<Polygon> extraPolygons;
   final void Function(LatLng)? onTap;
 
   const PagsanjanMapWidget({
@@ -49,6 +51,7 @@ class PagsanjanMapWidget extends StatefulWidget {
     required this.initialCenter,
     required this.initialZoom,
     this.markers = const [],
+    this.extraPolygons = const [],
     this.onTap,
   });
 
@@ -60,6 +63,7 @@ class _PagsanjanMapWidgetState extends State<PagsanjanMapWidget> {
   final MapController _mapController = MapController();
   List<Polygon> _polygons = [];
   List<Marker> _barangayLabelMarkers = [];
+  bool _isSatelliteMode = false;
 
   @override
   void initState() {
@@ -72,7 +76,13 @@ class _PagsanjanMapWidgetState extends State<PagsanjanMapWidget> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.initialCenter != widget.initialCenter || oldWidget.initialZoom != widget.initialZoom) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        _mapController.move(widget.initialCenter, widget.initialZoom);
+        if (mounted) {
+          try {
+            _mapController.move(widget.initialCenter, widget.initialZoom);
+          } catch (e) {
+            debugPrint('MapController move notice: $e');
+          }
+        }
       });
     }
   }
@@ -210,48 +220,108 @@ class _PagsanjanMapWidgetState extends State<PagsanjanMapWidget> {
             options: MapOptions(
               initialCenter: widget.initialCenter,
               initialZoom: widget.initialZoom,
+              minZoom: 11.0,
+              maxZoom: 18.0,
+              cameraConstraint: CameraConstraint.contain(
+                bounds: LatLngBounds(
+                  const LatLng(14.2000, 121.3600),
+                  const LatLng(14.3600, 121.5500),
+                ),
+              ),
               onTap: (tapPosition, point) {
                 if (widget.onTap != null) widget.onTap!(point);
               },
             ),
             children: [
-              TileLayer(
-                urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                userAgentPackageName: 'com.example.agriculture',
-              ),
-              if (_polygons.isNotEmpty)
-                PolygonLayer(polygons: _polygons),
+              if (_isSatelliteMode) ...[
+                TileLayer(
+                  urlTemplate: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+                  userAgentPackageName: 'com.example.agriculture',
+                  maxZoom: 18,
+                  maxNativeZoom: 18,
+                ),
+                TileLayer(
+                  urlTemplate: 'https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Transportation/MapServer/tile/{z}/{y}/{x}',
+                  userAgentPackageName: 'com.example.agriculture',
+                  maxZoom: 18,
+                  maxNativeZoom: 18,
+                ),
+              ] else ...[
+                TileLayer(
+                  urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                  userAgentPackageName: 'com.example.agriculture',
+                  maxZoom: 18,
+                  maxNativeZoom: 18,
+                ),
+              ],
+              if (_polygons.isNotEmpty || widget.extraPolygons.isNotEmpty)
+                PolygonLayer(
+                  polygons: [
+                    ..._polygons.map((p) => Polygon(
+                      points: p.points,
+                      color: _isSatelliteMode
+                          ? Colors.blue.withValues(alpha: 0.12)
+                          : const Color(0xFFDBEAFE).withValues(alpha: 0.35),
+                      borderColor: _isSatelliteMode ? Colors.amberAccent : const Color(0xFF0056B3),
+                      borderStrokeWidth: _isSatelliteMode ? 3.0 : 2.8,
+                    )),
+                    ...widget.extraPolygons,
+                  ],
+                ),
               if (allMarkers.isNotEmpty)
                 MarkerLayer(markers: allMarkers),
             ],
           ),
-          // ZOOM IN / ZOOM OUT FLOATING BUTTONS
+          // SATELLITE & ZOOM FLOATING BUTTONS
           Positioned(
             right: 16,
             bottom: 16,
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
+                // SATELLITE / STREET MAP TOGGLE
                 FloatingActionButton.small(
-                  heroTag: 'map_zoom_in_${DateTime.now().millisecondsSinceEpoch}',
+                  heroTag: 'map_mode_toggle_${identityHashCode(this)}',
+                  backgroundColor: _isSatelliteMode ? const Color(0xFF0284C7) : const Color(0xFF0056B3),
+                  foregroundColor: Colors.white,
+                  tooltip: _isSatelliteMode ? 'Switch to Street Map' : 'Switch to Satellite View',
+                  onPressed: () {
+                    setState(() {
+                      _isSatelliteMode = !_isSatelliteMode;
+                    });
+                  },
+                  child: Icon(
+                    _isSatelliteMode ? Icons.map_rounded : Icons.satellite_alt_rounded,
+                    size: 20,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                FloatingActionButton.small(
+                  heroTag: 'map_zoom_in_${identityHashCode(this)}',
                   backgroundColor: const Color(0xFF0056B3),
                   foregroundColor: Colors.white,
                   tooltip: 'Zoom In (+)',
                   onPressed: () {
                     final currentZoom = _mapController.camera.zoom;
-                    _mapController.move(_mapController.camera.center, currentZoom + 1);
+                    if (currentZoom < 18.0) {
+                      final newZoom = math.min(18.0, currentZoom + 1.0);
+                      _mapController.move(_mapController.camera.center, newZoom);
+                    }
                   },
                   child: const Icon(Icons.add_rounded),
                 ),
                 const SizedBox(height: 8),
                 FloatingActionButton.small(
-                  heroTag: 'map_zoom_out_${DateTime.now().millisecondsSinceEpoch}',
+                  heroTag: 'map_zoom_out_${identityHashCode(this)}',
                   backgroundColor: const Color(0xFF0056B3),
                   foregroundColor: Colors.white,
                   tooltip: 'Zoom Out (-)',
                   onPressed: () {
                     final currentZoom = _mapController.camera.zoom;
-                    _mapController.move(_mapController.camera.center, currentZoom - 1);
+                    if (currentZoom > 11.0) {
+                      final newZoom = math.max(11.0, currentZoom - 1.0);
+                      _mapController.move(_mapController.camera.center, newZoom);
+                    }
                   },
                   child: const Icon(Icons.remove_rounded),
                 ),

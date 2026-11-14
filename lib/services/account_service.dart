@@ -1,7 +1,9 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:latlong2/latlong.dart';
 import '../core/crop_data.dart';
 import '../models/farmer.dart';
 import 'supabase_service.dart';
@@ -37,6 +39,7 @@ class AccountService extends ChangeNotifier {
           contactNumber: row['contact_number'] ?? '',
           organization: row['organization'] ?? '',
           status: row['status'] ?? 'Active',
+          employerName: row['employer_name'],
           records: row['records'] != null ? List<String>.from(row['records']) : [],
         ));
       }
@@ -44,6 +47,18 @@ class AccountService extends ChangeNotifier {
       final farmsRes = await SupabaseService.client.from('farms').select();
       _farms.clear();
       for (var row in farmsRes) {
+        List<LatLng> parsedBoundary = [];
+        if (row['boundary_points'] != null && row['boundary_points'].toString().isNotEmpty) {
+          try {
+            final List rawList = json.decode(row['boundary_points'].toString());
+            for (final p in rawList) {
+              if (p is Map && p['lat'] != null && p['lng'] != null) {
+                parsedBoundary.add(LatLng((p['lat'] as num).toDouble(), (p['lng'] as num).toDouble()));
+              }
+            }
+          } catch (_) {}
+        }
+
         _farms.add(FarmRecord(
           id: row['id'] ?? '',
           farmerId: row['farmer_id'] ?? '',
@@ -55,6 +70,9 @@ class AccountService extends ChangeNotifier {
           tenureStatus: row['tenure_status'] ?? 'Owner',
           cropType: row['crop_type'] ?? 'Rice',
           barangay: row['barangay'] ?? 'Biñan',
+          landownerId: row['landowner_id'],
+          landownerName: row['landowner_name'],
+          boundaryPoints: parsedBoundary,
         ));
       }
 
@@ -668,6 +686,7 @@ class AccountService extends ChangeNotifier {
     required String tenureStatus,
     required String cropType,
     required String barangay,
+    List<LatLng> boundaryPoints = const [],
   }) async {
     final normBrgy = normalizeBarangay(barangay);
     final newId = 'FARM${DateTime.now().millisecondsSinceEpoch}';
@@ -682,12 +701,14 @@ class AccountService extends ChangeNotifier {
       tenureStatus: tenureStatus,
       cropType: cropType,
       barangay: normBrgy,
+      boundaryPoints: boundaryPoints,
     );
     _farms.add(farm);
     logActivity(activeUserName, 'ADD', 'Farm Records', 'Added farm record for $farmerName in $normBrgy ($landAreaHectares ha)');
     notifyListeners();
 
     try {
+      final boundaryJson = json.encode(boundaryPoints.map((p) => {'lat': p.latitude, 'lng': p.longitude}).toList());
       await SupabaseService.client.from('farms').insert({
         'id': newId,
         'farmer_id': farmerId,
@@ -699,6 +720,7 @@ class AccountService extends ChangeNotifier {
         'tenure_status': tenureStatus,
         'crop_type': cropType,
         'barangay': normBrgy,
+        'boundary_points': boundaryJson,
       });
       debugPrint('Saved farm record to Supabase: $locationName');
     } catch (e) {

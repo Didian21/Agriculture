@@ -1,3 +1,5 @@
+import 'package:latlong2/latlong.dart';
+
 class Farmer {
   final String id;
   final String username;
@@ -7,6 +9,7 @@ class Farmer {
   String contactNumber;
   String organization;
   String status; // 'Active', 'Pending', 'Deactivated'
+  String? employerName; // Landowner / Employer for Hired Farmworkers
   final List<String> records;
 
   Farmer({
@@ -18,6 +21,7 @@ class Farmer {
     this.contactNumber = '09171234567',
     this.organization = 'Pagsanjan Farmers Association',
     this.status = 'Active',
+    this.employerName,
     this.records = const [],
   });
 }
@@ -30,9 +34,12 @@ class FarmRecord {
   double latitude;
   double longitude;
   double landAreaHectares;
-  String tenureStatus; // 'Owner', 'Tenant', 'Lease', 'CLT'
+  String tenureStatus; // 'Owner', 'Tenant', 'Lease', 'CLT', 'Hired Farmworkers'
   String cropType; // 'Rice', 'Prutas', 'Gulay'
   String barangay;
+  String? landownerId;
+  String? landownerName;
+  List<LatLng> boundaryPoints;
 
   FarmRecord({
     required this.id,
@@ -45,6 +52,9 @@ class FarmRecord {
     required this.tenureStatus,
     required this.cropType,
     required this.barangay,
+    this.landownerId,
+    this.landownerName,
+    this.boundaryPoints = const [],
   });
 }
 
