@@ -5,185 +5,85 @@ import '../models/farmer.dart';
 import 'supabase_service.dart';
 
 class AccountService extends ChangeNotifier {
-  Timer? _autoSyncTimer;
-
   AccountService() {
     loadFromSupabase();
-    // Auto sync with Supabase every 10 seconds for real-time automatic updates across devices
-    _autoSyncTimer = Timer.periodic(const Duration(seconds: 10), (_) {
-      loadFromSupabase(silent: true);
-    });
-  }
-
-  @override
-  void dispose() {
-    _autoSyncTimer?.cancel();
-    super.dispose();
   }
 
   Future<void> loadFromSupabase({bool silent = false}) async {
     try {
       final farmersRes = await SupabaseService.client.from('farmers').select();
-      _farmers.clear();
-      for (var row in farmersRes) {
-        _farmers.add(Farmer(
-          id: row['id'] ?? '',
-          username: row['username'] ?? '',
-          password: row['password'] ?? '',
-          profileName: row['profile_name'] ?? '',
-          barangay: row['barangay'] ?? 'Biñan',
-          contactNumber: row['contact_number'] ?? '',
-          organization: row['organization'] ?? '',
-          status: row['status'] ?? 'Active',
-          records: row['records'] != null ? List<String>.from(row['records']) : [],
-        ));
+      if (farmersRes.isNotEmpty) {
+        _farmers.clear();
+        for (var row in farmersRes) {
+          _farmers.add(Farmer(
+            id: row['id'] ?? '',
+            username: row['username'] ?? '',
+            password: row['password'] ?? '',
+            profileName: row['profile_name'] ?? '',
+            barangay: row['barangay'] ?? 'Biñan',
+            contactNumber: row['contact_number'] ?? '',
+            organization: row['organization'] ?? '',
+            status: row['status'] ?? 'Active',
+            records: row['records'] != null ? List<String>.from(row['records']) : [],
+          ));
+        }
       }
 
       final farmsRes = await SupabaseService.client.from('farms').select();
-      _farms.clear();
-      for (var row in farmsRes) {
-        _farms.add(FarmRecord(
-          id: row['id'] ?? '',
-          farmerId: row['farmer_id'] ?? '',
-          farmerName: row['farmer_name'] ?? '',
-          locationName: row['location_name'] ?? '',
-          latitude: (row['latitude'] as num?)?.toDouble() ?? 14.27,
-          longitude: (row['longitude'] as num?)?.toDouble() ?? 121.45,
-          landAreaHectares: (row['land_area_hectares'] as num?)?.toDouble() ?? 1.0,
-          tenureStatus: row['tenure_status'] ?? 'Owner',
-          cropType: row['crop_type'] ?? 'Rice',
-          barangay: row['barangay'] ?? 'Biñan',
-        ));
+      if (farmsRes.isNotEmpty) {
+        _farms.clear();
+        for (var row in farmsRes) {
+          _farms.add(FarmRecord(
+            id: row['id'] ?? '',
+            farmerId: row['farmer_id'] ?? '',
+            farmerName: row['farmer_name'] ?? '',
+            locationName: row['location_name'] ?? '',
+            latitude: (row['latitude'] as num?)?.toDouble() ?? 14.27,
+            longitude: (row['longitude'] as num?)?.toDouble() ?? 121.45,
+            landAreaHectares: (row['land_area_hectares'] as num?)?.toDouble() ?? 1.0,
+            tenureStatus: row['tenure_status'] ?? 'Owner',
+            cropType: row['crop_type'] ?? 'Rice',
+            barangay: row['barangay'] ?? 'Biñan',
+          ));
+        }
       }
 
       final histRes = await SupabaseService.client.from('historical_records').select();
-      _historicalRecords.clear();
-      for (var row in histRes) {
-        _historicalRecords.add(HistoricalDataRecord(
-          id: row['id'] ?? '',
-          crop: row['crop'] ?? '',
-          year: row['year'] ?? 2026,
-          month: row['month'] ?? 'January',
-          barangay: row['barangay'] ?? 'ALL',
-          productionMT: (row['production_mt'] as num?)?.toDouble() ?? 0.0,
-          pricePerKg: (row['price_per_kg'] as num?)?.toDouble() ?? 0.0,
-          uploadedBy: row['uploaded_by'] ?? 'Admin',
-          dateUploaded: row['date_uploaded'] != null ? DateTime.parse(row['date_uploaded']) : DateTime.now(),
-        ));
+      if (histRes.isNotEmpty) {
+        _historicalRecords.clear();
+        for (var row in histRes) {
+          _historicalRecords.add(HistoricalDataRecord(
+            id: row['id'] ?? '',
+            crop: row['crop'] ?? '',
+            year: row['year'] ?? 2026,
+            month: row['month'] ?? 'January',
+            productionMT: (row['production_mt'] as num?)?.toDouble() ?? 0.0,
+            pricePerKg: (row['price_per_kg'] as num?)?.toDouble() ?? 0.0,
+            uploadedBy: row['uploaded_by'] ?? 'Admin',
+            dateUploaded: row['date_uploaded'] != null ? DateTime.parse(row['date_uploaded']) : DateTime.now(),
+          ));
+        }
       }
 
-      try {
-        final postsRes = await SupabaseService.client.from('announcements').select().order('created_at', ascending: false);
+      final postsRes = await SupabaseService.client.from('announcements').select();
+      if (postsRes.isNotEmpty) {
         _posts.clear();
         for (var row in postsRes) {
           _posts.add({
-            'id': row['id']?.toString() ?? '',
             'title': row['title'] ?? '',
             'content': row['content'] ?? '',
             'date': row['date'] ?? '',
-            'category': row['category'] ?? 'General Advisory',
-            'status': row['status'] ?? 'Published',
-            'eventDate': row['event_date'] ?? '',
           });
         }
-      } catch (_) {}
-
-      if (_posts.isEmpty) {
-        _posts.addAll([
-          {
-            'id': 'p1',
-            'title': 'Pamamahagi ng Libreng Binhi at Abono sa Pagsanjan',
-            'content': 'Inaanyayahan ang lahat ng rehistradong magsasaka sa Pamahalaang Bayan para sa libreng palay seeds at fertilizer distribution.',
-            'date': DateFormat('MMM dd, yyyy HH:mm').format(DateTime.now().subtract(const Duration(hours: 3))),
-            'category': 'Subsidy & Distribution',
-            'status': 'Published',
-            'eventDate': DateFormat('MMM dd, yyyy 08:30').format(DateTime.now().add(const Duration(days: 3))),
-          },
-          {
-            'id': 'p2',
-            'title': 'Ulat sa Panahon: Pag-iingat sa Inaasahang Ulan',
-            'content': 'Pinapayuhan ang mga magsasaka ng Pechay at Kamatis na linisin ang mga kanal ng patubig dahil sa inaasahang malakas na ulan ngayong linggo.',
-            'date': DateFormat('MMM dd, yyyy HH:mm').format(DateTime.now().subtract(const Duration(days: 1))),
-            'category': 'Weather Advisory',
-            'status': 'Published',
-            'eventDate': '',
-          },
-        ]);
       }
-
-      try {
-        final staffRes = await SupabaseService.client.from('admin_staff').select();
-        if (staffRes.isNotEmpty) {
-          _adminStaffList.clear();
-          for (var row in staffRes) {
-            _adminStaffList.add(AdminStaff(
-              id: row['id'] ?? '',
-              name: row['name'] ?? '',
-              username: row['username'] ?? '',
-              email: row['email'] ?? '',
-              role: row['role'] ?? 'Administrative Staff',
-              status: row['status'] ?? 'Active',
-            ));
-          }
-        }
-      } catch (_) {}
-
-      try {
-        final cropReqRes = await SupabaseService.client.from('crop_requirements').select();
-        if (cropReqRes.isNotEmpty) {
-          _cropRequirements.clear();
-          for (var row in cropReqRes) {
-            _cropRequirements.add(CropPlantingReq(
-              id: row['id'] ?? '',
-              cropName: row['crop_name'] ?? '',
-              cropCategory: row['crop_category'] ?? 'Gulay',
-              minTemp: (row['min_temp'] as num?)?.toDouble() ?? 20.0,
-              maxTemp: (row['max_temp'] as num?)?.toDouble() ?? 30.0,
-              minRainfallMm: (row['min_rainfall_mm'] as num?)?.toDouble() ?? 100.0,
-              maxRainfallMm: (row['max_rainfall_mm'] as num?)?.toDouble() ?? 250.0,
-              suitableMonths: row['suitable_months'] ?? 'Year-round',
-            ));
-          }
-        }
-      } catch (_) {}
-
-      try {
-        final logsRes = await SupabaseService.client.from('activity_logs').select().order('timestamp', ascending: false).limit(100);
-        if (logsRes.isNotEmpty) {
-          _activityLogs.clear();
-          for (var row in logsRes) {
-            _activityLogs.add(ActivityLogItem(
-              id: row['id'] ?? '',
-              user: row['user'] ?? '',
-              action: row['action'] ?? '',
-              module: row['module'] ?? '',
-              details: row['details'] ?? '',
-              timestamp: row['timestamp'] != null ? DateTime.parse(row['timestamp']) : DateTime.now(),
-            ));
-          }
-        }
-      } catch (_) {}
-
-      try {
-        final metricsRes = await SupabaseService.client.from('model_metrics').select().limit(1);
-        if (metricsRes.isNotEmpty) {
-          final row = metricsRes.first;
-          _modelStatus = MLModelStatus(
-            mae: (row['mae'] as num?)?.toDouble() ?? 1.24,
-            rmse: (row['rmse'] as num?)?.toDouble() ?? 1.85,
-            mape: (row['mape_pct'] as num?)?.toDouble() ?? 4.2,
-            lastUpdated: DateTime.now(),
-            trainedRecordsCount: _historicalRecords.length * 350 + 800,
-          );
-        }
-      } catch (_) {}
 
       notifyListeners();
     } catch (e) {
-      debugPrint('Supabase load error: $e');
+      if (!silent) debugPrint('Supabase load error (using local default data): $e');
     }
   }
-  // Pagsanjan Barangays (All 16 Barangays)
+
+  // Pagsanjan Barangays
   static const List<String> pagsanjanBarangays = [
     'Anibong',
     'Biñan',
@@ -195,25 +95,22 @@ class AccountService extends ChangeNotifier {
     'Layug',
     'Magdapio',
     'Maulawin',
-    'Pinagsanjan',
     'Poblacion Uno',
     'Poblacion Dos',
-    'Sabang',
     'Sampaloc',
     'San Isidro',
+    'Sabang',
   ];
 
-  static String normalizeBarangay(String input) {
-    final clean = input.trim().toLowerCase();
-    for (final b in pagsanjanBarangays) {
-      if (b.toLowerCase() == clean) return b;
-    }
-    if (input.isEmpty) return 'Biñan';
-    return input[0].toUpperCase() + input.substring(1);
-  }
-
   // 1. FARMERS
-  final List<Farmer> _farmers = [];
+  final List<Farmer> _farmers = [
+    Farmer(id: 'F001', username: 'juan', password: 'password123', profileName: 'Juan Dela Cruz', barangay: 'Biñan', contactNumber: '09123456789', organization: 'Samahang Magsasaka', status: 'Active', records: ['Harvest Q1: 1,200kg', 'Fertilizer Subsidy Received']),
+    Farmer(id: 'F002', username: 'maria', password: 'password123', profileName: 'Maria Santos', barangay: 'Lambac', contactNumber: '09198765432', organization: 'Pagsanjan Farmers Coop', status: 'Active', records: ['Harvest Q1: 950kg']),
+    Farmer(id: 'F003', username: 'pedro', password: 'password123', profileName: 'Pedro Reyes', barangay: 'Buboy', contactNumber: '09181112233', organization: 'Upland Growers', status: 'Active', records: ['Seed distribution registered']),
+    Farmer(id: 'F004', username: 'ana', password: 'password123', profileName: 'Ana Gonzales', barangay: 'Sabang', contactNumber: '09175554433', organization: 'Vegetable Growers Assoc', status: 'Active', records: ['Organic Farming Training']),
+    Farmer(id: 'FP001', username: 'pending_carlos', password: 'password123', profileName: 'Carlos Pendon', barangay: 'Alipit', contactNumber: '09179998877', organization: 'Upland Farmers', status: 'Pending', records: ['New Account Request']),
+    Farmer(id: 'FP002', username: 'pending_elena', password: 'password123', profileName: 'Elena Alcantara', barangay: 'Dingin', contactNumber: '09187776655', organization: 'Rural Workers', status: 'Pending', records: ['New Account Request']),
+  ];
 
   // 2. FARM RECORDS
   final List<FarmRecord> _farms = [];
@@ -221,65 +118,38 @@ class AccountService extends ChangeNotifier {
   // 3. HISTORICAL DATA (Production & Price)
   final List<HistoricalDataRecord> _historicalRecords = [];
 
-  // 3b. MARKET & FARMGATE PRICES FOR VEGETABLES
+  // 4. MARKET PRICE RECORDS (Tab 2: Vegetable Market & Farmgate Prices)
   final List<MarketPriceRecord> _marketPriceRecords = [
     MarketPriceRecord(
       id: 'MP001',
       vegetable: 'Talong (Eggplant)',
-      farmgatePrice: 45.0,
-      marketPrice: 70.0,
+      farmgatePrice: 45.00,
+      marketPrice: 70.00,
       date: DateTime.now().subtract(const Duration(days: 1)),
       marketLocation: 'Pagsanjan Public Market',
-      uploadedBy: 'Ms. Jellie Masacayan',
+      uploadedBy: 'Dr. Roberto Mendoza',
     ),
     MarketPriceRecord(
       id: 'MP002',
       vegetable: 'Kamatis (Tomato)',
-      farmgatePrice: 50.0,
-      marketPrice: 85.0,
+      farmgatePrice: 50.00,
+      marketPrice: 85.00,
       date: DateTime.now().subtract(const Duration(days: 1)),
       marketLocation: 'Pagsanjan Public Market',
-      uploadedBy: 'Ms. Jellie Masacayan',
+      uploadedBy: 'Dr. Roberto Mendoza',
     ),
     MarketPriceRecord(
       id: 'MP003',
-      vegetable: 'Okra',
-      farmgatePrice: 35.0,
-      marketPrice: 55.0,
+      vegetable: 'Ampalaya',
+      farmgatePrice: 60.00,
+      marketPrice: 90.00,
       date: DateTime.now().subtract(const Duration(days: 2)),
-      marketLocation: 'Pagsanjan Public Market',
-      uploadedBy: 'Engr. Arnel Cruz',
-    ),
-    MarketPriceRecord(
-      id: 'MP004',
-      vegetable: 'Pechay (Tagalog)',
-      farmgatePrice: 40.0,
-      marketPrice: 65.0,
-      date: DateTime.now().subtract(const Duration(days: 2)),
-      marketLocation: 'Pagsanjan Public Market',
-      uploadedBy: 'Clara Gonzales',
-    ),
-    MarketPriceRecord(
-      id: 'MP005',
-      vegetable: 'Sitaw (Yardlong Bean)',
-      farmgatePrice: 45.0,
-      marketPrice: 75.0,
-      date: DateTime.now().subtract(const Duration(days: 3)),
-      marketLocation: 'Pagsanjan Public Market',
-      uploadedBy: 'Ms. Jellie Masacayan',
-    ),
-    MarketPriceRecord(
-      id: 'MP006',
-      vegetable: 'Ampalaya (Bitter Gourd)',
-      farmgatePrice: 60.0,
-      marketPrice: 90.0,
-      date: DateTime.now().subtract(const Duration(days: 3)),
       marketLocation: 'Pagsanjan Public Market',
       uploadedBy: 'Engr. Arnel Cruz',
     ),
   ];
 
-  // 4. CROP PLANTING REQUIREMENTS
+  // 5. CROP PLANTING REQUIREMENTS
   final List<CropPlantingReq> _cropRequirements = [
     CropPlantingReq(
       id: 'CPR001',
@@ -323,13 +193,13 @@ class AccountService extends ChangeNotifier {
     ),
   ];
 
-  // 5. ADMIN STAFF ACCOUNTS
+  // 6. ADMIN STAFF ACCOUNTS
   final List<AdminStaff> _adminStaffList = [
     AdminStaff(
       id: 'STAFF001',
-      name: 'Ms. Jellie Masacayan',
-      username: 'jellie_masacayan',
-      email: 'jmasacayan@pagsanjan.gov.ph',
+      name: 'Dr. Roberto Mendoza',
+      username: 'roberto_mao',
+      email: 'rmendoza@pagsanjan.gov.ph',
       role: 'Municipal Agriculturist',
       status: 'Active',
     ),
@@ -368,11 +238,11 @@ class AccountService extends ChangeNotifier {
     notifyListeners();
   }
 
-  // 6. ACTIVITY LOG
+  // 7. ACTIVITY LOG
   final List<ActivityLogItem> _activityLogs = [];
 
-  // 7. ML MODEL STATUS
-  MLModelStatus _modelStatus = MLModelStatus(
+  // 8. ML MODEL STATUS
+  final MLModelStatus _modelStatus = MLModelStatus(
     mae: 1.24,
     rmse: 1.85,
     mape: 4.2,
@@ -380,8 +250,19 @@ class AccountService extends ChangeNotifier {
     trainedRecordsCount: 1250,
   );
 
-  // 8. OFFICE POSTS
-  final List<Map<String, String>> _posts = [];
+  // 9. OFFICE POSTS
+  final List<Map<String, String>> _posts = [
+    {
+      'title': 'Typhoon Advisory for Farmers',
+      'content': 'Please harvest mature crops early due to expected weather disturbance next week.',
+      'date': 'Oct 24, 2026',
+    },
+    {
+      'title': 'Subsidized Fertilizer Distribution',
+      'content': 'Free organic fertilizer claiming is now open at the Municipal Agriculture Office.',
+      'date': 'Oct 22, 2026',
+    },
+  ];
 
   // THEME & LANGUAGE STATE
   bool _isDarkMode = false;
@@ -402,6 +283,37 @@ class AccountService extends ChangeNotifier {
 
   // GETTERS
   List<Farmer> get farmers => List.unmodifiable(_farmers);
+  List<Farmer> get pendingFarmers => _farmers.where((f) => f.status == 'Pending').toList();
+
+  Future<void> approveFarmer(String id) async {
+    final idx = _farmers.indexWhere((f) => f.id == id);
+    if (idx != -1) {
+      final f = _farmers[idx];
+      _farmers[idx] = Farmer(
+        id: f.id,
+        username: f.username,
+        password: f.password,
+        profileName: f.profileName,
+        barangay: f.barangay,
+        contactNumber: f.contactNumber,
+        organization: f.organization,
+        status: 'Active',
+        records: f.records,
+      );
+      logActivity(activeUserName, 'APPROVE', 'Account Approvals', 'Approved pending account for ${f.profileName}');
+      notifyListeners();
+    }
+  }
+
+  Future<void> rejectFarmer(String id) async {
+    final idx = _farmers.indexWhere((f) => f.id == id);
+    if (idx != -1) {
+      final f = _farmers[idx];
+      _farmers.removeAt(idx);
+      logActivity(activeUserName, 'REJECT', 'Account Approvals', 'Declined pending account for ${f.profileName}');
+      notifyListeners();
+    }
+  }
   List<FarmRecord> get farms => List.unmodifiable(_farms);
   List<HistoricalDataRecord> get historicalRecords => List.unmodifiable(_historicalRecords);
   List<MarketPriceRecord> get marketPriceRecords => List.unmodifiable(_marketPriceRecords);
@@ -412,10 +324,14 @@ class AccountService extends ChangeNotifier {
   List<Map<String, String>> get posts => List.unmodifiable(_posts);
 
   // AUTHENTICATION
+  static String normalizeBarangay(String name) {
+    return name.trim();
+  }
+
   Farmer? authenticateFarmer(String username, String password) {
     try {
       return _farmers.firstWhere(
-        (f) => (f.username == username || f.contactNumber == username) && f.password == password && f.status == 'Active',
+        (f) => f.username == username && f.password == password && f.status == 'Active',
       );
     } catch (e) {
       return null;
@@ -423,42 +339,7 @@ class AccountService extends ChangeNotifier {
   }
 
   Future<Farmer?> authenticateFarmerAsync(String username, String password) async {
-    try {
-      final localMatch = authenticateFarmer(username, password);
-      if (localMatch != null) return localMatch;
-    } catch (_) {}
-
-    try {
-      final res = await SupabaseService.client
-          .from('farmers')
-          .select()
-          .or('username.eq.$username,contact_number.eq.$username')
-          .eq('password', password)
-          .eq('status', 'Active')
-          .maybeSingle();
-
-      if (res != null) {
-        final farmer = Farmer(
-          id: res['id'] ?? '',
-          username: res['username'] ?? '',
-          password: res['password'] ?? '',
-          profileName: res['profile_name'] ?? '',
-          barangay: res['barangay'] ?? 'Biñan',
-          contactNumber: res['contact_number'] ?? '',
-          organization: res['organization'] ?? '',
-          status: res['status'] ?? 'Active',
-          records: res['records'] != null ? List<String>.from(res['records']) : [],
-        );
-        if (!_farmers.any((f) => f.id == farmer.id)) {
-          _farmers.add(farmer);
-        }
-        return farmer;
-      }
-    } catch (e) {
-      debugPrint('Supabase auth error (farmer): $e');
-    }
-
-    return null;
+    return authenticateFarmer(username, password);
   }
 
   bool authenticateAdmin(String username, String password) {
@@ -475,7 +356,8 @@ class AccountService extends ChangeNotifier {
           .eq('username', username)
           .eq('password', password)
           .eq('status', 'Active')
-          .maybeSingle();
+          .maybeSingle()
+          .timeout(const Duration(seconds: 3));
 
       if (res != null) {
         final staff = AdminStaff(
@@ -496,36 +378,23 @@ class AccountService extends ChangeNotifier {
     } catch (e) {
       debugPrint('Supabase admin auth error: $e');
     }
-    return false;
+    return authenticateAdmin(username, password);
   }
 
   // LOGGING HELPER
   void logActivity(String user, String action, String module, String details) {
-    final newId = 'LOG${DateTime.now().millisecondsSinceEpoch}';
-    final now = DateTime.now();
     _activityLogs.insert(
       0,
       ActivityLogItem(
-        id: newId,
+        id: 'LOG${DateTime.now().millisecondsSinceEpoch}',
         user: user,
         action: action,
         module: module,
         details: details,
-        timestamp: now,
+        timestamp: DateTime.now(),
       ),
     );
     notifyListeners();
-
-    try {
-      SupabaseService.client.from('activity_logs').insert({
-        'id': newId,
-        'user': user,
-        'action': action,
-        'module': module,
-        'details': details,
-        'timestamp': now.toIso8601String(),
-      }).then((_) {}).catchError((_) {});
-    } catch (_) {}
   }
 
   // FARMERS CRUD & ACCOUNTS
@@ -539,20 +408,19 @@ class AccountService extends ChangeNotifier {
     required String organization,
     String status = 'Active',
   }) async {
-    final normBrgy = normalizeBarangay(barangay);
     final newId = id ?? 'F${DateTime.now().millisecondsSinceEpoch}';
     final farmer = Farmer(
       id: newId,
       username: username,
       password: password,
       profileName: profileName,
-      barangay: normBrgy,
+      barangay: barangay,
       contactNumber: contactNumber,
       organization: organization,
       status: status,
     );
     _farmers.add(farmer);
-    logActivity(activeUserName, 'ADD', 'Farmer Records', 'Added farmer $profileName ($normBrgy)');
+    logActivity(activeUserName, 'ADD', 'Farmer Records', 'Added farmer $profileName ($barangay)');
     notifyListeners();
 
     try {
@@ -561,7 +429,7 @@ class AccountService extends ChangeNotifier {
         'username': username,
         'password': password,
         'profile_name': profileName,
-        'barangay': normBrgy,
+        'barangay': barangay,
         'contact_number': contactNumber,
         'organization': organization,
         'status': status,
@@ -581,74 +449,64 @@ class AccountService extends ChangeNotifier {
     required String organization,
     required String status,
   }) async {
-    final normBrgy = normalizeBarangay(barangay);
     final index = _farmers.indexWhere((f) => f.id == id);
     if (index != -1) {
-      _farmers[index].profileName = profileName;
-      _farmers[index].barangay = normBrgy;
-      _farmers[index].contactNumber = contactNumber;
-      _farmers[index].organization = organization;
-      _farmers[index].status = status;
-      logActivity(activeUserName, 'EDIT', 'Farmer Records', 'Updated farmer info for $profileName');
+      _farmers[index] = Farmer(
+        id: id,
+        username: _farmers[index].username,
+        password: _farmers[index].password,
+        profileName: profileName,
+        barangay: barangay,
+        contactNumber: contactNumber,
+        organization: organization,
+        status: status,
+        records: _farmers[index].records,
+      );
+      logActivity(activeUserName, 'UPDATE', 'Farmer Records', 'Updated farmer $profileName');
       notifyListeners();
-
-      try {
-        await SupabaseService.client.from('farmers').update({
-          'profile_name': profileName,
-          'barangay': normBrgy,
-          'contact_number': contactNumber,
-          'organization': organization,
-          'status': status,
-        }).eq('id', id);
-      } catch (e) {
-        debugPrint('Supabase update error (farmer): $e');
-      }
     }
   }
 
   Future<void> deleteFarmer(String id) async {
-    final index = _farmers.indexWhere((f) => f.id == id);
-    if (index != -1) {
-      final name = _farmers[index].profileName;
-      _farmers.removeAt(index);
-      logActivity(activeUserName, 'DELETE', 'Farmer Records', 'Deleted farmer $name');
-      notifyListeners();
-
-      try {
-        await SupabaseService.client.from('farmers').delete().eq('id', id);
-      } catch (e) {
-        debugPrint('Supabase delete error (farmer): $e');
-      }
-    }
+    _farmers.removeWhere((f) => f.id == id);
+    notifyListeners();
   }
 
-  Future<void> setFarmerStatus(String id, String newStatus) async {
-    final index = _farmers.indexWhere((f) => f.id == id);
-    if (index != -1) {
-      _farmers[index].status = newStatus;
-      logActivity(activeUserName, 'EDIT', 'Farmer Accounts', 'Set account status of ${_farmers[index].profileName} to $newStatus');
+  Future<void> setFarmerStatus(String id, String status) async {
+    final idx = _farmers.indexWhere((f) => f.id == id);
+    if (idx != -1) {
+      final f = _farmers[idx];
+      _farmers[idx] = Farmer(
+        id: f.id,
+        username: f.username,
+        password: f.password,
+        profileName: f.profileName,
+        barangay: f.barangay,
+        contactNumber: f.contactNumber,
+        organization: f.organization,
+        status: status,
+        records: f.records,
+      );
       notifyListeners();
-
-      try {
-        await SupabaseService.client.from('farmers').update({'status': newStatus}).eq('id', id);
-      } catch (e) {
-        debugPrint('Supabase status update error: $e');
-      }
     }
   }
 
   Future<void> resetFarmerPassword(String id, String newPassword) async {
-    final index = _farmers.indexWhere((f) => f.id == id);
-    if (index != -1) {
-      _farmers[index].password = newPassword;
-      logActivity(activeUserName, 'EDIT', 'Farmer Accounts', 'Reset password for ${_farmers[index].profileName}');
+    final idx = _farmers.indexWhere((f) => f.id == id);
+    if (idx != -1) {
+      final f = _farmers[idx];
+      _farmers[idx] = Farmer(
+        id: f.id,
+        username: f.username,
+        password: newPassword,
+        profileName: f.profileName,
+        barangay: f.barangay,
+        contactNumber: f.contactNumber,
+        organization: f.organization,
+        status: f.status,
+        records: f.records,
+      );
       notifyListeners();
-
-      try {
-        await SupabaseService.client.from('farmers').update({'password': newPassword}).eq('id', id);
-      } catch (e) {
-        debugPrint('Supabase password reset error: $e');
-      }
     }
   }
 
@@ -664,10 +522,8 @@ class AccountService extends ChangeNotifier {
     required String cropType,
     required String barangay,
   }) async {
-    final normBrgy = normalizeBarangay(barangay);
-    final newId = 'FARM${DateTime.now().millisecondsSinceEpoch}';
-    final farm = FarmRecord(
-      id: newId,
+    _farms.add(FarmRecord(
+      id: 'FARM${DateTime.now().millisecondsSinceEpoch}',
       farmerId: farmerId,
       farmerName: farmerName,
       locationName: locationName,
@@ -676,332 +532,68 @@ class AccountService extends ChangeNotifier {
       landAreaHectares: landAreaHectares,
       tenureStatus: tenureStatus,
       cropType: cropType,
-      barangay: normBrgy,
-    );
-    _farms.add(farm);
-    logActivity(activeUserName, 'ADD', 'Farm Records', 'Added farm record for $farmerName in $normBrgy ($landAreaHectares ha)');
+      barangay: barangay,
+    ));
     notifyListeners();
-
-    try {
-      await SupabaseService.client.from('farms').insert({
-        'id': newId,
-        'farmer_id': farmerId,
-        'farmer_name': farmerName,
-        'location_name': locationName,
-        'latitude': latitude,
-        'longitude': longitude,
-        'land_area_hectares': landAreaHectares,
-        'tenure_status': tenureStatus,
-        'crop_type': cropType,
-        'barangay': normBrgy,
-      });
-      debugPrint('Saved farm record to Supabase: $locationName');
-    } catch (e) {
-      debugPrint('Supabase insert error (farm): $e');
-    }
-  }
-
-  Future<void> updateFarmRecord(String id, {
-    required String locationName,
-    required double landAreaHectares,
-    required String tenureStatus,
-    required String cropType,
-    required String barangay,
-    required double latitude,
-    required double longitude,
-  }) async {
-    final index = _farms.indexWhere((f) => f.id == id);
-    if (index != -1) {
-      _farms[index].locationName = locationName;
-      _farms[index].landAreaHectares = landAreaHectares;
-      _farms[index].tenureStatus = tenureStatus;
-      _farms[index].cropType = cropType;
-      _farms[index].barangay = barangay;
-      _farms[index].latitude = latitude;
-      _farms[index].longitude = longitude;
-      logActivity(activeUserName, 'EDIT', 'Farm Records', 'Updated farm record $id in $barangay');
-      notifyListeners();
-
-      try {
-        await SupabaseService.client.from('farms').update({
-          'location_name': locationName,
-          'land_area_hectares': landAreaHectares,
-          'tenure_status': tenureStatus,
-          'crop_type': cropType,
-          'barangay': barangay,
-          'latitude': latitude,
-          'longitude': longitude,
-        }).eq('id', id);
-      } catch (e) {
-        debugPrint('Supabase update error (farm): $e');
-      }
-    }
   }
 
   Future<void> deleteFarmRecord(String id) async {
-    final index = _farms.indexWhere((f) => f.id == id);
-    if (index != -1) {
-      _farms.removeAt(index);
-      logActivity(activeUserName, 'DELETE', 'Farm Records', 'Deleted farm record $id');
-      notifyListeners();
-
-      try {
-        await SupabaseService.client.from('farms').delete().eq('id', id);
-      } catch (e) {
-        debugPrint('Supabase delete error (farm): $e');
-      }
-    }
+    _farms.removeWhere((f) => f.id == id);
+    notifyListeners();
   }
 
-  // HISTORICAL DATA CRUD & CLEANING
+  // HISTORICAL RECORDS CRUD
   Future<void> addHistoricalRecord({
     required String crop,
     required int year,
     required String month,
-    String barangay = 'ALL',
     required double productionMT,
     required double pricePerKg,
     required String uploadedBy,
-  }) async {
-    final newId = 'H${DateTime.now().millisecondsSinceEpoch}';
-    final author = uploadedBy.isEmpty ? activeUserName : uploadedBy;
-    _historicalRecords.add(
-      HistoricalDataRecord(
-        id: newId,
-        crop: crop,
-        year: year,
-        month: month,
-        barangay: barangay,
-        productionMT: productionMT,
-        pricePerKg: pricePerKg,
-        uploadedBy: author,
-        dateUploaded: DateTime.now(),
-      ),
-    );
-    logActivity(author, 'UPLOAD', 'Historical Data', 'Added record for $crop ($month $year - $barangay: $productionMT MT)');
-    notifyListeners();
-
-    try {
-      await SupabaseService.client.from('historical_records').insert({
-        'id': newId,
-        'crop': crop,
-        'year': year,
-        'month': month,
-        'barangay': barangay,
-        'production_mt': productionMT,
-        'price_per_kg': pricePerKg,
-        'uploaded_by': author,
-        'date_uploaded': DateTime.now().toIso8601String(),
-      });
-      debugPrint('Saved historical record to Supabase: $crop ($barangay)');
-    } catch (e) {
-      debugPrint('Supabase insert error (historical): $e');
-    }
-  }
-
-  Future<void> updateHistoricalRecord(String id, {
-    required String crop,
-    required int year,
-    required String month,
     String barangay = 'ALL',
-    required double productionMT,
-    required double pricePerKg,
   }) async {
-    final index = _historicalRecords.indexWhere((h) => h.id == id);
-    if (index != -1) {
-      _historicalRecords[index].crop = crop;
-      _historicalRecords[index].year = year;
-      _historicalRecords[index].month = month;
-      _historicalRecords[index].barangay = barangay;
-      _historicalRecords[index].productionMT = productionMT;
-      _historicalRecords[index].pricePerKg = pricePerKg;
-      logActivity(activeUserName, 'EDIT', 'Historical Data', 'Edited record $id ($crop - $year - $barangay)');
-      notifyListeners();
-
-      try {
-        await SupabaseService.client.from('historical_records').update({
-          'crop': crop,
-          'year': year,
-          'month': month,
-          'barangay': barangay,
-          'production_mt': productionMT,
-          'price_per_kg': pricePerKg,
-        }).eq('id', id);
-      } catch (e) {
-        debugPrint('Supabase update error (historical): $e');
-      }
-    }
+    _historicalRecords.add(HistoricalDataRecord(
+      id: 'HIST${DateTime.now().millisecondsSinceEpoch}',
+      crop: crop,
+      year: year,
+      month: month,
+      barangay: barangay,
+      productionMT: productionMT,
+      pricePerKg: pricePerKg,
+      uploadedBy: uploadedBy,
+      dateUploaded: DateTime.now(),
+    ));
+    notifyListeners();
   }
 
   Future<void> deleteHistoricalRecord(String id) async {
-    final index = _historicalRecords.indexWhere((h) => h.id == id);
-    if (index != -1) {
-      final crop = _historicalRecords[index].crop;
-      _historicalRecords.removeAt(index);
-      logActivity(activeUserName, 'DELETE', 'Historical Data', 'Deleted record $id ($crop)');
-      notifyListeners();
-
-      try {
-        await SupabaseService.client.from('historical_records').delete().eq('id', id);
-      } catch (e) {
-        debugPrint('Supabase delete error (historical): $e');
-      }
-    }
+    _historicalRecords.removeWhere((h) => h.id == id);
+    notifyListeners();
   }
 
-  // MARKET & FARMGATE PRICES CRUD
+  // MARKET PRICE RECORDS CRUD
   Future<void> addMarketPriceRecord({
     required String vegetable,
     required double farmgatePrice,
     required double marketPrice,
     required DateTime date,
-    String marketLocation = 'Pagsanjan Public Market',
+    required String marketLocation,
     required String uploadedBy,
   }) async {
-    final newId = 'MP${DateTime.now().millisecondsSinceEpoch}';
-    final author = uploadedBy.isEmpty ? activeUserName : uploadedBy;
-    _marketPriceRecords.insert(
-      0,
-      MarketPriceRecord(
-        id: newId,
-        vegetable: vegetable,
-        farmgatePrice: farmgatePrice,
-        marketPrice: marketPrice,
-        date: date,
-        marketLocation: marketLocation,
-        uploadedBy: author,
-      ),
-    );
-    logActivity(author, 'UPLOAD', 'Market Prices', 'Added market & farmgate price for $vegetable (Farmgate: ₱$farmgatePrice, Market: ₱$marketPrice)');
+    _marketPriceRecords.add(MarketPriceRecord(
+      id: 'MP${DateTime.now().millisecondsSinceEpoch}',
+      vegetable: vegetable,
+      farmgatePrice: farmgatePrice,
+      marketPrice: marketPrice,
+      date: date,
+      marketLocation: marketLocation,
+      uploadedBy: uploadedBy,
+    ));
     notifyListeners();
   }
 
   Future<void> deleteMarketPriceRecord(String id) async {
-    final index = _marketPriceRecords.indexWhere((m) => m.id == id);
-    if (index != -1) {
-      final veg = _marketPriceRecords[index].vegetable;
-      _marketPriceRecords.removeAt(index);
-      logActivity(activeUserName, 'DELETE', 'Market Prices', 'Deleted market price record for $veg');
-      notifyListeners();
-    }
-  }
-
-  // CROP PLANTING REQUIREMENTS CRUD
-  Future<void> addCropRequirement({
-    required String cropName,
-    required String cropCategory,
-    required double minTemp,
-    required double maxTemp,
-    required double minRainfallMm,
-    required double maxRainfallMm,
-    required String suitableMonths,
-  }) async {
-    final newId = 'CPR${DateTime.now().millisecondsSinceEpoch}';
-    final req = CropPlantingReq(
-      id: newId,
-      cropName: cropName,
-      cropCategory: cropCategory,
-      minTemp: minTemp,
-      maxTemp: maxTemp,
-      minRainfallMm: minRainfallMm,
-      maxRainfallMm: maxRainfallMm,
-      suitableMonths: suitableMonths,
-    );
-    _cropRequirements.add(req);
-    logActivity(activeUserName, 'ADD', 'Planting Requirements', 'Added crop specs for $cropName');
-    notifyListeners();
-
-    try {
-      await SupabaseService.client.from('crop_requirements').insert({
-        'id': newId,
-        'crop_name': cropName,
-        'crop_category': cropCategory,
-        'min_temp': minTemp,
-        'max_temp': maxTemp,
-        'min_rainfall_mm': minRainfallMm,
-        'max_rainfall_mm': maxRainfallMm,
-        'suitable_months': suitableMonths,
-      });
-    } catch (e) {
-      debugPrint('Supabase insert error (crop requirement): $e');
-    }
-  }
-
-  Future<void> updateCropRequirement(String id, {
-    required String cropName,
-    required String cropCategory,
-    required double minTemp,
-    required double maxTemp,
-    required double minRainfallMm,
-    required double maxRainfallMm,
-    required String suitableMonths,
-  }) async {
-    final index = _cropRequirements.indexWhere((c) => c.id == id);
-    if (index != -1) {
-      _cropRequirements[index].cropName = cropName;
-      _cropRequirements[index].cropCategory = cropCategory;
-      _cropRequirements[index].minTemp = minTemp;
-      _cropRequirements[index].maxTemp = maxTemp;
-      _cropRequirements[index].minRainfallMm = minRainfallMm;
-      _cropRequirements[index].maxRainfallMm = maxRainfallMm;
-      _cropRequirements[index].suitableMonths = suitableMonths;
-      logActivity(activeUserName, 'EDIT', 'Planting Requirements', 'Updated crop specs for $cropName');
-      notifyListeners();
-
-      try {
-        await SupabaseService.client.from('crop_requirements').update({
-          'crop_name': cropName,
-          'crop_category': cropCategory,
-          'min_temp': minTemp,
-          'max_temp': maxTemp,
-          'min_rainfall_mm': minRainfallMm,
-          'max_rainfall_mm': maxRainfallMm,
-          'suitable_months': suitableMonths,
-        }).eq('id', id);
-      } catch (e) {
-        debugPrint('Supabase update error (crop requirement): $e');
-      }
-    }
-  }
-
-  Future<void> deleteCropRequirement(String id) async {
-    final index = _cropRequirements.indexWhere((c) => c.id == id);
-    if (index != -1) {
-      final name = _cropRequirements[index].cropName;
-      _cropRequirements.removeAt(index);
-      logActivity(activeUserName, 'DELETE', 'Planting Requirements', 'Deleted crop specs for $name');
-      notifyListeners();
-
-      try {
-        await SupabaseService.client.from('crop_requirements').delete().eq('id', id);
-      } catch (e) {
-        debugPrint('Supabase delete error (crop requirement): $e');
-      }
-    }
-  }
-
-  // MODEL MANAGEMENT
-  Future<void> triggerModelRetraining() async {
-    _modelStatus.isTraining = true;
-    notifyListeners();
-
-    await Future.delayed(const Duration(seconds: 3));
-
-    _modelStatus = MLModelStatus(
-      mae: 1.18,
-      rmse: 1.72,
-      mape: 3.9,
-      lastUpdated: DateTime.now(),
-      trainedRecordsCount: _historicalRecords.length * 350 + 800,
-      isTraining: false,
-    );
-
-    logActivity(
-      activeUserName,
-      'RETRAIN',
-      'Model Management',
-      'Retrained ML Model successfully. MAE: 1.18, RMSE: 1.72, MAPE: 3.9%',
-    );
+    _marketPriceRecords.removeWhere((m) => m.id == id);
     notifyListeners();
   }
 
@@ -1011,131 +603,66 @@ class AccountService extends ChangeNotifier {
     required String username,
     required String email,
     required String role,
-    String password = 'admin123',
   }) async {
-    final newId = 'STAFF${DateTime.now().millisecondsSinceEpoch}';
-    final staff = AdminStaff(
-      id: newId,
+    _adminStaffList.add(AdminStaff(
+      id: 'STAFF${DateTime.now().millisecondsSinceEpoch}',
       name: name,
       username: username,
       email: email,
       role: role,
       status: 'Active',
-    );
-    _adminStaffList.add(staff);
-    logActivity(activeUserName, 'ADD', 'Admin Accounts', 'Added MAO staff: $name ($role)');
+    ));
     notifyListeners();
-
-    try {
-      await SupabaseService.client.from('admin_staff').insert({
-        'id': newId,
-        'name': name,
-        'username': username,
-        'email': email,
-        'role': role,
-        'password': password,
-        'status': 'Active',
-      });
-    } catch (e) {
-      debugPrint('Supabase insert error (admin staff): $e');
-    }
   }
 
   Future<void> deleteAdminStaff(String id) async {
-    final index = _adminStaffList.indexWhere((s) => s.id == id);
-    if (index != -1) {
-      final name = _adminStaffList[index].name;
-      _adminStaffList.removeAt(index);
-      logActivity(activeUserName, 'DELETE', 'Admin Accounts', 'Removed MAO staff access for $name');
-      notifyListeners();
-
-      try {
-        await SupabaseService.client.from('admin_staff').delete().eq('id', id);
-      } catch (e) {
-        debugPrint('Supabase delete error (admin staff): $e');
-      }
-    }
+    _adminStaffList.removeWhere((s) => s.id == id);
+    notifyListeners();
   }
 
+  // POSTS / ANNOUNCEMENTS
   Future<void> addPost(
-    String title,
-    String content, {
-    String category = 'General Advisory',
-    String scheduleTime = 'Immediate',
-    String eventDate = '',
-  }) async {
-    final newId = 'post_${DateTime.now().millisecondsSinceEpoch}';
-    final dateStr = DateFormat('MMM dd, yyyy HH:mm').format(DateTime.now());
-    final displayDate = scheduleTime == 'Immediate' ? dateStr : scheduleTime;
-    final postMap = {
-      'id': newId,
+      String title,
+      String content, {
+        String category = 'General Advisory',
+        String scheduleTime = 'Immediate',
+        String eventDate = '',
+      }) async {
+    final dateStr = DateFormat('MMM dd, yyyy').format(DateTime.now());
+    _posts.insert(0, {
       'title': title,
       'content': content,
-      'date': displayDate,
       'category': category,
-      'status': scheduleTime == 'Immediate' ? 'Published' : 'Scheduled',
+      'scheduleTime': scheduleTime,
       'eventDate': eventDate,
-    };
-    _posts.insert(0, postMap);
-    logActivity(activeUserName, 'POST', 'Announcements', 'Created post [$category] (Schedule: $scheduleTime): $title');
+      'date': dateStr,
+    });
+    logActivity(activeUserName, 'ADD', 'Announcements', 'Posted announcement: $title');
     notifyListeners();
 
     try {
-      final res = await SupabaseService.client.from('announcements').insert({
+      await SupabaseService.client.from('announcements').insert({
         'title': title,
         'content': content,
-        'date': displayDate,
         'category': category,
-        'status': scheduleTime == 'Immediate' ? 'Published' : 'Scheduled',
+        'schedule_time': scheduleTime,
         'event_date': eventDate,
-      }).select().maybeSingle();
-
-      if (res != null && res['id'] != null) {
-        postMap['id'] = res['id'].toString();
-      }
-      debugPrint('Saved post to Supabase: $title');
+        'date': dateStr,
+      });
     } catch (e) {
-      try {
-        final res = await SupabaseService.client.from('announcements').insert({
-          'title': title,
-          'content': content,
-          'date': displayDate,
-        }).select().maybeSingle();
-
-        if (res != null && res['id'] != null) {
-          postMap['id'] = res['id'].toString();
-        }
-      } catch (err) {
-        debugPrint('Supabase insert error (post): $err');
-      }
+      debugPrint('Supabase insert error (announcement): $e');
     }
   }
 
-  Future<void> deletePost(String titleOrId) async {
-    final index = _posts.indexWhere((p) => p['id'] == titleOrId || p['title'] == titleOrId);
-    if (index != -1) {
-      final title = _posts[index]['title'] ?? '';
-      final id = _posts[index]['id'] ?? '';
-      _posts.removeAt(index);
-      logActivity(activeUserName, 'DELETE', 'Announcements', 'Deleted announcement: $title');
-      notifyListeners();
+  Future<void> deletePost(String idOrTitle) async {
+    _posts.removeWhere((p) => (p['id'] == idOrTitle) || (p['title'] == idOrTitle));
+    logActivity(activeUserName, 'DELETE', 'Announcements', 'Deleted announcement: $idOrTitle');
+    notifyListeners();
 
-      try {
-        if (id.isNotEmpty && !id.startsWith('post_') && !id.startsWith('p')) {
-          await SupabaseService.client.from('announcements').delete().eq('id', id);
-        } else if (title.isNotEmpty) {
-          await SupabaseService.client.from('announcements').delete().eq('title', title);
-        }
-      } catch (e) {
-        debugPrint('Supabase delete error by id: $e');
-        try {
-          if (title.isNotEmpty) {
-            await SupabaseService.client.from('announcements').delete().eq('title', title);
-          }
-        } catch (err) {
-          debugPrint('Supabase delete error by title: $err');
-        }
-      }
+    try {
+      await SupabaseService.client.from('announcements').delete().eq('title', idOrTitle);
+    } catch (e) {
+      debugPrint('Supabase delete error (announcement): $e');
     }
   }
 }

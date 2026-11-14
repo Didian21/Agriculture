@@ -93,6 +93,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
   // Filters for Dashboard Summary
   String _selectedCropFilter = 'All';
   String _selectedBarangayFilter = 'All';
+  String _selectedOrganizationFilter = 'All';
   String _selectedTimePeriodFilter = 'All';
 
   // Interactive Map State
@@ -348,36 +349,45 @@ class _AdminDashboardState extends State<AdminDashboard> {
       point: LatLng(farm.latitude, farm.longitude),
       width: 44,
       height: 48,
-      child: GestureDetector(
-        onTap: onTap,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              padding: const EdgeInsets.all(6),
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [primaryBlue, primaryBlue.withValues(alpha: 0.85)],
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
+      child: Tooltip(
+        message: 'Owner: ${farm.farmerName}\nCrop: ${farm.cropType} (${farm.landAreaHectares} ha)',
+        preferBelow: false,
+        decoration: BoxDecoration(
+          color: const Color(0xFF0F172A),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        textStyle: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+        child: GestureDetector(
+          onTap: onTap,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(6),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [primaryBlue, primaryBlue.withValues(alpha: 0.85)],
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                  ),
+                  shape: BoxShape.circle,
+                  border: Border.all(color: Colors.white, width: 2),
+                  boxShadow: const [
+                    BoxShadow(color: Colors.black26, blurRadius: 6, offset: Offset(0, 3)),
+                  ],
                 ),
-                shape: BoxShape.circle,
-                border: Border.all(color: Colors.white, width: 2),
-                boxShadow: const [
-                  BoxShadow(color: Colors.black26, blurRadius: 6, offset: Offset(0, 3)),
-                ],
+                child: Icon(cropIcon, color: Colors.white, size: 18),
               ),
-              child: Icon(cropIcon, color: Colors.white, size: 18),
-            ),
-            ClipPath(
-              clipper: _TriangleClipper(),
-              child: Container(
-                width: 8,
-                height: 6,
-                color: primaryBlue,
+              ClipPath(
+                clipper: _TriangleClipper(),
+                child: Container(
+                  width: 8,
+                  height: 6,
+                  color: primaryBlue,
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -1548,24 +1558,6 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
           ),
         ),
 
-        // SINGLE DIRECT IMPORT BUTTON (Opens File Explorer dialog directly)
-        if (showImport)
-          ElevatedButton.icon(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF16A34A),
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            ),
-            onPressed: () {
-              _showImportDialog(context, moduleName, service, locale);
-            },
-            icon: const Icon(Icons.upload_file_rounded, size: 16),
-            label: Text(
-              isTagalog ? 'I-import ang File' : 'Import File',
-              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
-            ),
-          ),
       ],
     );
   }
@@ -2597,13 +2589,15 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
       Color cardBorder,
       Color primaryAccent,
       ) {
+    final orgs = ['All', ...service.farmers.map((f) => f.organization).where((o) => o.trim().isNotEmpty).toSet().toList()];
     final farmers = service.farmers.where((f) {
       final query = _searchQuery.toLowerCase();
       final matchesQuery = f.profileName.toLowerCase().contains(query) ||
           f.username.toLowerCase().contains(query) ||
           f.organization.toLowerCase().contains(query);
       final matchesBarangay = _selectedBarangayFilter == 'All' || f.barangay.trim().toLowerCase() == _selectedBarangayFilter.trim().toLowerCase();
-      return matchesQuery && matchesBarangay;
+      final matchesOrg = _selectedOrganizationFilter == 'All' || f.organization.trim().toLowerCase() == _selectedOrganizationFilter.trim().toLowerCase();
+      return matchesQuery && matchesBarangay && matchesOrg;
     }).toList();
 
     return Padding(
@@ -2652,7 +2646,7 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
               ),
               const SizedBox(width: 12),
               SizedBox(
-                width: 200,
+                width: 180,
                 child: DropdownButtonFormField<String>(
                   initialValue: _selectedBarangayFilter,
                   dropdownColor: cardBg,
@@ -2667,6 +2661,25 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
                   ),
                   items: ['All', ...AccountService.pagsanjanBarangays].map((b) => DropdownMenuItem(value: b, child: Text(b))).toList(),
                   onChanged: (val) => setState(() => _selectedBarangayFilter = val ?? 'All'),
+                ),
+              ),
+              const SizedBox(width: 12),
+              SizedBox(
+                width: 200,
+                child: DropdownButtonFormField<String>(
+                  initialValue: _selectedOrganizationFilter,
+                  dropdownColor: cardBg,
+                  style: TextStyle(color: textColor, fontSize: 13),
+                  decoration: InputDecoration(
+                    labelText: locale.isTagalog ? 'Samahan' : 'Organization',
+                    labelStyle: TextStyle(color: subtextColor),
+                    filled: true,
+                    fillColor: cardBg,
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: cardBorder)),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  ),
+                  items: orgs.map((o) => DropdownMenuItem(value: o, child: Text(o))).toList(),
+                  onChanged: (val) => setState(() => _selectedOrganizationFilter = val ?? 'All'),
                 ),
               ),
             ],
@@ -4609,19 +4622,7 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
                 spacing: 8,
                 children: [
                   _buildExportImportButtons(context, 'Historical Data', locale, service),
-                  if (_historicalTableIndex == 0)
-                    ElevatedButton.icon(
-                      onPressed: () => _showUploadCsvDialog(context, service),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: primaryAccent,
-                        foregroundColor: Colors.white,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                      ),
-                      icon: const Icon(Icons.upload_file_rounded),
-                      label: Text(locale.uploadMaoRecord, style: const TextStyle(fontWeight: FontWeight.bold)),
-                    )
-                  else
+                  if (_historicalTableIndex == 1)
                     ElevatedButton.icon(
                       onPressed: () => _showAddMarketPriceDialog(context, service),
                       style: ElevatedButton.styleFrom(
@@ -5925,6 +5926,95 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
                   );
                 },
               ),
+            ),
+          ),
+          const SizedBox(height: 24),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                locale.isTagalog ? '⏳ Mga Nakabinbing Akawnt (Pending Approvals)' : '⏳ Pending Account Approvals',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: textColor),
+              ),
+              Badge(
+                label: Text('${service.pendingFarmers.length}'),
+                backgroundColor: Colors.orange,
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            height: 180,
+            child: Container(
+              decoration: BoxDecoration(
+                color: cardBg,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: cardBorder),
+              ),
+              child: service.pendingFarmers.isEmpty
+                  ? Center(
+                      child: Text(
+                        locale.isTagalog ? 'Walang nakabinbing akawnt.' : 'No pending account requests.',
+                        style: TextStyle(color: subtextColor, fontSize: 13),
+                      ),
+                    )
+                  : ListView.separated(
+                      padding: const EdgeInsets.all(8),
+                      itemCount: service.pendingFarmers.length,
+                      separatorBuilder: (context, index) => Divider(height: 1, color: cardBorder),
+                      itemBuilder: (context, index) {
+                        final farmer = service.pendingFarmers[index];
+                        return ListTile(
+                          leading: CircleAvatar(
+                            backgroundColor: Colors.orange.shade100,
+                            foregroundColor: Colors.orange.shade800,
+                            child: const Icon(Icons.person_add_rounded, size: 18),
+                          ),
+                          title: Text(farmer.profileName, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: textColor)),
+                          subtitle: Text('Username: @${farmer.username} • Brgy: ${farmer.barangay} • Org: ${farmer.organization}', style: TextStyle(color: subtextColor, fontSize: 11)),
+                          trailing: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              ElevatedButton.icon(
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: const Color(0xFF16A34A),
+                                  foregroundColor: Colors.white,
+                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                  minimumSize: Size.zero,
+                                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                ),
+                                onPressed: () {
+                                  service.approveFarmer(farmer.id);
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(content: Text(locale.isTagalog ? 'Tinanggap ang akawnt ni ${farmer.profileName}!' : 'Accepted account for ${farmer.profileName}!'), backgroundColor: Colors.green),
+                                  );
+                                },
+                                icon: const Icon(Icons.check_rounded, size: 14),
+                                label: Text(locale.isTagalog ? 'Accept' : 'Accept', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                              ),
+                              const SizedBox(width: 8),
+                              ElevatedButton.icon(
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: Colors.redAccent,
+                                  foregroundColor: Colors.white,
+                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                  minimumSize: Size.zero,
+                                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                ),
+                                onPressed: () {
+                                  service.rejectFarmer(farmer.id);
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(content: Text(locale.isTagalog ? 'Tinanggihan ang akawnt ni ${farmer.profileName}.' : 'Declined account for ${farmer.profileName}.'), backgroundColor: Colors.redAccent),
+                                  );
+                                },
+                                icon: const Icon(Icons.close_rounded, size: 14),
+                                label: Text(locale.isTagalog ? 'Decline' : 'Decline', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                              ),
+                            ],
+                          ),
+                        );
+                      },
+                    ),
             ),
           ),
         ],
