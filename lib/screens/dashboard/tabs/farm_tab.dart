@@ -17,6 +17,7 @@ import '../../../widgets/common_widgets.dart';
 import '../../../widgets/crop_image.dart';
 import '../../../widgets/dss_common.dart';
 import '../../../widgets/harvest_weather_strip.dart';
+import '../dss/farm_map_card.dart';
 
 /// "My Farm": lahat ng makikita rito ay galing sa mga tanim na inilagay ng magsasaka sa DSS tab.
 class FarmTab extends StatelessWidget {
@@ -65,6 +66,10 @@ class FarmTab extends StatelessWidget {
       _ProfileCard(profile: profile, crops: farm.cropIds),
       const SizedBox(height: 16),
       _LandCard(total: totalLand, plantings: plantings, sqm: farm.useSqm, onSetUnit: farm.setUseSqm, onOpenDss: onOpenDss),
+      const SizedBox(height: 16),
+      SectionTitle(icon: Icons.map_rounded, text: t.dssFarmMap, subtitle: t.dssFarmMapSub),
+      const SizedBox(height: 8),
+      FarmMapCard(input: farm),
       const SizedBox(height: 16),
       if (plantings.isNotEmpty) ...[
         Row(children: [

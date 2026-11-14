@@ -10,6 +10,7 @@ import 'package:pdf/widgets.dart' as pw;
 
 import '../models/farmer.dart';
 import '../services/account_service.dart';
+import '../services/supabase_service.dart';
 import '../services/weather_service.dart';
 import '../models/weather_models.dart';
 import 'package:latlong2/latlong.dart' hide Path;
@@ -395,6 +396,150 @@ class _AdminDashboardState extends State<AdminDashboard> {
 
   final ScrollController _kpiScrollController = ScrollController();
   final ScrollController _sidebarScrollController = ScrollController();
+  final ScrollController _histTable1ScrollController = ScrollController();
+  final ScrollController _histTable2ScrollController = ScrollController();
+  final ScrollController _dashHistScrollController = ScrollController();
+  final ScrollController _farmersBrgyScrollController = ScrollController();
+  final ScrollController _cropAreaBrgyScrollController = ScrollController();
+
+  int _table1Page = 0;
+  int _table2Page = 0;
+  static const int _pageSize = 10;
+
+  String _mlCropSearchQuery = '';
+  int _mlCropPage = 0;
+  static const int _mlPageSize = 6;
+
+  int _dashHistPage = 0;
+
+  String _farmerSortField = 'Name';
+  bool _farmerSortAscending = true;
+  String _selectedAssociationFilter = 'All';
+
+  List<String> getUniqueOrganizations(AccountService service) {
+    final set = <String>{};
+    for (final f in service.farmers) {
+      final org = f.organization.trim();
+      if (org.isNotEmpty &&
+          org != 'Choose Association' &&
+          org != 'Pumili ng Samahan' &&
+          org != 'Not Associated' &&
+          org != 'Walang Samahan' &&
+          org != 'Independent') {
+        set.add(org);
+      }
+    }
+    final list = set.toList()..sort();
+    return list;
+  }
+
+  double calculatePolygonAreaSqM(List<LatLng> points) {
+    if (points.length < 3) return 0.0;
+    const double radius = 6378137.0;
+    double area = 0.0;
+
+    for (int i = 0; i < points.length; i++) {
+      final p1 = points[i];
+      final p2 = points[(i + 1) % points.length];
+
+      final lat1 = p1.latitude * math.pi / 180.0;
+      final lat2 = p2.latitude * math.pi / 180.0;
+      final lon1 = p1.longitude * math.pi / 180.0;
+      final lon2 = p2.longitude * math.pi / 180.0;
+
+      area += (lon2 - lon1) * (2.0 + math.sin(lat1) + math.sin(lat2));
+    }
+
+    area = (area * radius * radius / 2.0).abs();
+    return area;
+  }
+
+  double calculatePolygonAreaHectares(List<LatLng> points) {
+    return calculatePolygonAreaSqM(points) / 10000.0;
+  }
+
+  LatLng calculatePolygonCentroid(List<LatLng> points) {
+    if (points.isEmpty) return const LatLng(14.2790, 121.4550);
+    double sumLat = 0;
+    double sumLng = 0;
+    for (final p in points) {
+      sumLat += p.latitude;
+      sumLng += p.longitude;
+    }
+    return LatLng(sumLat / points.length, sumLng / points.length);
+  }
+
+  bool isPointInPolygon(LatLng point, List<LatLng> polygon) {
+    if (polygon.length < 3) return false;
+    bool inside = false;
+    int j = polygon.length - 1;
+    for (int i = 0; i < polygon.length; i++) {
+      final pi = polygon[i];
+      final pj = polygon[j];
+      if ((pi.longitude > point.longitude) != (pj.longitude > point.longitude) &&
+          (point.latitude < (pj.latitude - pi.latitude) * (point.longitude - pi.longitude) / (pj.longitude - pi.longitude) + pi.latitude)) {
+        inside = !inside;
+      }
+      j = i;
+    }
+    return inside;
+  }
+
+  bool doLineSegmentsIntersect(LatLng p1, LatLng p2, LatLng p3, LatLng p4) {
+    double ccw(LatLng a, LatLng b, LatLng c) {
+      return (c.longitude - a.longitude) * (b.latitude - a.latitude) - (b.longitude - a.longitude) * (c.latitude - a.latitude);
+    }
+
+    final ccw1 = ccw(p1, p2, p3);
+    final ccw2 = ccw(p1, p2, p4);
+    final ccw3 = ccw(p3, p4, p1);
+    final ccw4 = ccw(p3, p4, p2);
+
+    if (((ccw1 > 0 && ccw2 < 0) || (ccw1 < 0 && ccw2 > 0)) &&
+        ((ccw3 > 0 && ccw4 < 0) || (ccw3 < 0 && ccw4 > 0))) {
+      return true;
+    }
+    return false;
+  }
+
+  bool doPolygonsOverlap(List<LatLng> poly1, List<LatLng> poly2) {
+    if (poly1.length < 3 || poly2.length < 3) return false;
+
+    for (int i = 0; i < poly1.length; i++) {
+      final a = poly1[i];
+      final b = poly1[(i + 1) % poly1.length];
+      for (int j = 0; j < poly2.length; j++) {
+        final c = poly2[j];
+        final d = poly2[(j + 1) % poly2.length];
+        if (doLineSegmentsIntersect(a, b, c, d)) {
+          return true;
+        }
+      }
+    }
+
+    for (final p in poly1) {
+      if (isPointInPolygon(p, poly2)) return true;
+    }
+
+    for (final p in poly2) {
+      if (isPointInPolygon(p, poly1)) return true;
+    }
+
+    return false;
+  }
+
+  FarmRecord? findOverlappingFarm(List<LatLng> newPoly, List<FarmRecord> allFarms, {String? excludeFarmId}) {
+    if (newPoly.length < 3) return null;
+    for (final farm in allFarms) {
+      if (excludeFarmId != null && farm.id == excludeFarmId) continue;
+      if (farm.boundaryPoints.length >= 3) {
+        if (doPolygonsOverlap(newPoly, farm.boundaryPoints)) {
+          return farm;
+        }
+      }
+    }
+    return null;
+  }
 
   @override
   void initState() {
@@ -412,6 +557,11 @@ class _AdminDashboardState extends State<AdminDashboard> {
     _searchController.dispose();
     _kpiScrollController.dispose();
     _sidebarScrollController.dispose();
+    _histTable1ScrollController.dispose();
+    _histTable2ScrollController.dispose();
+    _dashHistScrollController.dispose();
+    _farmersBrgyScrollController.dispose();
+    _cropAreaBrgyScrollController.dispose();
     super.dispose();
   }
 
@@ -1006,7 +1156,7 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           title: Row(
             children: [
-              const Icon(Icons.upload_file_rounded, color: Color(0xFF16A34A)),
+              const Icon(Icons.upload_file_rounded, color: Color(0xFF0056B3)),
               const SizedBox(width: 10),
               Expanded(
                 child: Text(
@@ -1043,13 +1193,14 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
                     onPressed: () async {
                       final isHistorical = moduleName.toLowerCase().contains('historical');
                       final templateCsv = isHistorical
-                          ? 'Crop,Year,Month,Barangay,Production (MT),Price Per KG (PHP)\n'
-                          'Rice,2026,January,Biñan,480.0,24.00\n'
-                          'Prutas (Banana),2025,November,Anibong,120.0,45.00\n'
-                          'Gulay (Talong),2025,December,Buboy,85.2,55.00\n'
-                          : 'Full Personal Name,Username,Barangay,Contact Number,Organization Membership,Primary Crop Type,Land Area (Hectares)\n'
-                          'Juan Dela Cruz,juan_dela_cruz,Biñan,09171234567,Pagsanjan Farmers Coop,Rice,2.5\n'
-                          'Maria Santos,maria_santos,Buboy,09189876543,Anibong Planters,Gulay,1.2\n';
+                          ? 'Crop,Year,Month,Barangay,Production (KG)\n'
+                          'Rice,2026,January,Biñan,480000\n'
+                          'Prutas (Banana),2025,November,Anibong,120000\n'
+                          'Gulay (Talong),2025,December,Buboy,85000\n'
+                          : 'Full Personal Name,Username,Barangay,Contact Number,Organization Membership,Tenure Status,Primary Crop Type,Land Area (Hectares)\n'
+                          'Juan Dela Cruz,juan_dela_cruz,Biñan,09171234567,Pagsanjan Farmers Coop,Owner,Rice,2.5\n'
+                          'Maria Santos,maria_santos,Buboy,09189876543,Anibong Planters,Tenant,Gulay,1.2\n'
+                          'Pedro Reyes,pedro_reyes,Calusiche,09191112233,Not Associated,Hired Farmworkers,Rice,2.0\n';
 
                       final targetFileName = isHistorical ? 'pagsanjan_historical_data_template.csv' : 'pagsanjan_farmers_blank_template.csv';
 
@@ -1111,7 +1262,7 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
                   width: double.infinity,
                   child: ElevatedButton.icon(
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF16A34A),
+                      backgroundColor: const Color(0xFF0284C7),
                       foregroundColor: Colors.white,
                       padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
@@ -1429,10 +1580,21 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
                       final name = parts[0 + offset].trim();
                       final user = parts[1 + offset].trim();
                       final barangay = parts.length > (2 + offset) && parts[2 + offset].trim().isNotEmpty ? parts[2 + offset].trim() : 'Biñan';
-                      final contact = parts.length > (3 + offset) && parts[3 + offset].trim().isNotEmpty ? parts[3 + offset].trim() : '';
-                      final org = parts.length > (4 + offset) && parts[4 + offset].trim().isNotEmpty ? parts[4 + offset].trim() : 'Independent';
-                      final crop = parts.length > (5 + offset) && parts[5 + offset].trim().isNotEmpty ? parts[5 + offset].trim() : 'Rice';
-                      final land = parts.length > (6 + offset) ? (double.tryParse(parts[6 + offset].trim()) ?? 2.0) : 2.0;
+                      final contact = parts.length > (3 + offset) && parts[3 + offset].trim().isNotEmpty ? parts[3 + offset].trim() : '09171234567';
+                      final org = parts.length > (4 + offset) && parts[4 + offset].trim().isNotEmpty ? parts[4 + offset].trim() : 'Not Associated';
+                      
+                      String tenure = 'Owner';
+                      String crop = 'Rice';
+                      double land = 2.0;
+
+                      if (parts.length >= (8 + offset)) {
+                        tenure = parts[5 + offset].trim().isNotEmpty ? parts[5 + offset].trim() : 'Owner';
+                        crop = parts[6 + offset].trim().isNotEmpty ? parts[6 + offset].trim() : 'Rice';
+                        land = double.tryParse(parts[7 + offset].trim()) ?? 2.0;
+                      } else if (parts.length >= (7 + offset)) {
+                        crop = parts[5 + offset].trim().isNotEmpty ? parts[5 + offset].trim() : 'Rice';
+                        land = double.tryParse(parts[6 + offset].trim()) ?? 2.0;
+                      }
 
                       // Validate incomplete data (Name and Username strictly required)
                       if (name.isEmpty || user.isEmpty) {
@@ -1470,7 +1632,7 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
                         latitude: 14.2717,
                         longitude: 121.4553,
                         landAreaHectares: land,
-                        tenureStatus: 'Owner',
+                        tenureStatus: tenure,
                         cropType: crop,
                         barangay: barangay,
                       );
@@ -1504,57 +1666,25 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
       ),
     );
   }
-  Widget _buildExportImportButtons(BuildContext context, String moduleName, AdminLocale locale, AccountService service, {bool showImport = true}) {
+  Widget _buildExportImportButtons(BuildContext context, String moduleName, AdminLocale locale, AccountService service, {bool showImport = true, bool allowPdf = false}) {
     final isTagalog = locale.isTagalog;
     return Wrap(
       spacing: 8,
       runSpacing: 4,
       children: [
-        // COMBINED EXPORT BUTTON (PDF & Excel/CSV)
-        PopupMenuButton<String>(
-          tooltip: isTagalog ? 'Mga Pagpipilian sa Pag-export' : 'Export Options',
-          offset: const Offset(0, 40),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          onSelected: (val) {
-            _triggerExport(context, '$moduleName ($val)', isTagalog);
-          },
-          itemBuilder: (context) => [
-            PopupMenuItem(
-              value: 'PDF',
-              child: Row(
-                children: [
-                  const Icon(Icons.picture_as_pdf_rounded, color: Color(0xFFDC2626), size: 18),
-                  const SizedBox(width: 8),
-                  Text(locale.exportPdf, style: const TextStyle(fontWeight: FontWeight.w600)),
-                ],
-              ),
-            ),
-            PopupMenuItem(
-              value: 'Excel/CSV',
-              child: Row(
-                children: [
-                  const Icon(Icons.table_chart_rounded, color: Color(0xFF0284C7), size: 18),
-                  const SizedBox(width: 8),
-                  Text(locale.exportExcel, style: const TextStyle(fontWeight: FontWeight.w600)),
-                ],
-              ),
-            ),
-          ],
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            decoration: BoxDecoration(
-              border: Border.all(color: const Color(0xFF0056B3)),
-              borderRadius: BorderRadius.circular(10),
-              color: Colors.white,
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(Icons.download_rounded, size: 16, color: Color(0xFF0056B3)),
-                const SizedBox(width: 6),
-                Text(isTagalog ? 'Export ▾' : 'Export ▾', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Color(0xFF0056B3))),
-              ],
-            ),
+        // DIRECT EXCEL / CSV EXPORT BUTTON
+        ElevatedButton.icon(
+          style: ElevatedButton.styleFrom(
+            backgroundColor: const Color(0xFF0056B3),
+            foregroundColor: Colors.white,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          ),
+          onPressed: () => _triggerExport(context, '$moduleName (Excel/CSV)', isTagalog),
+          icon: const Icon(Icons.table_chart_rounded, size: 18),
+          label: Text(
+            isTagalog ? 'I-export sa Excel' : 'Export Excel',
+            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
           ),
         ),
 
@@ -1737,6 +1867,7 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
                     _buildNavItem(icon: Icons.manage_accounts_rounded, label: locale.navAccounts, index: 4, isDark: isDark),
                     _buildNavItem(icon: Icons.supervisor_account_rounded, label: locale.navAdminStaff, index: 5, isDark: isDark),
                     _buildNavItem(icon: Icons.receipt_long_rounded, label: locale.navActivityLog, index: 6, isDark: isDark),
+                    _buildNavItem(icon: Icons.psychology_rounded, label: isTagalog ? 'Machine Learning' : 'Machine Learning', index: 7, isDark: isDark),
                   ],
                 ),
               ),
@@ -1826,6 +1957,9 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
         break;
       case 6:
         mainContentArea = _buildActivityLogView(service, locale, isDark, cardBg, textColor, subtextColor, cardBorder, primaryAccent);
+        break;
+      case 7:
+        mainContentArea = _buildMachineLearningView(service, locale, isDark, cardBg, textColor, subtextColor, cardBorder, primaryAccent);
         break;
       default:
         mainContentArea = _buildDashboardSummaryView(service, locale, isDark, cardBg, textColor, subtextColor, cardBorder, primaryAccent, secondaryBlue);
@@ -2024,10 +2158,26 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
       return true;
     }).toList();
 
+    final totalDashHist = filteredHistorical.length;
+    final maxDashHistPages = (totalDashHist / 10).ceil();
+    final safeDashHistPage = maxDashHistPages > 0 ? math.min(_dashHistPage, maxDashHistPages - 1) : 0;
+    final startDashHist = safeDashHistPage * 10;
+    final endDashHist = math.min(startDashHist + 10, totalDashHist);
+    final paginatedDashHistorical = totalDashHist > 0 ? filteredHistorical.sublist(startDashHist, endDashHist) : <HistoricalDataRecord>[];
+
     final totalFarmersCount = filteredFarmers.length;
     final totalFarmArea = filteredFarms.fold(0.0, (sum, item) => sum + item.landAreaHectares);
 
     final Map<String, int> farmersPerBarangay = {};
+    final Map<String, double> areaPerBarangay = {};
+    final Map<String, Map<String, double>> cropAreaPerBarangay = {};
+
+    for (final b in AccountService.pagsanjanBarangays) {
+      farmersPerBarangay[b] = 0;
+      areaPerBarangay[b] = 0.0;
+      cropAreaPerBarangay[b] = {};
+    }
+
     for (final f in filteredFarmers) {
       final normBrgy = AccountService.normalizeBarangay(f.barangay);
       farmersPerBarangay[normBrgy] = (farmersPerBarangay[normBrgy] ?? 0) + 1;
@@ -2035,7 +2185,13 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
 
     final Map<String, double> areaPerCrop = {};
     for (final farm in filteredFarms) {
+      final normBrgy = AccountService.normalizeBarangay(farm.barangay);
+      areaPerBarangay[normBrgy] = (areaPerBarangay[normBrgy] ?? 0.0) + farm.landAreaHectares;
       areaPerCrop[farm.cropType] = (areaPerCrop[farm.cropType] ?? 0.0) + farm.landAreaHectares;
+
+      final brgyCrops = cropAreaPerBarangay[normBrgy] ?? {};
+      brgyCrops[farm.cropType] = (brgyCrops[farm.cropType] ?? 0.0) + farm.landAreaHectares;
+      cropAreaPerBarangay[normBrgy] = brgyCrops;
     }
 
     return SingleChildScrollView(
@@ -2208,24 +2364,46 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(locale.farmersPerBarangay, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: textColor)),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(locale.farmersPerBarangay, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: textColor)),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                            decoration: BoxDecoration(color: primaryAccent.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(10)),
+                            child: const Text('16 Barangays', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF16A34A))),
+                          ),
+                        ],
+                      ),
                       const SizedBox(height: 12),
                       if (farmersPerBarangay.isEmpty)
                         Text('No records found', style: TextStyle(color: subtextColor))
                       else
-                        ...farmersPerBarangay.entries.map((entry) => Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 6.0),
-                          child: Row(
-                            children: [
-                              Expanded(child: Text(entry.key, style: TextStyle(fontSize: 13, color: textColor))),
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
-                                decoration: BoxDecoration(color: primaryAccent.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(12)),
-                                child: Text('${entry.value} ${locale.isTagalog ? "magsasaka" : "farmers"}', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: primaryAccent)),
-                              ),
-                            ],
+                        SizedBox(
+                          height: 320,
+                          child: Scrollbar(
+                            controller: _farmersBrgyScrollController,
+                            thumbVisibility: true,
+                            trackVisibility: true,
+                            child: ListView(
+                              controller: _farmersBrgyScrollController,
+                              physics: const AlwaysScrollableScrollPhysics(),
+                              children: farmersPerBarangay.entries.map((entry) => Padding(
+                                padding: const EdgeInsets.symmetric(vertical: 6.0, horizontal: 4.0),
+                                child: Row(
+                                  children: [
+                                    Expanded(child: Text(entry.key, style: TextStyle(fontSize: 13, color: textColor))),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                                      decoration: BoxDecoration(color: primaryAccent.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(12)),
+                                      child: Text('${entry.value} ${locale.isTagalog ? "magsasaka" : "farmers"}', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: primaryAccent)),
+                                    ),
+                                  ],
+                                ),
+                              )).toList(),
+                            ),
                           ),
-                        )),
+                        ),
                     ],
                   ),
                 ),
@@ -2242,24 +2420,89 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(locale.areaPerCrop, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: textColor)),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(locale.areaPerCrop, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: textColor)),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                            decoration: BoxDecoration(color: const Color(0xFF0284C7).withValues(alpha: 0.12), borderRadius: BorderRadius.circular(10)),
+                            child: const Text('16 Barangays', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF0284C7))),
+                          ),
+                        ],
+                      ),
                       const SizedBox(height: 12),
-                      if (areaPerCrop.isEmpty)
+                      if (areaPerBarangay.isEmpty)
                         Text('No records found', style: TextStyle(color: subtextColor))
                       else
-                        ...areaPerCrop.entries.map((entry) => Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 6.0),
-                          child: Row(
-                            children: [
-                              Expanded(child: Text(entry.key, style: TextStyle(fontSize: 13, color: textColor))),
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
-                                decoration: BoxDecoration(color: const Color(0xFF0284C7).withValues(alpha: 0.12), borderRadius: BorderRadius.circular(12)),
-                                child: Text('${entry.value.toStringAsFixed(1)} ha', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF0284C7))),
-                              ),
-                            ],
+                        SizedBox(
+                          height: 320,
+                          child: Scrollbar(
+                            controller: _cropAreaBrgyScrollController,
+                            thumbVisibility: true,
+                            trackVisibility: true,
+                            child: ListView(
+                              controller: _cropAreaBrgyScrollController,
+                              physics: const AlwaysScrollableScrollPhysics(),
+                              children: [
+                                ...areaPerBarangay.entries.map((entry) {
+                                  final brgyCrops = cropAreaPerBarangay[entry.key] ?? {};
+                                  final topCrop = brgyCrops.isNotEmpty
+                                      ? brgyCrops.entries.reduce((a, b) => a.value > b.value ? a : b).key
+                                      : 'Rice';
+
+                                  return Padding(
+                                    padding: const EdgeInsets.symmetric(vertical: 6.0, horizontal: 4.0),
+                                    child: Row(
+                                      children: [
+                                        Expanded(
+                                          child: Column(
+                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            children: [
+                                              Text(entry.key, style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: textColor)),
+                                              Text(
+                                                '${locale.isTagalog ? "Pangunahing tanim" : "Primary Crop"}: $topCrop',
+                                                style: TextStyle(fontSize: 11, color: subtextColor),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                          decoration: BoxDecoration(
+                                            color: const Color(0xFF0284C7).withValues(alpha: 0.12),
+                                            borderRadius: BorderRadius.circular(12),
+                                          ),
+                                          child: Text(
+                                            '${entry.value.toStringAsFixed(1)} ha',
+                                            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF0284C7)),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  );
+                                }),
+                                const Divider(height: 16),
+                                Padding(
+                                  padding: const EdgeInsets.symmetric(vertical: 4.0),
+                                  child: Text(
+                                    locale.isTagalog ? 'Kabuuan Bawat Uri ng Tanim:' : 'Total Area per Crop Type:',
+                                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: primaryAccent),
+                                  ),
+                                ),
+                                ...areaPerCrop.entries.map((entry) => Padding(
+                                  padding: const EdgeInsets.symmetric(vertical: 4.0, horizontal: 4.0),
+                                  child: Row(
+                                    children: [
+                                      Expanded(child: Text(entry.key, style: TextStyle(fontSize: 12, color: textColor))),
+                                      Text('${entry.value.toStringAsFixed(1)} ha', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: textColor)),
+                                    ],
+                                  ),
+                                )),
+                              ],
+                            ),
                           ),
-                        )),
+                        ),
                     ],
                   ),
                 ),
@@ -2270,7 +2513,6 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
 
           // Historical Production & Price Trends
           Container(
-            padding: const EdgeInsets.all(18),
             decoration: BoxDecoration(
               color: cardBg,
               borderRadius: BorderRadius.circular(16),
@@ -2279,39 +2521,668 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(locale.historicalTrends, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: textColor)),
-                const SizedBox(height: 12),
+                Padding(
+                  padding: const EdgeInsets.all(18),
+                  child: Text(locale.historicalTrends, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: textColor)),
+                ),
                 if (filteredHistorical.isEmpty)
                   Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 12.0),
+                    padding: const EdgeInsets.all(18.0),
                     child: Text('No historical records match the selected filters.', style: TextStyle(color: subtextColor, fontSize: 13)),
                   )
-                else
-                  SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: DataTable(
-                      columns: [
-                        DataColumn(label: Text('Crop', style: TextStyle(color: subtextColor))),
-                        DataColumn(label: Text('Period', style: TextStyle(color: subtextColor))),
-                        DataColumn(label: Text('Barangay', style: TextStyle(color: subtextColor))),
-                        DataColumn(label: Text('Production (MT)', style: TextStyle(color: subtextColor))),
-                        DataColumn(label: Text('Avg Price (PHP/kg)', style: TextStyle(color: subtextColor))),
-                        DataColumn(label: Text('Uploaded By', style: TextStyle(color: subtextColor))),
-                      ],
-                      rows: filteredHistorical.map((h) => DataRow(
-                        cells: [
-                          DataCell(Text(h.crop, style: TextStyle(fontWeight: FontWeight.bold, color: textColor))),
-                          DataCell(Text('${h.month} ${h.year}', style: TextStyle(color: textColor))),
-                          DataCell(Text(h.barangay, style: TextStyle(color: textColor))),
-                          DataCell(Text('${h.productionMT} MT', style: TextStyle(color: textColor))),
-                          DataCell(Text('₱${h.pricePerKg.toStringAsFixed(2)}', style: TextStyle(color: textColor))),
-                          DataCell(Text(h.uploadedBy, style: TextStyle(color: textColor))),
-                        ],
-                      )).toList(),
+                else ...[
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 8),
+                    child: Scrollbar(
+                      controller: _dashHistScrollController,
+                      thumbVisibility: true,
+                      trackVisibility: true,
+                      child: SingleChildScrollView(
+                        controller: _dashHistScrollController,
+                        scrollDirection: Axis.horizontal,
+                        padding: const EdgeInsets.only(bottom: 12),
+                        child: DataTable(
+                          columns: [
+                            DataColumn(label: Text('Crop', style: TextStyle(color: subtextColor))),
+                            DataColumn(label: Text('Period', style: TextStyle(color: subtextColor))),
+                            DataColumn(label: Text('Barangay', style: TextStyle(color: subtextColor))),
+                            DataColumn(label: Text('Production (KG)', style: TextStyle(color: subtextColor))),
+                            DataColumn(label: Text('Uploaded By', style: TextStyle(color: subtextColor))),
+                          ],
+                          rows: paginatedDashHistorical.map((h) {
+                            final prodKg = h.productionMT >= 100 ? h.productionMT : (h.productionMT * 1000);
+                            final nf = NumberFormat('#,###');
+                            return DataRow(
+                              cells: [
+                                DataCell(Text(h.crop, style: TextStyle(fontWeight: FontWeight.bold, color: textColor))),
+                                DataCell(Text('${h.month} ${h.year}', style: TextStyle(color: textColor))),
+                                DataCell(Text(h.barangay, style: TextStyle(color: textColor))),
+                                DataCell(Text('${nf.format(prodKg.round())} kg', style: TextStyle(color: textColor))),
+                                DataCell(Text(h.uploadedBy, style: TextStyle(color: textColor))),
+                              ],
+                            );
+                          }).toList(),
+                        ),
+                      ),
                     ),
                   ),
+                  _buildPaginationBar(
+                    currentPage: safeDashHistPage,
+                    totalItems: totalDashHist,
+                    pageSize: 10,
+                    onPageChanged: (newPage) => setState(() => _dashHistPage = newPage),
+                    isDark: isDark,
+                    textColor: textColor,
+                    subtextColor: subtextColor,
+                    primaryAccent: primaryAccent,
+                  ),
+                ],
               ],
             ),
+          ),
+          const SizedBox(height: 20),
+
+          // FARMER ASSOCIATIONS & ORGANIZATIONS DIRECTORY
+          Builder(builder: (context) {
+            final assocMap = <String, List<Farmer>>{};
+            for (final f in service.farmers) {
+              final org = f.organization.trim().isEmpty ? 'Not Associated' : f.organization.trim();
+              assocMap.putIfAbsent(org, () => []).add(f);
+            }
+
+            final uniqueOrgs = assocMap.keys.where((k) => k != 'Not Associated' && k != 'Independent').toList()..sort();
+
+            return Container(
+              padding: const EdgeInsets.all(18),
+              decoration: BoxDecoration(
+                color: cardBg,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: cardBorder),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Row(
+                        children: [
+                          const Icon(Icons.groups_rounded, color: Color(0xFF0284C7), size: 22),
+                          const SizedBox(width: 8),
+                          Text(
+                            locale.isTagalog ? 'Mga Samahan at Asosasyon ng Magsasaka' : 'Farmer Associations Directory',
+                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: textColor),
+                          ),
+                        ],
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(color: const Color(0xFF0284C7).withValues(alpha: 0.12), borderRadius: BorderRadius.circular(12)),
+                        child: Text(
+                          '${uniqueOrgs.length} ${locale.isTagalog ? "Samahan" : "Associations"}',
+                          style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF0284C7)),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+
+                  if (assocMap.isEmpty)
+                    Text(locale.isTagalog ? 'Walang nahanap na samahan' : 'No associations found', style: TextStyle(color: subtextColor))
+                  else
+                    Wrap(
+                      spacing: 12,
+                      runSpacing: 12,
+                      children: [
+                        for (final org in assocMap.keys)
+                          Container(
+                            width: 320,
+                            padding: const EdgeInsets.all(14),
+                            decoration: BoxDecoration(
+                              color: isDark ? const Color(0xFF1E293B) : const Color(0xFFF8FAFC),
+                              borderRadius: BorderRadius.circular(14),
+                              border: Border.all(color: cardBorder),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    Container(
+                                      padding: const EdgeInsets.all(8),
+                                      decoration: BoxDecoration(
+                                        color: org == 'Not Associated' || org == 'Independent'
+                                            ? Colors.grey.withValues(alpha: 0.15)
+                                            : primaryAccent.withValues(alpha: 0.15),
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                      child: Icon(
+                                        org == 'Not Associated' || org == 'Independent' ? Icons.person_off_rounded : Icons.groups_rounded,
+                                        color: org == 'Not Associated' || org == 'Independent' ? Colors.grey : primaryAccent,
+                                        size: 20,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 10),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            org,
+                                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13.5, color: textColor),
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                          Text(
+                                            '${assocMap[org]!.length} ${locale.isTagalog ? "kasaping magsasaka" : "member farmers"}',
+                                            style: TextStyle(fontSize: 11, color: subtextColor),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 10),
+                                const Divider(height: 1),
+                                const SizedBox(height: 8),
+                                Text(
+                                  locale.isTagalog ? 'Mga Kasapi:' : 'Members:',
+                                  style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: subtextColor),
+                                ),
+                                const SizedBox(height: 4),
+                                Wrap(
+                                  spacing: 6,
+                                  runSpacing: 4,
+                                  children: assocMap[org]!.take(5).map((f) => Chip(
+                                    labelPadding: const EdgeInsets.symmetric(horizontal: 4),
+                                    padding: EdgeInsets.zero,
+                                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                    avatar: CircleAvatar(
+                                      backgroundColor: primaryAccent.withValues(alpha: 0.2),
+                                      child: Text(f.profileName.isNotEmpty ? f.profileName[0].toUpperCase() : 'F', style: TextStyle(fontSize: 10, color: primaryAccent)),
+                                    ),
+                                    label: Text(f.profileName, style: TextStyle(fontSize: 11, color: textColor)),
+                                    backgroundColor: cardBg,
+                                    side: BorderSide(color: cardBorder),
+                                  )).toList(),
+                                ),
+                                if (assocMap[org]!.length > 5)
+                                  Padding(
+                                    padding: const EdgeInsets.only(top: 4.0),
+                                    child: Text(
+                                      '+ ${assocMap[org]!.length - 5} ${locale.isTagalog ? "iba pa" : "more members"}',
+                                      style: TextStyle(fontSize: 10.5, fontStyle: FontStyle.italic, color: primaryAccent),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ),
+                      ],
+                    ),
+                ],
+              ),
+            );
+          }),
+        ],
+      ),
+    );
+  }
+
+  // ==========================================
+  // MODULE 7: MACHINE LEARNING & AI
+  // ==========================================
+  Widget _buildMachineLearningView(
+    AccountService service,
+    AdminLocale locale,
+    bool isDark,
+    Color cardBg,
+    Color textColor,
+    Color subtextColor,
+    Color cardBorder,
+    Color primaryAccent,
+  ) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(22),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('MACHINE LEARNING & AI', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: primaryAccent, letterSpacing: 1.1)),
+                  const SizedBox(height: 2),
+                  Text(
+                    locale.isTagalog ? 'Machine Learning Predictions & Accuracy' : 'Machine Learning Price Predictions',
+                    style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: textColor),
+                  ),
+                ],
+              ),
+              Wrap(
+                spacing: 8,
+                children: [
+                  _buildExportImportButtons(context, 'Machine Learning Predictions', locale, service, showImport: false, allowPdf: false),
+                ],
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+
+          // ML PREDICTIONS CARD
+          _buildMlFarmgatePricePredictionCard(service, locale, isDark, cardBg, textColor, subtextColor, cardBorder, primaryAccent),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildMlFarmgatePricePredictionCard(
+    AccountService service,
+    AdminLocale locale,
+    bool isDark,
+    Color cardBg,
+    Color textColor,
+    Color subtextColor,
+    Color cardBorder,
+    Color primaryAccent,
+  ) {
+    final status = service.modelStatus;
+    final isTagalog = locale.isTagalog;
+    final forecasts = service.supabasePriceForecasts;
+    final forecastModels = service.supabaseForecastModels;
+
+    double getUploadedFarmgatePrice(String cropName, String lookupKey, double fallback) {
+      final cleanKey = lookupKey.toLowerCase().trim();
+      final cleanName = cropName.toLowerCase().trim();
+      final shortKey = cleanName.split(' ')[0].split('(')[0].trim();
+
+      for (final m in service.marketPriceRecords) {
+        final veg = m.vegetable.toLowerCase().trim();
+        if (veg == cleanKey || veg == cleanName || veg.contains(shortKey) || cleanName.contains(veg)) {
+          if (m.farmgatePrice > 0) return m.farmgatePrice;
+        }
+      }
+
+      for (final h in service.historicalRecords) {
+        final c = h.crop.toLowerCase().trim();
+        if (c == cleanKey || c == cleanName || c.contains(shortKey) || cleanName.contains(c)) {
+          if (h.pricePerKg > 0) return h.pricePerKg;
+        }
+      }
+
+      return fallback;
+    }
+
+    double getUploadedMarketPrice(String cropName, String lookupKey, double fallback) {
+      final cleanKey = lookupKey.toLowerCase().trim();
+      final cleanName = cropName.toLowerCase().trim();
+      final shortKey = cleanName.split(' ')[0].split('(')[0].trim();
+
+      for (final m in service.marketPriceRecords) {
+        final veg = m.vegetable.toLowerCase().trim();
+        if (veg == cleanKey || veg == cleanName || veg.contains(shortKey) || cleanName.contains(veg)) {
+          if (m.marketPrice > 0) return m.marketPrice;
+        }
+      }
+
+      final fg = getUploadedFarmgatePrice(cropName, lookupKey, fallback);
+      return double.parse((fg * 1.4).toStringAsFixed(2));
+    }
+
+    // Build dynamic set of ALL crops present in the database
+    final Set<String> dbCropNames = {};
+    for (final m in service.marketPriceRecords) {
+      if (m.vegetable.trim().isNotEmpty) dbCropNames.add(m.vegetable.trim());
+    }
+    for (final h in service.historicalRecords) {
+      if (h.crop.trim().isNotEmpty) dbCropNames.add(h.crop.trim());
+    }
+    for (final k in forecasts.keys) {
+      if (k.trim().isNotEmpty) dbCropNames.add(k.trim());
+    }
+
+    // Default standard list if DB is initializing
+    final defaultCrops = [
+      'Rice', 'Talong (Eggplant)', 'Kamatis (Tomato)', 'Sitaw (Yardlong Bean)',
+      'Ampalaya (Bitter Gourd)', 'Saging (Banana)', 'Okra', 'Pechay (Tagalog)',
+      'Kalabasa (Squash)', 'Labanos (Radish)', 'Carrot', 'Patatas (Potato)'
+    ];
+
+    if (dbCropNames.isEmpty) {
+      dbCropNames.addAll(defaultCrops);
+    }
+
+    Color getCropColor(String crop) {
+      final lc = crop.toLowerCase();
+      if (lc.contains('rice') || lc.contains('palay')) return const Color(0xFFC0A02B);
+      if (lc.contains('talong') || lc.contains('eggplant')) return const Color(0xFF7B4FA3);
+      if (lc.contains('kamatis') || lc.contains('tomato')) return const Color(0xFFE5533D);
+      if (lc.contains('sitaw') || lc.contains('bean')) return const Color(0xFF2E9E5B);
+      if (lc.contains('ampalaya') || lc.contains('bitter')) return const Color(0xFF16A34A);
+      if (lc.contains('saging') || lc.contains('banana') || lc.contains('saba') || lc.contains('lakatan')) return const Color(0xFFE6A700);
+      if (lc.contains('okra')) return const Color(0xFF65A30D);
+      if (lc.contains('pechay') || lc.contains('petchay')) return const Color(0xFF0D9488);
+      if (lc.contains('kalabasa') || lc.contains('squash')) return const Color(0xFFD97706);
+      return const Color(0xFF0284C7);
+    }
+
+    IconData getCropIcon(String crop) {
+      final lc = crop.toLowerCase();
+      if (lc.contains('rice') || lc.contains('palay')) return Icons.grass_rounded;
+      if (lc.contains('saging') || lc.contains('banana') || lc.contains('coconut') || lc.contains('niyog')) return Icons.park_rounded;
+      return Icons.eco_rounded;
+    }
+
+    final filteredCropNames = dbCropNames.where((cropName) {
+      if (_mlCropSearchQuery.trim().isEmpty) return true;
+      return cropName.toLowerCase().contains(_mlCropSearchQuery.trim().toLowerCase());
+    }).toList();
+
+    final totalMlItems = filteredCropNames.length;
+    final maxMlPages = (totalMlItems / _mlPageSize).ceil();
+    final safeMlPage = maxMlPages > 0 ? math.min(_mlCropPage, maxMlPages - 1) : 0;
+    final startMl = safeMlPage * _mlPageSize;
+    final endMl = math.min(startMl + _mlPageSize, totalMlItems);
+    final paginatedCropNames = totalMlItems > 0 ? filteredCropNames.sublist(startMl, endMl) : <String>[];
+
+    final cropPredictions = paginatedCropNames.map((cropName) {
+      return {
+        'crop': cropName,
+        'lookupKey': cropName,
+        'icon': getCropIcon(cropName),
+        'color': getCropColor(cropName),
+      };
+    }).toList();
+
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: cardBg,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: cardBorder),
+        boxShadow: isDark ? [] : const [BoxShadow(color: Color(0x0A0056B3), blurRadius: 10)],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Expanded(
+                child: Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF0284C7).withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: const Icon(Icons.auto_graph_rounded, color: Color(0xFF0284C7), size: 24),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            isTagalog ? '🤖 ML Prediksyon ng Presyo sa Bukid (dss_pagsanjan_ml.py)' : '🤖 ML Farmgate Price Predictions (dss_pagsanjan_ml.py)',
+                            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: textColor),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            isTagalog ? 'Pinatatakbo ng dss_pagsanjan_ml.py • ARIMA, ElasticNet, RandomForest & Gaussian Process' : 'Powered by dss_pagsanjan_ml.py • ARIMA, ElasticNet, RandomForest & Gaussian Process',
+                            style: TextStyle(fontSize: 12, color: subtextColor),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 12),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  SizedBox(
+                    width: 220,
+                    child: TextField(
+                      onChanged: (val) => setState(() {
+                        _mlCropSearchQuery = val;
+                        _mlCropPage = 0;
+                      }),
+                      style: TextStyle(color: textColor, fontSize: 13),
+                      decoration: InputDecoration(
+                        hintText: isTagalog ? 'Magsaliksik ng pananim...' : 'Search crop...',
+                        hintStyle: TextStyle(color: subtextColor, fontSize: 12),
+                        prefixIcon: const Icon(Icons.search_rounded, size: 18),
+                        suffixIcon: _mlCropSearchQuery.isNotEmpty
+                            ? IconButton(
+                                icon: const Icon(Icons.clear_rounded, size: 16),
+                                onPressed: () => setState(() {
+                                  _mlCropSearchQuery = '';
+                                  _mlCropPage = 0;
+                                }),
+                              )
+                            : null,
+                        isDense: true,
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            decoration: BoxDecoration(
+              color: isDark ? const Color(0xFF1E293B) : const Color(0xFFF1F5F9),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0)),
+            ),
+            child: Wrap(
+              spacing: 18,
+              runSpacing: 8,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.verified_rounded, size: 16, color: Color(0xFF16A34A)),
+                    const SizedBox(width: 6),
+                    Text(
+                      'ML Accuracy: ${(100 - status.mape).toStringAsFixed(1)}%',
+                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: textColor),
+                    ),
+                  ],
+                ),
+                Text('MAE: ±₱${status.mae.toStringAsFixed(2)}/kg', style: TextStyle(fontSize: 12, color: subtextColor)),
+                Text('RMSE: ${status.rmse.toStringAsFixed(2)}', style: TextStyle(fontSize: 12, color: subtextColor)),
+                Text('Trained Records: ${status.trainedRecordsCount}', style: TextStyle(fontSize: 12, color: subtextColor)),
+                Text('Last Run: ${DateFormat('MMM d, h:mm a').format(status.lastUpdated)}', style: TextStyle(fontSize: 12, color: subtextColor)),
+              ],
+            ),
+          ),
+          const SizedBox(height: 18),
+
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final isWide = constraints.maxWidth > 800;
+              final crossAxisCount = isWide ? 3 : (constraints.maxWidth > 550 ? 2 : 1);
+
+              return Wrap(
+                spacing: 14,
+                runSpacing: 14,
+                children: cropPredictions.map((item) {
+                  final double width = (constraints.maxWidth - (14 * (crossAxisCount - 1))) / crossAxisCount;
+
+                  final key = (item['lookupKey'] as String?) ?? '';
+                  final cropName = (item['crop'] as String?) ?? '';
+                  final fallbackFg = (item['currentFarmgate'] as num?)?.toDouble() ?? 35.0;
+                  final fallbackMkt = (item['marketRetail'] as num?)?.toDouble() ?? (fallbackFg * 1.4);
+
+                  final currentPrice = getUploadedFarmgatePrice(cropName, key, fallbackFg);
+                  final marketPrice = getUploadedMarketPrice(cropName, key, fallbackMkt);
+
+                  final predictedPrice = forecasts[key] ?? forecasts[cropName] ?? (item['defaultPredicted'] as num?)?.toDouble() ?? (currentPrice * 1.05);
+                  final modelName = forecastModels[key] ?? (item['defaultDriver'] as String?) ?? 'dss_pagsanjan_ml (Ensemble)';
+
+                  final diff = predictedPrice - currentPrice;
+                  final pct = currentPrice > 0 ? (diff / currentPrice) * 100 : 0.0;
+                  final isUp = diff >= 0;
+                  final trendStr = '${isUp ? '+' : ''}${pct.toStringAsFixed(1)}%';
+                  final itemColor = item['color'] as Color;
+
+                  return Container(
+                    width: width,
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: isDark ? const Color(0xFF132338) : const Color(0xFFF8FAFC),
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: itemColor.withValues(alpha: 0.3)),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            CircleAvatar(
+                              radius: 14,
+                              backgroundColor: itemColor.withValues(alpha: 0.15),
+                              child: Icon(item['icon'] as IconData, size: 16, color: itemColor),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                item['crop'] as String,
+                                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: textColor),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                              decoration: BoxDecoration(
+                                color: (isUp ? const Color(0xFF16A34A) : Colors.redAccent).withValues(alpha: 0.12),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(
+                                    isUp ? Icons.trending_up_rounded : Icons.trending_down_rounded,
+                                    size: 14,
+                                    color: isUp ? const Color(0xFF16A34A) : Colors.redAccent,
+                                  ),
+                                  const SizedBox(width: 3),
+                                  Text(
+                                    trendStr,
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.bold,
+                                      color: isUp ? const Color(0xFF16A34A) : Colors.redAccent,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  isTagalog ? 'Kasalukuyang Bukid' : 'Current Farmgate',
+                                  style: TextStyle(fontSize: 11, color: subtextColor),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  '₱${currentPrice.toStringAsFixed(2)}/kg',
+                                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: textColor),
+                                ),
+                              ],
+                            ),
+                            Icon(Icons.arrow_forward_rounded, size: 16, color: subtextColor.withValues(alpha: 0.5)),
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.end,
+                              children: [
+                                Text(
+                                  isTagalog ? 'Prediksyon sa Bukid' : 'Predicted Farmgate',
+                                  style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF0284C7)),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  '₱${predictedPrice.toStringAsFixed(2)}/kg',
+                                  style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 15, color: Color(0xFF0284C7)),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 10),
+
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: isDark ? const Color(0xFF0F172A) : const Color(0xFFEFF6FF),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text(
+                                isTagalog ? 'Presyo sa Palengke:' : 'Market Retail Price:',
+                                style: TextStyle(fontSize: 11, color: subtextColor),
+                              ),
+                              Text(
+                                '₱${marketPrice.toStringAsFixed(2)}/kg',
+                                style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: textColor),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+
+                        Row(
+                          children: [
+                            const Icon(Icons.psychology_outlined, size: 13, color: Color(0xFF0284C7)),
+                            const SizedBox(width: 4),
+                            Expanded(
+                              child: Text(
+                                'dss_pagsanjan_ml.py ($modelName)',
+                                style: TextStyle(fontSize: 11, fontStyle: FontStyle.italic, color: subtextColor),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  );
+                }).toList(),
+              );
+            },
+          ),
+          const SizedBox(height: 16),
+          _buildPaginationBar(
+            currentPage: safeMlPage,
+            totalItems: totalMlItems,
+            pageSize: _mlPageSize,
+            onPageChanged: (newPage) => setState(() => _mlCropPage = newPage),
+            isDark: isDark,
+            textColor: textColor,
+            subtextColor: subtextColor,
+            primaryAccent: const Color(0xFF0284C7),
           ),
         ],
       ),
@@ -2600,6 +3471,29 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
       return matchesQuery && matchesBarangay && matchesOrg;
     }).toList();
 
+    farmers.sort((a, b) {
+      int comparison = 0;
+      switch (_farmerSortField) {
+        case 'Barangay':
+          comparison = a.barangay.compareTo(b.barangay);
+          break;
+        case 'Status':
+          comparison = a.status.compareTo(b.status);
+          break;
+        case 'Organization':
+          comparison = a.organization.compareTo(b.organization);
+          break;
+        case 'Username':
+          comparison = a.username.compareTo(b.username);
+          break;
+        case 'Name':
+        default:
+          comparison = a.profileName.toLowerCase().compareTo(b.profileName.toLowerCase());
+          break;
+      }
+      return _farmerSortAscending ? comparison : -comparison;
+    });
+
     return Padding(
       padding: const EdgeInsets.all(22),
       child: Column(
@@ -2640,26 +3534,26 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
                     filled: true,
                     fillColor: cardBg,
                     border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: cardBorder)),
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                   ),
                 ),
               ),
-              const SizedBox(width: 12),
+              const SizedBox(width: 10),
               SizedBox(
                 width: 180,
                 child: DropdownButtonFormField<String>(
                   initialValue: _selectedBarangayFilter,
                   dropdownColor: cardBg,
-                  style: TextStyle(color: textColor, fontSize: 13),
+                  style: TextStyle(color: textColor, fontSize: 12.5),
                   decoration: InputDecoration(
-                    labelText: 'Filter Barangay',
-                    labelStyle: TextStyle(color: subtextColor),
+                    labelText: 'Barangay',
+                    labelStyle: TextStyle(color: subtextColor, fontSize: 11.5),
                     filled: true,
                     fillColor: cardBg,
                     border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: cardBorder)),
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
                   ),
-                  items: ['All', ...AccountService.pagsanjanBarangays].map((b) => DropdownMenuItem(value: b, child: Text(b))).toList(),
+                  items: ['All', ...AccountService.pagsanjanBarangays].map((b) => DropdownMenuItem(value: b, child: Text(b, overflow: TextOverflow.ellipsis))).toList(),
                   onChanged: (val) => setState(() => _selectedBarangayFilter = val ?? 'All'),
                 ),
               ),
@@ -2921,15 +3815,21 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
     final userCtrl = TextEditingController();
     final passCtrl = TextEditingController();
     final contactCtrl = TextEditingController();
-    final orgCtrl = TextEditingController();
+    final customOrgCtrl = TextEditingController();
+    final empSearchCtrl = TextEditingController();
     final addressCtrl = TextEditingController(); // Complete Address
     final landAreaCtrl = TextEditingController(); // Empty start
     final latCtrl = TextEditingController(); // Empty start
     final lonCtrl = TextEditingController(); // Empty start
     final specificCropCtrl = TextEditingController();
     final List<String> specificCropsList = [];
+    final List<LatLng> boundaryPoints = [];
     String selectedBrgy = 'Biñan';
     String selectedTenure = 'Owner';
+
+    final existingOrgs = getUniqueOrganizations(service);
+    String selectedOrg = 'Choose Association';
+    bool isAddingCustomOrg = false;
 
     // Field-level error messages
     String? nameErrorText;
@@ -3139,13 +4039,13 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
                                   LengthLimitingTextInputFormatter(11),
                                 ],
                                 decoration: InputDecoration(
-                                  labelText: isTagalog ? 'Numero ng Kontak (11 Digits)' : 'Contact Number (11 Digits)',
+                                  labelText: isTagalog ? 'Numero ng Kontak (Opsyonal)' : 'Contact Number (Optional)',
                                   hintText: '09123456789',
                                   errorText: contactErrorText,
                                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
                                   filled: true,
                                   fillColor: Colors.white,
-                                  helperText: isTagalog ? 'Dapat saktong 11 numero (hal. 09123456789)' : 'Must be exactly 11 digits (e.g. 09123456789)',
+                                  helperText: isTagalog ? 'Opsyonal: Saktong 11 numero kung lalagyan (hal. 09123456789)' : 'Optional: 11 digits if provided (e.g. 09123456789)',
                                 ),
                                 onChanged: (val) {
                                   final digitsOnly = val.replaceAll(RegExp(r'\D'), '');
@@ -3165,15 +4065,58 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
                           ],
                         ),
                         const SizedBox(height: 10),
-                        TextField(
-                          controller: orgCtrl,
+                        DropdownButtonFormField<String>(
+                          isExpanded: true,
+                          initialValue: selectedOrg,
                           decoration: InputDecoration(
-                            labelText: isTagalog ? 'Samahan / Organisasyon' : 'Association / Org Membership',
+                            labelText: isTagalog ? 'Samahan / Asosasyon' : 'Association / Organization',
                             border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
                             filled: true,
                             fillColor: Colors.white,
                           ),
+                          items: [
+                            DropdownMenuItem(
+                              value: 'Choose Association',
+                              child: Text(isTagalog ? 'Pumili ng Samahan (Choose Association)' : 'Choose Association', overflow: TextOverflow.ellipsis, maxLines: 1),
+                            ),
+                            DropdownMenuItem(
+                              value: 'Not Associated',
+                              child: Text(isTagalog ? 'Walang Samahan (Not Associated)' : 'Not Associated', overflow: TextOverflow.ellipsis, maxLines: 1),
+                            ),
+                            ...existingOrgs.map((org) => DropdownMenuItem(
+                              value: org,
+                              child: Text(org, overflow: TextOverflow.ellipsis, maxLines: 1),
+                            )),
+                            DropdownMenuItem(
+                              value: 'ADD_NEW',
+                              child: Text(
+                                isTagalog ? '➕ Magdagdag ng Bagong Samahan' : '➕ Add New Association',
+                                style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF0284C7)),
+                                overflow: TextOverflow.ellipsis,
+                                maxLines: 1,
+                              ),
+                            ),
+                          ],
+                          onChanged: (val) {
+                            setDialogState(() {
+                              selectedOrg = val ?? 'Choose Association';
+                              isAddingCustomOrg = (selectedOrg == 'ADD_NEW');
+                            });
+                          },
                         ),
+                        if (isAddingCustomOrg) ...[
+                          const SizedBox(height: 8),
+                          TextField(
+                            controller: customOrgCtrl,
+                            decoration: InputDecoration(
+                              labelText: isTagalog ? 'Pangalan ng Bagong Samahan' : 'New Association Name',
+                              hintText: 'e.g. Pagsanjan Organic Farmers Coop',
+                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                              filled: true,
+                              fillColor: Colors.white,
+                            ),
+                          ),
+                        ],
 
                         const Divider(height: 28, thickness: 1.2),
 
@@ -3340,12 +4283,139 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
                                   filled: true,
                                   fillColor: Colors.white,
                                 ),
-                                items: ['Owner', 'Tenant', 'Lease', 'CLT'].map((t) => DropdownMenuItem(value: t, child: Text(t))).toList(),
-                                onChanged: (val) => selectedTenure = val ?? 'Owner',
+                                items: ['Owner', 'Tenant', 'Lease', 'CLT', 'Hired Farmworkers'].map((t) => DropdownMenuItem(value: t, child: Text(t))).toList(),
+                                onChanged: (val) {
+                                  setDialogState(() {
+                                    selectedTenure = val ?? 'Owner';
+                                  });
+                                },
                               ),
                             ),
                           ],
                         ),
+                        if (selectedTenure == 'Hired Farmworkers') ...[
+                          const SizedBox(height: 10),
+                          TextField(
+                            controller: empSearchCtrl,
+                            style: const TextStyle(fontSize: 13),
+                            decoration: InputDecoration(
+                              labelText: isTagalog ? 'Maghanap ng Employer (Pangalan o Barangay)' : 'Search Employer (Name or Barangay)',
+                              hintText: isTagalog ? 'I-type ang pangalan ng employer...' : 'Type employer name...',
+                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                              filled: true,
+                              fillColor: const Color(0xFFEFF6FF),
+                              prefixIcon: const Icon(Icons.search_rounded, size: 20, color: Color(0xFF0284C7)),
+                              suffixIcon: empSearchCtrl.text.isNotEmpty
+                                  ? IconButton(
+                                      icon: const Icon(Icons.clear_rounded, size: 18),
+                                      onPressed: () {
+                                        setDialogState(() {
+                                          empSearchCtrl.clear();
+                                        });
+                                      },
+                                    )
+                                  : null,
+                              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                            ),
+                            onChanged: (_) => setDialogState(() {}),
+                          ),
+                          const SizedBox(height: 8),
+                          DropdownButtonFormField<String>(
+                            isExpanded: true,
+                            decoration: InputDecoration(
+                              labelText: isTagalog ? 'Pumili ng Employer (Owner/Tenant/Lease/CLT)' : 'Select Employer (Owner/Tenant/Lease/CLT)',
+                              hintText: isTagalog ? 'Sino ang may-ari/tenant/nagpaupa?' : 'Who hired this farmworker?',
+                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                              filled: true,
+                              fillColor: const Color(0xFFEFF6FF),
+                              prefixIcon: const Icon(Icons.person_pin_rounded, color: Color(0xFF0284C7)),
+                            ),
+                            items: service.farmers
+                                .where((f) {
+                                  if (f.profileName.trim().isEmpty) return false;
+                                  final q = empSearchCtrl.text.trim().toLowerCase();
+                                  final matchesQuery = q.isEmpty ||
+                                      f.profileName.toLowerCase().contains(q) ||
+                                      f.username.toLowerCase().contains(q) ||
+                                      f.barangay.toLowerCase().contains(q);
+                                  if (!matchesQuery) return false;
+
+                                  final fFarm = service.farms.firstWhere(
+                                    (farm) => farm.farmerId == f.id || farm.farmerName == f.profileName,
+                                    orElse: () => FarmRecord(
+                                      id: '',
+                                      farmerId: f.id,
+                                      farmerName: f.profileName,
+                                      locationName: 'Sitio ${f.barangay}',
+                                      latitude: 14.2790,
+                                      longitude: 121.4550,
+                                      landAreaHectares: 2.0,
+                                      tenureStatus: 'Owner',
+                                      cropType: 'Rice',
+                                      barangay: f.barangay,
+                                    ),
+                                  );
+                                  final tenure = fFarm.tenureStatus.toLowerCase();
+                                  return tenure == 'owner' || tenure == 'tenant' || tenure == 'lease' || tenure == 'clt' || tenure.contains('owner') || tenure.contains('tenant') || tenure.contains('lease');
+                                })
+                                .map((f) {
+                                  final fFarm = service.farms.firstWhere(
+                                    (farm) => farm.farmerId == f.id || farm.farmerName == f.profileName,
+                                    orElse: () => FarmRecord(
+                                      id: '',
+                                      farmerId: f.id,
+                                      farmerName: f.profileName,
+                                      locationName: 'Sitio ${f.barangay}',
+                                      latitude: 14.2790,
+                                      longitude: 121.4550,
+                                      landAreaHectares: 2.0,
+                                      tenureStatus: 'Owner',
+                                      cropType: 'Rice',
+                                      barangay: f.barangay,
+                                    ),
+                                  );
+                                  return DropdownMenuItem(
+                                    value: f.id,
+                                    child: Text(
+                                      '${f.profileName} (${fFarm.tenureStatus} · ${f.barangay})',
+                                      overflow: TextOverflow.ellipsis,
+                                      maxLines: 1,
+                                    ),
+                                  );
+                                })
+                                .toList(),
+                            onChanged: (empId) {
+                              if (empId != null) {
+                                setDialogState(() {
+                                  final empFarmer = service.farmers.firstWhere((f) => f.id == empId, orElse: () => service.farmers.first);
+                                  final empFarm = service.farms.firstWhere(
+                                    (farm) => farm.farmerId == empId || farm.farmerName == empFarmer.profileName,
+                                    orElse: () => FarmRecord(
+                                      id: 'AUTO_FARM',
+                                      farmerId: empFarmer.id,
+                                      farmerName: empFarmer.profileName,
+                                      locationName: 'Sitio ${empFarmer.barangay}',
+                                      latitude: 14.2790,
+                                      longitude: 121.4550,
+                                      landAreaHectares: 2.0,
+                                      tenureStatus: 'Owner',
+                                      cropType: 'Rice',
+                                      barangay: empFarmer.barangay,
+                                    ),
+                                  );
+
+                                  landAreaCtrl.text = empFarm.landAreaHectares.toStringAsFixed(1);
+                                  selectedBrgy = empFarm.barangay;
+                                  addressCtrl.text = empFarm.locationName.trim().isNotEmpty
+                                      ? empFarm.locationName
+                                      : 'House #${empFarmer.id.substring(math.max(0, empFarmer.id.length - 3))}, Brgy. ${empFarm.barangay}, Pagsanjan';
+                                  latCtrl.text = empFarm.latitude.toStringAsFixed(5);
+                                  lonCtrl.text = empFarm.longitude.toStringAsFixed(5);
+                                });
+                              }
+                            },
+                          ),
+                        ],
 
                         const SizedBox(height: 10),
                         // COMPLETE ADDRESS INPUT FIELD
@@ -3437,67 +4507,211 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
 
                               showDialog(
                                 context: context,
-                                builder: (mapCtx) => AlertDialog(
-                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                                  title: Row(
-                                    children: [
-                                      const Icon(Icons.touch_app_rounded, color: Color(0xFF0056B3)),
-                                      const SizedBox(width: 8),
-                                      Expanded(
-                                        child: Text(
-                                          isTagalog ? 'I-tap sa Mapa ang Lokasyon ng Sakahan' : 'Tap on Map to Pick Farm Location',
-                                          style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+                                builder: (mapCtx) => StatefulBuilder(
+                                  builder: (mapCtx, setMapState) {
+                                    final sqM = calculatePolygonAreaSqM(boundaryPoints);
+                                    final ha = calculatePolygonAreaHectares(boundaryPoints);
+                                    final nf = NumberFormat('#,###');
+                                    final overlappingFarm = findOverlappingFarm(boundaryPoints, service.farms);
+
+                                    return AlertDialog(
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                                      contentPadding: EdgeInsets.zero,
+                                      backgroundColor: const Color(0xFFF8FAFC),
+                                      title: Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                                        decoration: const BoxDecoration(
+                                          color: Color(0xFF0056B3),
+                                          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+                                        ),
+                                        child: Row(
+                                          children: [
+                                            Container(
+                                              padding: const EdgeInsets.all(8),
+                                              decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.2), shape: BoxShape.circle),
+                                              child: const Icon(Icons.polyline_rounded, color: Colors.white, size: 22),
+                                            ),
+                                            const SizedBox(width: 12),
+                                            Expanded(
+                                              child: Text(
+                                                isTagalog ? 'I-set ang Boundary at Sukat ng Sakahan' : 'Set Farm Land Boundary & Area',
+                                                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
+                                              ),
+                                            ),
+                                            IconButton(
+                                              icon: const Icon(Icons.close_rounded, color: Colors.white),
+                                              onPressed: () => Navigator.pop(mapCtx),
+                                            ),
+                                          ],
                                         ),
                                       ),
-                                    ],
-                                  ),
-                                  content: SizedBox(
-                                    width: 500,
-                                    height: 380,
-                                    child: ClipRRect(
-                                      borderRadius: BorderRadius.circular(12),
-                                      child: PagsanjanMapWidget(
-                                        initialCenter: LatLng(currentLat, currentLon),
-                                        initialZoom: 14,
-                                        markers: latCtrl.text.isNotEmpty && lonCtrl.text.isNotEmpty
-                                            ? [
-                                          Marker(
-                                            point: LatLng(currentLat, currentLon),
-                                            width: 40,
-                                            height: 40,
-                                            child: const Icon(Icons.location_pin, color: Colors.red, size: 36),
-                                          ),
-                                        ]
-                                            : [],
-                                        onTap: (point) {
-                                          final detectedBrgy = BarangayResolver.resolveBarangay(point);
-                                          setDialogState(() {
-                                            latCtrl.text = point.latitude.toStringAsFixed(5);
-                                            lonCtrl.text = point.longitude.toStringAsFixed(5);
-                                            selectedBrgy = detectedBrgy;
-                                            gpsErrorText = null;
-                                            dialogErrorBanner = null;
-                                            if (addressCtrl.text.trim().isEmpty) {
-                                              addressCtrl.text = 'Sitio $detectedBrgy, Brgy. $detectedBrgy, Pagsanjan';
-                                            }
-                                          });
-                                          Navigator.pop(mapCtx);
-                                        },
+                                      content: SizedBox(
+                                        width: 620,
+                                        height: 520,
+                                        child: Column(
+                                          children: [
+                                            Container(
+                                              width: double.infinity,
+                                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                                              color: const Color(0xFFEFF6FF),
+                                              child: Row(
+                                                children: [
+                                                  const Icon(Icons.touch_app_rounded, color: Color(0xFF0284C7), size: 18),
+                                                  const SizedBox(width: 8),
+                                                  Expanded(
+                                                    child: Text(
+                                                      boundaryPoints.length < 3
+                                                          ? (isTagalog ? 'Mag-tap ng 3 o higit pang punto sa mapa para iguhit ang boundary.' : 'Tap 3 or more points on map to draw farm boundary.')
+                                                          : (isTagalog ? '🌾 Na-mapang Sukat: ${ha.toStringAsFixed(2)} ha (${nf.format(sqM.round())} m²)' : '🌾 Mapped Area: ${ha.toStringAsFixed(2)} ha (${nf.format(sqM.round())} m²)'),
+                                                      style: TextStyle(
+                                                        fontSize: 12.5,
+                                                        fontWeight: FontWeight.bold,
+                                                        color: boundaryPoints.length >= 3 ? const Color(0xFF16A34A) : const Color(0xFF0369A1),
+                                                      ),
+                                                    ),
+                                                  ),
+                                                  if (boundaryPoints.isNotEmpty) ...[
+                                                    TextButton.icon(
+                                                      style: TextButton.styleFrom(foregroundColor: Colors.redAccent),
+                                                      onPressed: () {
+                                                        setMapState(() {
+                                                          boundaryPoints.removeLast();
+                                                        });
+                                                      },
+                                                      icon: const Icon(Icons.undo_rounded, size: 16),
+                                                      label: Text(isTagalog ? 'I-undo' : 'Undo'),
+                                                    ),
+                                                    TextButton.icon(
+                                                      style: TextButton.styleFrom(foregroundColor: Colors.grey),
+                                                      onPressed: () {
+                                                        setMapState(() {
+                                                          boundaryPoints.clear();
+                                                        });
+                                                      },
+                                                      icon: const Icon(Icons.clear_all_rounded, size: 16),
+                                                      label: Text(isTagalog ? 'Linisin' : 'Clear'),
+                                                    ),
+                                                  ],
+                                                ],
+                                              ),
+                                            ),
+                                            if (overlappingFarm != null)
+                                              Container(
+                                                width: double.infinity,
+                                                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                                                color: const Color(0xFFFEF2F2),
+                                                child: Row(
+                                                  children: [
+                                                    const Icon(Icons.error_outline_rounded, color: Color(0xFFDC2626), size: 18),
+                                                    const SizedBox(width: 8),
+                                                    Expanded(
+                                                      child: Text(
+                                                        isTagalog
+                                                            ? '⚠️ SUMASAGASA SA IBA: Ang boundary na ito ay naki-overlap sa sakahan ni ${overlappingFarm.farmerName} (${overlappingFarm.barangay})!'
+                                                            : '⚠️ BOUNDARY OVERLAP: This boundary overlaps with the registered farm of ${overlappingFarm.farmerName} (${overlappingFarm.barangay})!',
+                                                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF991B1B)),
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
+                                            Expanded(
+                                              child: PagsanjanMapWidget(
+                                                initialCenter: LatLng(currentLat, currentLon),
+                                                initialZoom: 15,
+                                                extraPolygons: [
+                                                  ...service.farms.where((f) => f.boundaryPoints.length >= 3).map((f) => Polygon(
+                                                    points: f.boundaryPoints,
+                                                    color: Colors.red.withValues(alpha: 0.15),
+                                                    borderColor: Colors.redAccent,
+                                                    borderStrokeWidth: 2.0,
+                                                  )),
+                                                  if (boundaryPoints.length >= 3)
+                                                    Polygon(
+                                                      points: boundaryPoints,
+                                                      color: overlappingFarm != null
+                                                          ? Colors.red.withValues(alpha: 0.4)
+                                                          : const Color(0xFF0284C7).withValues(alpha: 0.3),
+                                                      borderColor: overlappingFarm != null ? Colors.red : const Color(0xFF0056B3),
+                                                      borderStrokeWidth: 3.0,
+                                                    ),
+                                                ],
+                                                markers: [
+                                                  ...boundaryPoints.asMap().entries.map((e) => Marker(
+                                                        point: e.value,
+                                                        width: 24,
+                                                        height: 24,
+                                                        child: Container(
+                                                          decoration: BoxDecoration(
+                                                            color: const Color(0xFF0056B3),
+                                                            shape: BoxShape.circle,
+                                                            border: Border.all(color: Colors.white, width: 2),
+                                                          ),
+                                                          child: Center(
+                                                            child: Text(
+                                                              '${e.key + 1}',
+                                                              style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                                                            ),
+                                                          ),
+                                                        ),
+                                                      )),
+                                                ],
+                                                onTap: (point) {
+                                                  setMapState(() {
+                                                    boundaryPoints.add(point);
+                                                  });
+                                                },
+                                              ),
+                                            ),
+                                          ],
+                                        ),
                                       ),
-                                    ),
-                                  ),
-                                  actions: [
-                                    TextButton(
-                                      onPressed: () => Navigator.pop(mapCtx),
-                                      child: Text(isTagalog ? 'Kanselahin' : 'Cancel'),
-                                    ),
-                                  ],
+                                      actions: [
+                                        TextButton(
+                                          onPressed: () => Navigator.pop(mapCtx),
+                                          child: Text(isTagalog ? 'Kanselahin' : 'Cancel', style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.grey)),
+                                        ),
+                                        ElevatedButton.icon(
+                                          style: ElevatedButton.styleFrom(
+                                            backgroundColor: overlappingFarm != null ? Colors.grey : const Color(0xFF0056B3),
+                                            foregroundColor: Colors.white,
+                                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+                                          ),
+                                          icon: const Icon(Icons.check_circle_rounded, size: 18),
+                                          label: Text(isTagalog ? 'I-confirm ang Boundary' : 'Confirm Farm Boundary', style: const TextStyle(fontWeight: FontWeight.bold)),
+                                          onPressed: (overlappingFarm != null || boundaryPoints.length < 3)
+                                              ? null
+                                              : () {
+                                                  final centroid = calculatePolygonCentroid(boundaryPoints);
+                                                  final computedHa = calculatePolygonAreaHectares(boundaryPoints);
+                                                  final detectedBrgy = BarangayResolver.resolveBarangay(centroid);
+
+                                                  setDialogState(() {
+                                                    latCtrl.text = centroid.latitude.toStringAsFixed(5);
+                                                    lonCtrl.text = centroid.longitude.toStringAsFixed(5);
+                                                    selectedBrgy = detectedBrgy;
+                                                    if (computedHa > 0) {
+                                                      landAreaCtrl.text = computedHa.toStringAsFixed(2);
+                                                    }
+                                                    gpsErrorText = null;
+                                                    dialogErrorBanner = null;
+                                                    if (addressCtrl.text.trim().isEmpty) {
+                                                      addressCtrl.text = 'Brgy. $detectedBrgy, Pagsanjan';
+                                                    }
+                                                  });
+                                                  Navigator.pop(mapCtx);
+                                                },
+                                        ),
+                                      ],
+                                    );
+                                  },
                                 ),
                               );
                             },
                             icon: const Icon(Icons.map_rounded),
                             label: Text(
-                              isTagalog ? 'Pumili ng Lokasyon sa Mapa ng Pagsanjan' : 'Pick Location on Pagsanjan Map',
+                              isTagalog ? '🗺️ Pumili sa Mapa & I-set ang Boundary ng Lupa' : '🗺️ Pick Location & Set Farm Land Boundary',
                               style: const TextStyle(fontWeight: FontWeight.bold),
                             ),
                           ),
@@ -3567,16 +4781,16 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
                             return;
                           }
 
-                          // 3. Validate Contact Number (MUST be 11 digits)
+                          // 3. Validate Contact Number (OPTIONAL)
                           final contactDigits = contactCtrl.text.replaceAll(RegExp(r'\D'), '');
-                          if (contactDigits.length != 11) {
+                          if (contactDigits.isNotEmpty && contactDigits.length != 11) {
                             setDialogState(() {
                               contactErrorText = isTagalog
-                                  ? 'Kailangang saktong 11 numero (hal. 09123456789)!'
-                                  : 'Must be exactly 11 digits (e.g. 09123456789)!';
+                                  ? 'Kung lalagyan, kailangang saktong 11 numero (hal. 09123456789)!'
+                                  : 'If provided, must be exactly 11 digits (e.g. 09123456789)!';
                               dialogErrorBanner = isTagalog
-                                  ? '⚠️ MALI SA CONTACT NUMBER: Kailangang saktong 11 numero (halimbawa: 09123456789)!'
-                                  : '⚠️ CONTACT NUMBER ERROR: Must be exactly 11 digits (e.g. 09123456789)!';
+                                  ? '⚠️ MALI SA CONTACT NUMBER: Kung lalagyan, kailangang saktong 11 numero (halimbawa: 09123456789)!'
+                                  : '⚠️ CONTACT NUMBER ERROR: If provided, must be 11 digits (e.g. 09123456789)!';
                             });
                             scrollCtrl.animateTo(0, duration: const Duration(milliseconds: 300), curve: Curves.easeOut);
                             return;
@@ -3612,24 +4826,28 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
                             return;
                           }
 
-                          // 6. DUPLICATE CHECK: Contact Number
-                          final existingContact = service.farmers.any((f) => f.contactNumber.replaceAll(RegExp(r'\D'), '') == contactDigits);
-                          if (existingContact) {
-                            setDialogState(() {
-                              contactErrorText = isTagalog
-                                  ? 'May umiiral nang magsasaka na may ganitong numero!'
-                                  : 'A farmer with this contact number already exists!';
-                              dialogErrorBanner = isTagalog
-                                  ? '⚠️ HINDI MAIPAGPATULOY: May umiiral nang magsasaka na may Contact Number ($contactDigits)!'
-                                  : '⚠️ CANNOT PROCEED: A farmer with this contact number ($contactDigits) already exists!';
-                            });
-                            scrollCtrl.animateTo(0, duration: const Duration(milliseconds: 300), curve: Curves.easeOut);
-                            return;
+                          // 6. DUPLICATE CHECK: Contact Number (Only if provided)
+                          if (contactDigits.isNotEmpty) {
+                            final existingContact = service.farmers.any((f) =>
+                                f.contactNumber.replaceAll(RegExp(r'\D'), '').isNotEmpty &&
+                                f.contactNumber.replaceAll(RegExp(r'\D'), '') == contactDigits);
+                            if (existingContact) {
+                              setDialogState(() {
+                                contactErrorText = isTagalog
+                                    ? 'May umiiral nang magsasaka na may ganitong numero!'
+                                    : 'A farmer with this contact number already exists!';
+                                dialogErrorBanner = isTagalog
+                                    ? '⚠️ HINDI MAIPAGPATULOY: May umiiral nang magsasaka na may Contact Number ($contactDigits)!'
+                                    : '⚠️ CANNOT PROCEED: A farmer with this contact number ($contactDigits) already exists!';
+                              });
+                              scrollCtrl.animateTo(0, duration: const Duration(milliseconds: 300), curve: Curves.easeOut);
+                              return;
+                            }
                           }
 
-                          // 7. DUPLICATE CHECK: Address / Location
+                          // 7. DUPLICATE CHECK: Address / Location (Exempt Hired Farmworkers)
                           final locInput = addressCtrl.text.trim().toLowerCase();
-                          if (locInput.isNotEmpty) {
+                          if (locInput.isNotEmpty && selectedTenure != 'Hired Farmworkers') {
                             final existingAddress = service.farmers.any((f) =>
                             f.barangay.toLowerCase() == selectedBrgy.toLowerCase() &&
                                 service.farms.any((farm) => (farm.farmerId == f.id || farm.farmerName == f.profileName) && farm.locationName.trim().toLowerCase() == locInput));
@@ -3682,31 +4900,56 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
                           }
 
                           final primaryCropsStr = selectedPrimaryCrops.join(', ');
-                          final finalCropType = specificCropsList.isNotEmpty
-                              ? '$primaryCropsStr (${specificCropsList.join(', ')})'
+                          final specificVarietiesStr = specificCropsList.isNotEmpty
+                              ? specificCropsList.join(', ')
                               : primaryCropsStr;
+
+                          final finalOrg = selectedOrg == 'ADD_NEW'
+                              ? (customOrgCtrl.text.trim().isEmpty ? 'Not Associated' : customOrgCtrl.text.trim())
+                              : (selectedOrg == 'Choose Association' ? 'Not Associated' : selectedOrg);
 
                           final farmerId = await service.addFarmer(
                             username: userVal,
                             password: passCtrl.text.isEmpty ? 'password123' : passCtrl.text,
                             profileName: nameVal,
                             barangay: selectedBrgy,
-                            contactNumber: contactDigits,
-                            organization: orgCtrl.text.isEmpty ? 'Independent' : orgCtrl.text.trim(),
+                            contactNumber: contactDigits.isEmpty ? 'N/A' : contactDigits,
+                            organization: finalOrg,
                           );
 
-                          // Add associated Farm Record so it syncs automatically to Farmer & Farm Records & Supabase!
+                          final farmLocName = selectedTenure == 'Hired Farmworkers'
+                              ? '${addressCtrl.text.trim().isEmpty ? "Sitio $selectedBrgy" : addressCtrl.text.trim()} (Hired Worker: $nameVal)'
+                              : (addressCtrl.text.trim().isEmpty ? 'Sitio $selectedBrgy' : addressCtrl.text.trim());
+
+                          // 1. Primary Crop Category saved in farms table in Supabase
                           await service.addFarmRecord(
                             farmerId: farmerId,
                             farmerName: nameVal,
-                            locationName: locInput.isEmpty ? 'Sitio $selectedBrgy' : addressCtrl.text.trim(),
+                            locationName: farmLocName,
                             latitude: double.tryParse(latCtrl.text) ?? 14.2790,
                             longitude: double.tryParse(lonCtrl.text) ?? 121.4550,
                             landAreaHectares: double.tryParse(landAreaCtrl.text) ?? 1.0,
                             tenureStatus: selectedTenure,
-                            cropType: finalCropType,
+                            cropType: primaryCropsStr,
                             barangay: selectedBrgy,
+                            boundaryPoints: boundaryPoints,
                           );
+
+                          // 2. Specific Crop Type & Varieties saved directly into farmer_plantings table in Supabase
+                          try {
+                            final plantingId = 'PL_${DateTime.now().millisecondsSinceEpoch}';
+                            await SupabaseService.client.from('farmer_plantings').insert({
+                              'id': plantingId,
+                              'farmer_id': farmerId,
+                              'farmer_name': nameVal,
+                              'crop': specificVarietiesStr,
+                              'hectares': double.tryParse(landAreaCtrl.text) ?? 1.0,
+                              'planted_on': DateTime.now().toIso8601String(),
+                              'barangay': selectedBrgy,
+                            });
+                          } catch (e) {
+                            debugPrint('Error inserting specific crop & variety into farmer_plantings: $e');
+                          }
 
                           if (!context.mounted) return;
                           Navigator.pop(context);
@@ -3739,114 +4982,294 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
     final isTagalog = service.isTagalog;
     final nameCtrl = TextEditingController(text: farmer.profileName);
     final contactCtrl = TextEditingController(text: farmer.contactNumber);
-    final orgCtrl = TextEditingController(text: farmer.organization);
+    final customOrgCtrl = TextEditingController();
     String selectedBrgy = farmer.barangay;
     String selectedStatus = farmer.status;
     String? contactErrorText;
+
+    final existingOrgs = getUniqueOrganizations(service);
+    String selectedOrg = farmer.organization.trim().isEmpty || farmer.organization == 'Independent'
+        ? 'Not Associated'
+        : farmer.organization;
+
+    if (selectedOrg != 'Choose Association' && selectedOrg != 'Not Associated' && !existingOrgs.contains(selectedOrg)) {
+      existingOrgs.add(selectedOrg);
+    }
+    bool isAddingCustomOrg = false;
 
     showDialog(
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
-          title: Text(
-            isTagalog
-                ? 'Baguhin ang Rekord ng Magsasaka (${farmer.username})'
-                : 'Edit Farmer Record (${farmer.username})',
-          ),
-          content: SingleChildScrollView(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          contentPadding: EdgeInsets.zero,
+          backgroundColor: const Color(0xFFF8FAFC),
+          content: SizedBox(
+            width: 480,
             child: Column(
               mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                TextField(
-                  controller: nameCtrl,
-                  decoration: InputDecoration(labelText: isTagalog ? 'Buong Pangalan' : 'Full Name'),
-                ),
-                DropdownButtonFormField<String>(
-                  initialValue: selectedBrgy,
-                  decoration: const InputDecoration(labelText: 'Barangay'),
-                  items: AccountService.pagsanjanBarangays.map((b) => DropdownMenuItem(value: b, child: Text(b))).toList(),
-                  onChanged: (val) => selectedBrgy = val ?? farmer.barangay,
-                ),
-                TextField(
-                  controller: contactCtrl,
-                  keyboardType: TextInputType.phone,
-                  inputFormatters: [
-                    FilteringTextInputFormatter.digitsOnly,
-                    LengthLimitingTextInputFormatter(11),
-                  ],
-                  decoration: InputDecoration(
-                    labelText: isTagalog ? 'Numero ng Kontak (11 Numero)' : 'Contact Details (11 Digits)',
-                    errorText: contactErrorText,
-                    helperText: isTagalog ? 'Dapat saktong 11 numero (hal. 09123456789)' : 'Must be exactly 11 digits (e.g. 09123456789)',
+                // BLUE HEADER BANNER
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                  decoration: const BoxDecoration(
+                    color: Color(0xFF0056B3),
+                    borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
                   ),
-                  onChanged: (val) {
-                    final digitsOnly = val.replaceAll(RegExp(r'\D'), '');
-                    setDialogState(() {
-                      if (digitsOnly.isNotEmpty && digitsOnly.length != 11) {
-                        contactErrorText = isTagalog
-                            ? 'Dapat saktong 11 numero (${digitsOnly.length}/11)'
-                            : 'Must be exactly 11 digits (${digitsOnly.length}/11)';
-                      } else {
-                        contactErrorText = null;
-                      }
-                    });
-                  },
-                ),
-                TextField(
-                  controller: orgCtrl,
-                  decoration: InputDecoration(
-                    labelText: isTagalog ? 'Samahan / Organisasyon' : 'Association Membership',
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.2),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(Icons.manage_accounts_rounded, color: Colors.white, size: 24),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          isTagalog
+                              ? 'Baguhin ang Rekord ng Magsasaka (@${farmer.username})'
+                              : 'Edit Farmer Record (@${farmer.username})',
+                          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.close_rounded, color: Colors.white),
+                        onPressed: () => Navigator.pop(context),
+                      ),
+                    ],
                   ),
                 ),
-                DropdownButtonFormField<String>(
-                  initialValue: selectedStatus,
-                  decoration: InputDecoration(labelText: isTagalog ? 'Katayuan (Status)' : 'Status'),
-                  items: ['Active', 'Pending', 'Deactivated'].map((s) => DropdownMenuItem(value: s, child: Text(s))).toList(),
-                  onChanged: (val) => selectedStatus = val ?? farmer.status,
+
+                // SCROLLABLE FORM BODY
+                Flexible(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.all(20),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // SECTION HEADER
+                        Row(
+                          children: [
+                            const Icon(Icons.badge_rounded, size: 18, color: Color(0xFF0056B3)),
+                            const SizedBox(width: 6),
+                            Text(
+                              isTagalog ? 'IMPORMASYON NG MAGSASAKA' : 'FARMER PROFILE DETAILS',
+                              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF0056B3), letterSpacing: 0.5),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+
+                        TextField(
+                          controller: nameCtrl,
+                          decoration: InputDecoration(
+                            labelText: isTagalog ? 'Buong Pangalan' : 'Full Name',
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                            filled: true,
+                            fillColor: Colors.white,
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+
+                        Row(
+                          children: [
+                            Expanded(
+                              child: DropdownButtonFormField<String>(
+                                initialValue: selectedBrgy,
+                                decoration: InputDecoration(
+                                  labelText: 'Barangay',
+                                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                                  filled: true,
+                                  fillColor: Colors.white,
+                                ),
+                                items: AccountService.pagsanjanBarangays.map((b) => DropdownMenuItem(value: b, child: Text(b))).toList(),
+                                onChanged: (val) => selectedBrgy = val ?? farmer.barangay,
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: DropdownButtonFormField<String>(
+                                initialValue: selectedStatus,
+                                decoration: InputDecoration(
+                                  labelText: isTagalog ? 'Katayuan (Status)' : 'Account Status',
+                                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                                  filled: true,
+                                  fillColor: Colors.white,
+                                ),
+                                items: ['Active', 'Pending', 'Deactivated'].map((s) => DropdownMenuItem(value: s, child: Text(s))).toList(),
+                                onChanged: (val) => selectedStatus = val ?? farmer.status,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 10),
+
+                        TextField(
+                          controller: contactCtrl,
+                          keyboardType: TextInputType.phone,
+                          inputFormatters: [
+                            FilteringTextInputFormatter.digitsOnly,
+                            LengthLimitingTextInputFormatter(11),
+                          ],
+                          decoration: InputDecoration(
+                            labelText: isTagalog ? 'Numero ng Kontak (Opsyonal)' : 'Contact Number (Optional)',
+                            errorText: contactErrorText,
+                            helperText: isTagalog ? 'Opsyonal: Saktong 11 numero kung lalagyan (hal. 09123456789)' : 'Optional: 11 digits if provided (e.g. 09123456789)',
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                            filled: true,
+                            fillColor: Colors.white,
+                            prefixIcon: const Icon(Icons.phone_android_rounded, size: 20),
+                          ),
+                          onChanged: (val) {
+                            final digitsOnly = val.replaceAll(RegExp(r'\D'), '');
+                            setDialogState(() {
+                              if (digitsOnly.isNotEmpty && digitsOnly.length != 11) {
+                                contactErrorText = isTagalog
+                                    ? 'Dapat saktong 11 numero (${digitsOnly.length}/11)'
+                                    : 'Must be exactly 11 digits (${digitsOnly.length}/11)';
+                              } else {
+                                contactErrorText = null;
+                              }
+                            });
+                          },
+                        ),
+                        const SizedBox(height: 10),
+
+                        DropdownButtonFormField<String>(
+                          isExpanded: true,
+                          initialValue: (existingOrgs.contains(selectedOrg) || selectedOrg == 'Not Associated' || selectedOrg == 'Choose Association') ? selectedOrg : 'Not Associated',
+                          decoration: InputDecoration(
+                            labelText: isTagalog ? 'Samahan / Asosasyon' : 'Association / Organization',
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                            filled: true,
+                            fillColor: Colors.white,
+                            prefixIcon: const Icon(Icons.groups_rounded, size: 20),
+                          ),
+                          items: [
+                            DropdownMenuItem(
+                              value: 'Choose Association',
+                              child: Text(isTagalog ? 'Pumili ng Samahan (Choose Association)' : 'Choose Association', overflow: TextOverflow.ellipsis, maxLines: 1),
+                            ),
+                            DropdownMenuItem(
+                              value: 'Not Associated',
+                              child: Text(isTagalog ? 'Walang Samahan (Not Associated)' : 'Not Associated', overflow: TextOverflow.ellipsis, maxLines: 1),
+                            ),
+                            ...existingOrgs.map((org) => DropdownMenuItem(
+                              value: org,
+                              child: Text(org, overflow: TextOverflow.ellipsis, maxLines: 1),
+                            )),
+                            DropdownMenuItem(
+                              value: 'ADD_NEW',
+                              child: Text(
+                                isTagalog ? '➕ Magdagdag ng Bagong Samahan' : '➕ Add New Association',
+                                style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF0284C7)),
+                                overflow: TextOverflow.ellipsis,
+                                maxLines: 1,
+                              ),
+                            ),
+                          ],
+                          onChanged: (val) {
+                            setDialogState(() {
+                              selectedOrg = val ?? 'Choose Association';
+                              isAddingCustomOrg = (selectedOrg == 'ADD_NEW');
+                            });
+                          },
+                        ),
+                        if (isAddingCustomOrg) ...[
+                          const SizedBox(height: 8),
+                          TextField(
+                            controller: customOrgCtrl,
+                            decoration: InputDecoration(
+                              labelText: isTagalog ? 'Pangalan ng Bagong Samahan' : 'New Association Name',
+                              hintText: 'e.g. Pagsanjan Organic Farmers Coop',
+                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                              filled: true,
+                              fillColor: Colors.white,
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ),
+
+                // ACTIONS FOOTER
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: const BorderRadius.vertical(bottom: Radius.circular(20)),
+                    border: Border(top: BorderSide(color: Colors.grey.shade200)),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(context),
+                        child: Text(
+                          isTagalog ? 'Kanselahin' : 'Cancel',
+                          style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF475569)),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      ElevatedButton.icon(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF0056B3),
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+                        ),
+                        icon: const Icon(Icons.check_circle_rounded, size: 18),
+                        label: Text(
+                          isTagalog ? 'I-update ang Rekord' : 'Update Farmer Record',
+                          style: const TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                        onPressed: () {
+                          final contactDigits = contactCtrl.text.replaceAll(RegExp(r'\D'), '');
+                          if (contactDigits.isNotEmpty && contactDigits.length != 11) {
+                            setDialogState(() {
+                              contactErrorText = isTagalog
+                                  ? 'Kung lalagyan, kailangang saktong 11 numero!'
+                                  : 'If provided, must be 11 digits!';
+                            });
+                            return;
+                          }
+
+                          final finalOrg = selectedOrg == 'ADD_NEW'
+                              ? (customOrgCtrl.text.trim().isEmpty ? 'Not Associated' : customOrgCtrl.text.trim())
+                              : (selectedOrg == 'Choose Association' ? 'Not Associated' : selectedOrg);
+
+                          service.updateFarmer(
+                            farmer.id,
+                            profileName: nameCtrl.text.trim(),
+                            barangay: selectedBrgy,
+                            contactNumber: contactDigits.isEmpty ? 'N/A' : contactDigits,
+                            organization: finalOrg,
+                            status: selectedStatus,
+                          );
+                          Navigator.pop(context);
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(
+                                isTagalog
+                                    ? 'Matagumpay na na-update ang rekord ng magsasaka!'
+                                    : 'Farmer record updated successfully!',
+                              ),
+                              backgroundColor: const Color(0xFF0056B3),
+                            ),
+                          );
+                        },
+                      ),
+                    ],
+                  ),
                 ),
               ],
             ),
           ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: Text(isTagalog ? 'Kanselahin' : 'Cancel'),
-            ),
-            ElevatedButton(
-              onPressed: () {
-                final contactDigits = contactCtrl.text.replaceAll(RegExp(r'\D'), '');
-                if (contactDigits.length != 11) {
-                  setDialogState(() {
-                    contactErrorText = isTagalog
-                        ? 'Kailangang saktong 11 numero!'
-                        : 'Must be exactly 11 digits!';
-                  });
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(
-                        isTagalog
-                            ? '⚠️ Hindi maipagpatuloy: Ang Contact Number ay kailangang saktong 11 numero (halimbawa: 09123456789).'
-                            : '⚠️ Cannot proceed: Contact Number must be exactly 11 digits (e.g. 09123456789).',
-                      ),
-                      backgroundColor: Colors.red,
-                    ),
-                  );
-                  return;
-                }
-
-                service.updateFarmer(
-                  farmer.id,
-                  profileName: nameCtrl.text.trim(),
-                  barangay: selectedBrgy,
-                  contactNumber: contactDigits,
-                  organization: orgCtrl.text.trim(),
-                  status: selectedStatus,
-                );
-                Navigator.pop(context);
-              },
-              child: Text(isTagalog ? 'I-update' : 'Update'),
-            ),
-          ],
         ),
       ),
     );
@@ -3859,7 +5282,9 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
     final latCtrl = TextEditingController(); // Empty start
     final lonCtrl = TextEditingController(); // Empty start
     final specificCropCtrl = TextEditingController();
+    final empSearchCtrl = TextEditingController();
     final List<String> specificCropsList = [];
+    final List<LatLng> boundaryPoints = [];
     String selectedTenure = 'Owner';
     String selectedBrgy = farmer.barangay;
     String? dialogErrorBanner;
@@ -4019,9 +5444,136 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
                             filled: true,
                             fillColor: Colors.white,
                           ),
-                          items: ['Owner', 'Tenant', 'Lease', 'CLT'].map((t) => DropdownMenuItem(value: t, child: Text(t))).toList(),
-                          onChanged: (val) => selectedTenure = val ?? 'Owner',
+                          items: ['Owner', 'Tenant', 'Lease', 'CLT', 'Hired Farmworkers'].map((t) => DropdownMenuItem(value: t, child: Text(t))).toList(),
+                          onChanged: (val) {
+                            setDialogState(() {
+                              selectedTenure = val ?? 'Owner';
+                            });
+                          },
                         ),
+                        if (selectedTenure == 'Hired Farmworkers') ...[
+                          const SizedBox(height: 10),
+                          TextField(
+                            controller: empSearchCtrl,
+                            style: const TextStyle(fontSize: 13),
+                            decoration: InputDecoration(
+                              labelText: isTagalog ? 'Maghanap ng Employer (Pangalan o Barangay)' : 'Search Employer (Name or Barangay)',
+                              hintText: isTagalog ? 'I-type ang pangalan ng employer...' : 'Type employer name...',
+                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                              filled: true,
+                              fillColor: const Color(0xFFEFF6FF),
+                              prefixIcon: const Icon(Icons.search_rounded, size: 20, color: Color(0xFF0284C7)),
+                              suffixIcon: empSearchCtrl.text.isNotEmpty
+                                  ? IconButton(
+                                      icon: const Icon(Icons.clear_rounded, size: 18),
+                                      onPressed: () {
+                                        setDialogState(() {
+                                          empSearchCtrl.clear();
+                                        });
+                                      },
+                                    )
+                                  : null,
+                              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                            ),
+                            onChanged: (_) => setDialogState(() {}),
+                          ),
+                          const SizedBox(height: 8),
+                          DropdownButtonFormField<String>(
+                            isExpanded: true,
+                            decoration: InputDecoration(
+                              labelText: isTagalog ? 'Pumili ng Employer (Owner/Tenant/Lease/CLT)' : 'Select Employer (Owner/Tenant/Lease/CLT)',
+                              hintText: isTagalog ? 'Sino ang may-ari/tenant/nagpaupa?' : 'Who hired this farmworker?',
+                              border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                              filled: true,
+                              fillColor: const Color(0xFFEFF6FF),
+                              prefixIcon: const Icon(Icons.person_pin_rounded, color: Color(0xFF0284C7)),
+                            ),
+                            items: service.farmers
+                                .where((f) {
+                                  if (f.profileName.trim().isEmpty) return false;
+                                  final q = empSearchCtrl.text.trim().toLowerCase();
+                                  final matchesQuery = q.isEmpty ||
+                                      f.profileName.toLowerCase().contains(q) ||
+                                      f.username.toLowerCase().contains(q) ||
+                                      f.barangay.toLowerCase().contains(q);
+                                  if (!matchesQuery) return false;
+
+                                  final fFarm = service.farms.firstWhere(
+                                    (farm) => farm.farmerId == f.id || farm.farmerName == f.profileName,
+                                    orElse: () => FarmRecord(
+                                      id: '',
+                                      farmerId: f.id,
+                                      farmerName: f.profileName,
+                                      locationName: 'Sitio ${f.barangay}',
+                                      latitude: 14.2790,
+                                      longitude: 121.4550,
+                                      landAreaHectares: 2.0,
+                                      tenureStatus: 'Owner',
+                                      cropType: 'Rice',
+                                      barangay: f.barangay,
+                                    ),
+                                  );
+                                  final tenure = fFarm.tenureStatus.toLowerCase();
+                                  return tenure == 'owner' || tenure == 'tenant' || tenure == 'lease' || tenure == 'clt' || tenure.contains('owner') || tenure.contains('tenant') || tenure.contains('lease');
+                                })
+                                .map((f) {
+                                  final fFarm = service.farms.firstWhere(
+                                    (farm) => farm.farmerId == f.id || farm.farmerName == f.profileName,
+                                    orElse: () => FarmRecord(
+                                      id: '',
+                                      farmerId: f.id,
+                                      farmerName: f.profileName,
+                                      locationName: 'Sitio ${f.barangay}',
+                                      latitude: 14.2790,
+                                      longitude: 121.4550,
+                                      landAreaHectares: 2.0,
+                                      tenureStatus: 'Owner',
+                                      cropType: 'Rice',
+                                      barangay: f.barangay,
+                                    ),
+                                  );
+                                  return DropdownMenuItem(
+                                    value: f.id,
+                                    child: Text(
+                                      '${f.profileName} (${fFarm.tenureStatus} · ${f.barangay})',
+                                      overflow: TextOverflow.ellipsis,
+                                      maxLines: 1,
+                                    ),
+                                  );
+                                })
+                                .toList(),
+                            onChanged: (empId) {
+                              if (empId != null) {
+                                setDialogState(() {
+                                  final empFarmer = service.farmers.firstWhere((f) => f.id == empId, orElse: () => service.farmers.first);
+                                  final empFarm = service.farms.firstWhere(
+                                    (farm) => farm.farmerId == empId || farm.farmerName == empFarmer.profileName,
+                                    orElse: () => FarmRecord(
+                                      id: 'AUTO_FARM',
+                                      farmerId: empFarmer.id,
+                                      farmerName: empFarmer.profileName,
+                                      locationName: 'Sitio ${empFarmer.barangay}',
+                                      latitude: 14.2790,
+                                      longitude: 121.4550,
+                                      landAreaHectares: 2.0,
+                                      tenureStatus: 'Owner',
+                                      cropType: 'Rice',
+                                      barangay: empFarmer.barangay,
+                                    ),
+                                  );
+
+                                  areaCtrl.text = empFarm.landAreaHectares.toStringAsFixed(1);
+                                  selectedBrgy = empFarm.barangay;
+                                  addressCtrl.text = empFarm.locationName.trim().isNotEmpty
+                                      ? empFarm.locationName
+                                      : 'House #${empFarmer.id.substring(math.max(0, empFarmer.id.length - 3))}, Brgy. ${empFarm.barangay}, Pagsanjan';
+                                  latCtrl.text = empFarm.latitude.toStringAsFixed(5);
+                                  lonCtrl.text = empFarm.longitude.toStringAsFixed(5);
+                                });
+                              }
+                            },
+                          ),
+                        ],
                         const SizedBox(height: 14),
 
                         // MULTI-SELECT PRIMARY CROP TYPES
@@ -4200,65 +5752,209 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
 
                               showDialog(
                                 context: context,
-                                builder: (mapCtx) => AlertDialog(
-                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                                  title: Row(
-                                    children: [
-                                      const Icon(Icons.touch_app_rounded, color: Color(0xFF0056B3)),
-                                      const SizedBox(width: 8),
-                                      Expanded(
-                                        child: Text(
-                                          isTagalog ? 'I-tap sa Mapa ang Lokasyon ng Sakahan' : 'Tap on Map to Pick Farm Location',
-                                          style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+                                builder: (mapCtx) => StatefulBuilder(
+                                  builder: (mapCtx, setMapState) {
+                                    final sqM = calculatePolygonAreaSqM(boundaryPoints);
+                                    final ha = calculatePolygonAreaHectares(boundaryPoints);
+                                    final nf = NumberFormat('#,###');
+                                    final overlappingFarm = findOverlappingFarm(boundaryPoints, service.farms);
+
+                                    return AlertDialog(
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                                      contentPadding: EdgeInsets.zero,
+                                      backgroundColor: const Color(0xFFF8FAFC),
+                                      title: Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                                        decoration: const BoxDecoration(
+                                          color: Color(0xFF0056B3),
+                                          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+                                        ),
+                                        child: Row(
+                                          children: [
+                                            Container(
+                                              padding: const EdgeInsets.all(8),
+                                              decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.2), shape: BoxShape.circle),
+                                              child: const Icon(Icons.polyline_rounded, color: Colors.white, size: 22),
+                                            ),
+                                            const SizedBox(width: 12),
+                                            Expanded(
+                                              child: Text(
+                                                isTagalog ? 'I-set ang Boundary at Sukat ng Sakahan' : 'Set Farm Land Boundary & Area',
+                                                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
+                                              ),
+                                            ),
+                                            IconButton(
+                                              icon: const Icon(Icons.close_rounded, color: Colors.white),
+                                              onPressed: () => Navigator.pop(mapCtx),
+                                            ),
+                                          ],
                                         ),
                                       ),
-                                    ],
-                                  ),
-                                  content: SizedBox(
-                                    width: 500,
-                                    height: 380,
-                                    child: ClipRRect(
-                                      borderRadius: BorderRadius.circular(12),
-                                      child: PagsanjanMapWidget(
-                                        initialCenter: LatLng(currentLat, currentLon),
-                                        initialZoom: 14,
-                                        markers: latCtrl.text.isNotEmpty && lonCtrl.text.isNotEmpty
-                                            ? [
-                                          Marker(
-                                            point: LatLng(currentLat, currentLon),
-                                            width: 40,
-                                            height: 40,
-                                            child: const Icon(Icons.location_pin, color: Colors.red, size: 36),
-                                          ),
-                                        ]
-                                            : [],
-                                        onTap: (point) {
-                                          final detectedBrgy = BarangayResolver.resolveBarangay(point);
-                                          setDialogState(() {
-                                            latCtrl.text = point.latitude.toStringAsFixed(5);
-                                            lonCtrl.text = point.longitude.toStringAsFixed(5);
-                                            selectedBrgy = detectedBrgy;
-                                            if (addressCtrl.text.trim().isEmpty) {
-                                              addressCtrl.text = 'Sitio $detectedBrgy, Brgy. $detectedBrgy, Pagsanjan';
-                                            }
-                                          });
-                                          Navigator.pop(mapCtx);
-                                        },
+                                      content: SizedBox(
+                                        width: 620,
+                                        height: 520,
+                                        child: Column(
+                                          children: [
+                                            Container(
+                                              width: double.infinity,
+                                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                                              color: const Color(0xFFEFF6FF),
+                                              child: Row(
+                                                children: [
+                                                  const Icon(Icons.touch_app_rounded, color: Color(0xFF0284C7), size: 18),
+                                                  const SizedBox(width: 8),
+                                                  Expanded(
+                                                    child: Text(
+                                                      boundaryPoints.length < 3
+                                                          ? (isTagalog ? 'Mag-tap ng 3 o higit pang punto sa mapa para iguhit ang boundary.' : 'Tap 3 or more points on map to draw farm boundary.')
+                                                          : (isTagalog ? '🌾 Na-mapang Sukat: ${ha.toStringAsFixed(2)} ha (${nf.format(sqM.round())} m²)' : '🌾 Mapped Area: ${ha.toStringAsFixed(2)} ha (${nf.format(sqM.round())} m²)'),
+                                                      style: TextStyle(
+                                                        fontSize: 12.5,
+                                                        fontWeight: FontWeight.bold,
+                                                        color: boundaryPoints.length >= 3 ? const Color(0xFF16A34A) : const Color(0xFF0369A1),
+                                                      ),
+                                                    ),
+                                                  ),
+                                                  if (boundaryPoints.isNotEmpty) ...[
+                                                    TextButton.icon(
+                                                      style: TextButton.styleFrom(foregroundColor: Colors.redAccent),
+                                                      onPressed: () {
+                                                        setMapState(() {
+                                                          boundaryPoints.removeLast();
+                                                        });
+                                                      },
+                                                      icon: const Icon(Icons.undo_rounded, size: 16),
+                                                      label: Text(isTagalog ? 'I-undo' : 'Undo'),
+                                                    ),
+                                                    TextButton.icon(
+                                                      style: TextButton.styleFrom(foregroundColor: Colors.grey),
+                                                      onPressed: () {
+                                                        setMapState(() {
+                                                          boundaryPoints.clear();
+                                                        });
+                                                      },
+                                                      icon: const Icon(Icons.clear_all_rounded, size: 16),
+                                                      label: Text(isTagalog ? 'Linisin' : 'Clear'),
+                                                    ),
+                                                  ],
+                                                ],
+                                              ),
+                                            ),
+                                            if (overlappingFarm != null)
+                                              Container(
+                                                width: double.infinity,
+                                                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                                                color: const Color(0xFFFEF2F2),
+                                                child: Row(
+                                                  children: [
+                                                    const Icon(Icons.error_outline_rounded, color: Color(0xFFDC2626), size: 18),
+                                                    const SizedBox(width: 8),
+                                                    Expanded(
+                                                      child: Text(
+                                                        isTagalog
+                                                            ? '⚠️ SUMASAGASA SA IBA: Ang boundary na ito ay naki-overlap sa sakahan ni ${overlappingFarm.farmerName} (${overlappingFarm.barangay})!'
+                                                            : '⚠️ BOUNDARY OVERLAP: This boundary overlaps with the registered farm of ${overlappingFarm.farmerName} (${overlappingFarm.barangay})!',
+                                                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF991B1B)),
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
+                                            Expanded(
+                                              child: PagsanjanMapWidget(
+                                                initialCenter: LatLng(currentLat, currentLon),
+                                                initialZoom: 15,
+                                                extraPolygons: [
+                                                  ...service.farms.where((f) => f.boundaryPoints.length >= 3).map((f) => Polygon(
+                                                    points: f.boundaryPoints,
+                                                    color: Colors.red.withValues(alpha: 0.15),
+                                                    borderColor: Colors.redAccent,
+                                                    borderStrokeWidth: 2.0,
+                                                  )),
+                                                  if (boundaryPoints.length >= 3)
+                                                    Polygon(
+                                                      points: boundaryPoints,
+                                                      color: overlappingFarm != null
+                                                          ? Colors.red.withValues(alpha: 0.4)
+                                                          : const Color(0xFF0284C7).withValues(alpha: 0.3),
+                                                      borderColor: overlappingFarm != null ? Colors.red : const Color(0xFF0056B3),
+                                                      borderStrokeWidth: 3.0,
+                                                    ),
+                                                ],
+                                                markers: [
+                                                  ...boundaryPoints.asMap().entries.map((e) => Marker(
+                                                        point: e.value,
+                                                        width: 24,
+                                                        height: 24,
+                                                        child: Container(
+                                                          decoration: BoxDecoration(
+                                                            color: const Color(0xFF0056B3),
+                                                            shape: BoxShape.circle,
+                                                            border: Border.all(color: Colors.white, width: 2),
+                                                          ),
+                                                          child: Center(
+                                                            child: Text(
+                                                              '${e.key + 1}',
+                                                              style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                                                            ),
+                                                          ),
+                                                        ),
+                                                      )),
+                                                ],
+                                                onTap: (point) {
+                                                  setMapState(() {
+                                                    boundaryPoints.add(point);
+                                                  });
+                                                },
+                                              ),
+                                            ),
+                                          ],
+                                        ),
                                       ),
-                                    ),
-                                  ),
-                                  actions: [
-                                    TextButton(
-                                      onPressed: () => Navigator.pop(mapCtx),
-                                      child: Text(isTagalog ? 'Kanselahin' : 'Cancel'),
-                                    ),
-                                  ],
+                                      actions: [
+                                        TextButton(
+                                          onPressed: () => Navigator.pop(mapCtx),
+                                          child: Text(isTagalog ? 'Kanselahin' : 'Cancel', style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.grey)),
+                                        ),
+                                        ElevatedButton.icon(
+                                          style: ElevatedButton.styleFrom(
+                                            backgroundColor: overlappingFarm != null ? Colors.grey : const Color(0xFF0056B3),
+                                            foregroundColor: Colors.white,
+                                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+                                          ),
+                                          icon: const Icon(Icons.check_circle_rounded, size: 18),
+                                          label: Text(isTagalog ? 'I-confirm ang Boundary' : 'Confirm Farm Boundary', style: const TextStyle(fontWeight: FontWeight.bold)),
+                                          onPressed: (overlappingFarm != null || boundaryPoints.length < 3)
+                                              ? null
+                                              : () {
+                                                  final centroid = calculatePolygonCentroid(boundaryPoints);
+                                                  final computedHa = calculatePolygonAreaHectares(boundaryPoints);
+                                                  final detectedBrgy = BarangayResolver.resolveBarangay(centroid);
+
+                                                  setDialogState(() {
+                                                    latCtrl.text = centroid.latitude.toStringAsFixed(5);
+                                                    lonCtrl.text = centroid.longitude.toStringAsFixed(5);
+                                                    selectedBrgy = detectedBrgy;
+                                                    if (computedHa > 0) {
+                                                      areaCtrl.text = computedHa.toStringAsFixed(2);
+                                                    }
+                                                    if (addressCtrl.text.trim().isEmpty) {
+                                                      addressCtrl.text = 'Brgy. $detectedBrgy, Pagsanjan';
+                                                    }
+                                                  });
+                                                  Navigator.pop(mapCtx);
+                                                },
+                                        ),
+                                      ],
+                                    );
+                                  },
                                 ),
                               );
                             },
                             icon: const Icon(Icons.map_rounded),
                             label: Text(
-                              isTagalog ? 'Pumili ng Lokasyon sa Mapa ng Pagsanjan' : 'Pick Location on Pagsanjan Map',
+                              isTagalog ? '🗺️ Pumili sa Mapa & I-set ang Boundary ng Lupa' : '🗺️ Pick Location & Set Farm Land Boundary',
                               style: const TextStyle(fontWeight: FontWeight.bold),
                             ),
                           ),
@@ -4333,6 +6029,7 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
                             tenureStatus: selectedTenure,
                             cropType: finalCropType,
                             barangay: selectedBrgy,
+                            boundaryPoints: boundaryPoints,
                           );
                           Navigator.pop(context);
                         },
@@ -4602,6 +6299,20 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
     final records = service.historicalRecords;
     final marketPrices = service.marketPriceRecords;
 
+    final totalRecords = records.length;
+    final totalPages1 = (totalRecords / _pageSize).ceil();
+    final safePage1 = totalPages1 > 0 ? math.min(_table1Page, totalPages1 - 1) : 0;
+    final start1 = safePage1 * _pageSize;
+    final end1 = math.min(start1 + _pageSize, totalRecords);
+    final paginatedRecords = totalRecords > 0 ? records.sublist(start1, end1) : <HistoricalDataRecord>[];
+
+    final totalMarketPrices = marketPrices.length;
+    final totalPages2 = (totalMarketPrices / _pageSize).ceil();
+    final safePage2 = totalPages2 > 0 ? math.min(_table2Page, totalPages2 - 1) : 0;
+    final start2 = safePage2 * _pageSize;
+    final end2 = math.min(start2 + _pageSize, totalMarketPrices);
+    final paginatedMarketPrices = totalMarketPrices > 0 ? marketPrices.sublist(start2, end2) : <MarketPriceRecord>[];
+
     return SingleChildScrollView(
       padding: const EdgeInsets.all(22),
       child: Column(
@@ -4621,8 +6332,20 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
               Wrap(
                 spacing: 8,
                 children: [
-                  _buildExportImportButtons(context, 'Historical Data', locale, service),
-                  if (_historicalTableIndex == 1)
+                  _buildExportImportButtons(context, 'Historical Data', locale, service, showImport: false, allowPdf: false),
+                  if (_historicalTableIndex == 0)
+                    ElevatedButton.icon(
+                      onPressed: () => _showUploadCsvDialog(context, service),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: primaryAccent,
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      ),
+                      icon: const Icon(Icons.add_circle_rounded),
+                      label: Text(locale.uploadMaoRecord, style: const TextStyle(fontWeight: FontWeight.bold)),
+                    )
+                  else
                     ElevatedButton.icon(
                       onPressed: () => _showAddMarketPriceDialog(context, service),
                       style: ElevatedButton.styleFrom(
@@ -4699,108 +6422,682 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
               ),
             ),
             const SizedBox(height: 16),
-            SizedBox(
-              height: 480,
-              child: Container(
-                decoration: BoxDecoration(
-                  color: cardBg,
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: cardBorder),
-                ),
-                child: SingleChildScrollView(
-                  scrollDirection: Axis.vertical,
-                  child: SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: DataTable(
-                      columns: [
-                        DataColumn(label: Text('Crop', style: TextStyle(color: subtextColor))),
-                        DataColumn(label: Text('Year', style: TextStyle(color: subtextColor))),
-                        DataColumn(label: Text('Month', style: TextStyle(color: subtextColor))),
-                        DataColumn(label: Text('Barangay', style: TextStyle(color: subtextColor))),
-                        DataColumn(label: Text('Production (MT)', style: TextStyle(color: subtextColor))),
-                        DataColumn(label: Text('Price / kg (PHP)', style: TextStyle(color: subtextColor))),
-                        DataColumn(label: Text('Uploaded By', style: TextStyle(color: subtextColor))),
-                        DataColumn(label: Text('Actions', style: TextStyle(color: subtextColor))),
-                      ],
-                      rows: records.map((r) => DataRow(
-                        cells: [
-                          DataCell(Text(r.crop, style: TextStyle(fontWeight: FontWeight.bold, color: textColor))),
-                          DataCell(Text('${r.year}', style: TextStyle(color: textColor))),
-                          DataCell(Text(r.month, style: TextStyle(color: textColor))),
-                          DataCell(Text(r.barangay, style: TextStyle(color: textColor))),
-                          DataCell(Text('${r.productionMT} MT', style: TextStyle(color: textColor))),
-                          DataCell(Text('₱${r.pricePerKg.toStringAsFixed(2)}', style: TextStyle(color: textColor))),
-                          DataCell(Text(r.uploadedBy, style: TextStyle(color: textColor))),
-                          DataCell(
-                            IconButton(
-                              icon: const Icon(Icons.delete_rounded, color: Colors.redAccent, size: 20),
-                              onPressed: () => _confirmDeleteHistoricalRecord(context, service, r, locale),
-                            ),
-                          ),
-                        ],
-                      )).toList(),
+            Container(
+              decoration: BoxDecoration(
+                color: cardBg,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: cardBorder),
+              ),
+              child: Column(
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.all(8),
+                    child: Scrollbar(
+                      controller: _histTable1ScrollController,
+                      thumbVisibility: true,
+                      trackVisibility: true,
+                      child: SingleChildScrollView(
+                        controller: _histTable1ScrollController,
+                        scrollDirection: Axis.horizontal,
+                        padding: const EdgeInsets.only(bottom: 12),
+                        child: DataTable(
+                          columns: [
+                            DataColumn(label: Text('Crop', style: TextStyle(color: subtextColor))),
+                            DataColumn(label: Text('Year', style: TextStyle(color: subtextColor))),
+                            DataColumn(label: Text('Month', style: TextStyle(color: subtextColor))),
+                            DataColumn(label: Text('Barangay', style: TextStyle(color: subtextColor))),
+                            DataColumn(label: Text('Production (KG)', style: TextStyle(color: subtextColor))),
+                            DataColumn(label: Text('Uploaded By', style: TextStyle(color: subtextColor))),
+                            DataColumn(label: Text('Actions', style: TextStyle(color: subtextColor))),
+                          ],
+                          rows: paginatedRecords.map((r) {
+                            final prodKg = r.productionMT >= 100 ? r.productionMT : (r.productionMT * 1000);
+                            final nf = NumberFormat('#,###');
+                            return DataRow(
+                              cells: [
+                                DataCell(Text(r.crop, style: TextStyle(fontWeight: FontWeight.bold, color: textColor))),
+                                DataCell(Text('${r.year}', style: TextStyle(color: textColor))),
+                                DataCell(Text(r.month, style: TextStyle(color: textColor))),
+                                DataCell(Text(r.barangay, style: TextStyle(color: textColor))),
+                                DataCell(Text('${nf.format(prodKg.round())} kg', style: TextStyle(color: textColor))),
+                                DataCell(Text(r.uploadedBy, style: TextStyle(color: textColor))),
+                                DataCell(
+                                  IconButton(
+                                    icon: const Icon(Icons.delete_rounded, color: Colors.redAccent, size: 20),
+                                    onPressed: () => _confirmDeleteHistoricalRecord(context, service, r, locale),
+                                  ),
+                                ),
+                              ],
+                            );
+                          }).toList(),
+                        ),
+                      ),
                     ),
                   ),
-                ),
+                  _buildPaginationBar(
+                    currentPage: safePage1,
+                    totalItems: totalRecords,
+                    pageSize: _pageSize,
+                    onPageChanged: (newPage) => setState(() => _table1Page = newPage),
+                    isDark: isDark,
+                    textColor: textColor,
+                    subtextColor: subtextColor,
+                    primaryAccent: primaryAccent,
+                  ),
+                ],
               ),
             ),
           ] else ...[
             // TABLE 2: VEGETABLE MARKET & FARMGATE PRICES WITH DATES
-            SizedBox(
-              height: 480,
-              child: Container(
-                decoration: BoxDecoration(
-                  color: cardBg,
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: cardBorder),
-                ),
-                child: SingleChildScrollView(
-                  scrollDirection: Axis.vertical,
-                  child: SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: DataTable(
-                      columns: [
-                        DataColumn(label: Text(locale.isTagalog ? 'Gulay / Pananim' : 'Vegetable / Crop', style: TextStyle(color: subtextColor))),
-                        DataColumn(label: Text(locale.isTagalog ? 'Presyo sa Bukid (Farmgate)' : 'Farmgate Price (₱/kg)', style: TextStyle(color: subtextColor))),
-                        DataColumn(label: Text(locale.isTagalog ? 'Presyo sa Palengke (Market)' : 'Market Price (₱/kg)', style: TextStyle(color: subtextColor))),
-                        DataColumn(label: Text(locale.isTagalog ? 'Tubo / Spread' : 'Spread', style: TextStyle(color: subtextColor))),
-                        DataColumn(label: Text(locale.isTagalog ? 'Petsa' : 'Date', style: TextStyle(color: subtextColor))),
-                        DataColumn(label: Text(locale.isTagalog ? 'Lokasyon ng Palengke' : 'Market Location', style: TextStyle(color: subtextColor))),
-                        DataColumn(label: Text(locale.isTagalog ? 'Nag-upload' : 'Uploaded By', style: TextStyle(color: subtextColor))),
-                        DataColumn(label: Text(locale.isTagalog ? 'Aksyon' : 'Actions', style: TextStyle(color: subtextColor))),
-                      ],
-                      rows: marketPrices.map((m) {
-                        final spread = m.marketPrice - m.farmgatePrice;
-                        final spreadPct = m.farmgatePrice > 0 ? (spread / m.farmgatePrice) * 100 : 0.0;
-                        return DataRow(
-                          cells: [
-                            DataCell(Text(m.vegetable, style: TextStyle(fontWeight: FontWeight.bold, color: textColor))),
-                            DataCell(Text('₱${m.farmgatePrice.toStringAsFixed(2)}', style: const TextStyle(fontWeight: FontWeight.w700, color: Color(0xFF16A34A)))),
-                            DataCell(Text('₱${m.marketPrice.toStringAsFixed(2)}', style: const TextStyle(fontWeight: FontWeight.w700, color: Color(0xFF0284C7)))),
-                            DataCell(Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                              decoration: BoxDecoration(color: Colors.amber.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(8)),
-                              child: Text('+₱${spread.toStringAsFixed(2)} (${spreadPct.toStringAsFixed(0)}%)', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.amber)),
-                            )),
-                            DataCell(Text(DateFormat('MMM dd, yyyy').format(m.date), style: TextStyle(color: textColor))),
-                            DataCell(Text(m.marketLocation, style: TextStyle(color: textColor))),
-                            DataCell(Text(m.uploadedBy, style: TextStyle(color: textColor))),
-                            DataCell(
-                              IconButton(
-                                icon: const Icon(Icons.delete_rounded, color: Colors.redAccent, size: 20),
-                                onPressed: () => _confirmDeleteMarketPriceRecord(context, service, m, locale),
-                              ),
-                            ),
+            Container(
+              decoration: BoxDecoration(
+                color: cardBg,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: cardBorder),
+              ),
+              child: Column(
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.all(8),
+                    child: Scrollbar(
+                      controller: _histTable2ScrollController,
+                      thumbVisibility: true,
+                      trackVisibility: true,
+                      child: SingleChildScrollView(
+                        controller: _histTable2ScrollController,
+                        scrollDirection: Axis.horizontal,
+                        padding: const EdgeInsets.only(bottom: 12),
+                        child: DataTable(
+                          columns: [
+                            DataColumn(label: Text(locale.isTagalog ? 'Gulay / Pananim' : 'Vegetable / Crop', style: TextStyle(color: subtextColor))),
+                            DataColumn(label: Text(locale.isTagalog ? 'Presyo sa Bukid (Farmgate)' : 'Farmgate Price (₱/kg)', style: TextStyle(color: subtextColor))),
+                            DataColumn(label: Text(locale.isTagalog ? 'Presyo sa Palengke (Market)' : 'Market Price (₱/kg)', style: TextStyle(color: subtextColor))),
+                            DataColumn(label: Text(locale.isTagalog ? 'Tubo / Spread' : 'Spread', style: TextStyle(color: subtextColor))),
+                            DataColumn(label: Text(locale.isTagalog ? 'Petsa' : 'Date', style: TextStyle(color: subtextColor))),
+                            DataColumn(label: Text(locale.isTagalog ? 'Lokasyon ng Palengke' : 'Market Location', style: TextStyle(color: subtextColor))),
+                            DataColumn(label: Text(locale.isTagalog ? 'Nag-upload' : 'Uploaded By', style: TextStyle(color: subtextColor))),
+                            DataColumn(label: Text(locale.isTagalog ? 'Aksyon' : 'Actions', style: TextStyle(color: subtextColor))),
                           ],
-                        );
-                      }).toList(),
+                          rows: paginatedMarketPrices.map((m) {
+                            final spread = m.marketPrice - m.farmgatePrice;
+                            final spreadPct = m.farmgatePrice > 0 ? (spread / m.farmgatePrice) * 100 : 0.0;
+                            return DataRow(
+                              cells: [
+                                DataCell(Text(m.vegetable, style: TextStyle(fontWeight: FontWeight.bold, color: textColor))),
+                                DataCell(Text('₱${m.farmgatePrice.toStringAsFixed(2)}', style: const TextStyle(fontWeight: FontWeight.w700, color: Color(0xFF16A34A)))),
+                                DataCell(Text('₱${m.marketPrice.toStringAsFixed(2)}', style: const TextStyle(fontWeight: FontWeight.w700, color: Color(0xFF0284C7)))),
+                                DataCell(Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                  decoration: BoxDecoration(color: Colors.amber.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(8)),
+                                  child: Text('+₱${spread.toStringAsFixed(2)} (${spreadPct.toStringAsFixed(0)}%)', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.amber)),
+                                )),
+                                DataCell(Text(DateFormat('MMM dd, yyyy').format(m.date), style: TextStyle(color: textColor))),
+                                DataCell(Text(m.marketLocation, style: TextStyle(color: textColor))),
+                                DataCell(Text(m.uploadedBy, style: TextStyle(color: textColor))),
+                                DataCell(
+                                  IconButton(
+                                    icon: const Icon(Icons.delete_rounded, color: Colors.redAccent, size: 20),
+                                    onPressed: () => _confirmDeleteMarketPriceRecord(context, service, m, locale),
+                                  ),
+                                ),
+                              ],
+                            );
+                          }).toList(),
+                        ),
+                      ),
                     ),
                   ),
-                ),
+                  _buildPaginationBar(
+                    currentPage: safePage2,
+                    totalItems: totalMarketPrices,
+                    pageSize: _pageSize,
+                    onPageChanged: (newPage) => setState(() => _table2Page = newPage),
+                    isDark: isDark,
+                    textColor: textColor,
+                    subtextColor: subtextColor,
+                    primaryAccent: primaryAccent,
+                  ),
+                ],
               ),
             ),
           ],
         ],
+      ),
+    );
+  }
+
+  Widget _buildPaginationBar({
+    required int currentPage,
+    required int totalItems,
+    required int pageSize,
+    required ValueChanged<int> onPageChanged,
+    required bool isDark,
+    required Color textColor,
+    required Color subtextColor,
+    required Color primaryAccent,
+  }) {
+    if (totalItems <= 0) return const SizedBox.shrink();
+
+    final totalPages = (totalItems / pageSize).ceil();
+    final startItem = (currentPage * pageSize) + 1;
+    final endItem = math.min((currentPage + 1) * pageSize, totalItems);
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF132338) : const Color(0xFFF8FAFC),
+        borderRadius: const BorderRadius.only(
+          bottomLeft: Radius.circular(16),
+          bottomRight: Radius.circular(16),
+        ),
+        border: Border(top: BorderSide(color: isDark ? const Color(0xFF1E293B) : const Color(0xFFE2E8F0))),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            'Showing $startItem-$endItem of $totalItems items',
+            style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: subtextColor),
+          ),
+          Wrap(
+            spacing: 4,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              IconButton(
+                icon: const Icon(Icons.chevron_left_rounded, size: 20),
+                onPressed: currentPage > 0 ? () => onPageChanged(currentPage - 1) : null,
+                tooltip: 'Previous Page',
+              ),
+              ...List.generate(totalPages, (index) {
+                if (totalPages > 7) {
+                  if (index != 0 && index != totalPages - 1 && (index < currentPage - 1 || index > currentPage + 1)) {
+                    if (index == currentPage - 2 || index == currentPage + 2) {
+                      return Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 2),
+                        child: Text('...', style: TextStyle(color: subtextColor, fontSize: 12)),
+                      );
+                    }
+                    return const SizedBox.shrink();
+                  }
+                }
+
+                final isSelected = index == currentPage;
+                return InkWell(
+                  onTap: () => onPageChanged(index),
+                  borderRadius: BorderRadius.circular(8),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: isSelected ? primaryAccent : Colors.transparent,
+                      borderRadius: BorderRadius.circular(8),
+                      border: isSelected ? null : Border.all(color: subtextColor.withValues(alpha: 0.3)),
+                    ),
+                    child: Text(
+                      '${index + 1}',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                        color: isSelected ? Colors.white : textColor,
+                      ),
+                    ),
+                  ),
+                );
+              }),
+              IconButton(
+                icon: const Icon(Icons.chevron_right_rounded, size: 20),
+                onPressed: currentPage < totalPages - 1 ? () => onPageChanged(currentPage + 1) : null,
+                tooltip: 'Next Page',
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showUploadProductionCsvDialog(BuildContext context, AccountService service) {
+    final csvContentCtrl = TextEditingController(
+      text: 'crop,year,month,barangay,production_kg,uploader_farmer\n'
+            'Rice,2026,June,Biñan,480000,Juan Dela Cruz\n'
+            'Talong (Eggplant),2026,June,Anibong,150000,Maria Santos\n'
+            'Kamatis (Tomato),2026,June,Buboy,120000,Pedro Reyes\n'
+            'Sitaw (Yardlong Bean),2026,June,Calusiche,95000,Ana Ramos\n'
+            'Ampalaya (Bitter Gourd),2026,June,Dingin,85000,Juan Dela Cruz\n'
+            'Saging (Banana),2026,June,Lambac,210000,Maria Santos',
+    );
+    final fileNameCtrl = TextEditingController();
+    String selectedUploader = service.farmers.isNotEmpty ? service.farmers.first.profileName : service.activeUserName;
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(color: const Color(0xFF0284C7).withValues(alpha: 0.12), borderRadius: BorderRadius.circular(10)),
+                child: const Icon(Icons.table_chart_rounded, color: Color(0xFF0284C7)),
+              ),
+              const SizedBox(width: 12),
+              Text(
+                service.isTagalog ? 'Import Rekord ng Produksyon (CSV)' : 'Import Production Dataset (CSV)',
+                style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
+              ),
+            ],
+          ),
+          content: SizedBox(
+            width: 540,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFEFF6FF),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: const Color(0xFFBFDBFE)),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Row(
+                          children: [
+                            Icon(Icons.info_outline_rounded, size: 16, color: Color(0xFF0284C7)),
+                            SizedBox(width: 6),
+                            Text(
+                              'CSV Layout / Structure Format:',
+                              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Color(0xFF0369A1)),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          'Columns: crop, year, month, barangay, production_kg, uploader_farmer\n'
+                          'Example:\n'
+                          'Rice, 2026, June, Biñan, 480000, Juan Dela Cruz',
+                          style: TextStyle(fontSize: 11, color: Colors.blue.shade900, fontFamily: 'monospace'),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+
+                  // DOWNLOAD CSV TEMPLATE BUTTON
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: const Color(0xFF0284C7),
+                        side: const BorderSide(color: Color(0xFF0284C7)),
+                        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 14),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      ),
+                      onPressed: () async {
+                        const templateCsv = 'crop,year,month,barangay,production_kg,uploader_farmer\n'
+                            'Rice,2026,June,Biñan,480000,Juan Dela Cruz\n'
+                            'Talong (Eggplant),2026,June,Anibong,150000,Maria Santos\n'
+                            'Kamatis (Tomato),2026,June,Buboy,120000,Pedro Reyes\n'
+                            'Sitaw (Yardlong Bean),2026,June,Calusiche,95000,Ana Ramos\n'
+                            'Ampalaya (Bitter Gourd),2026,June,Dingin,85000,Juan Dela Cruz\n'
+                            'Saging (Banana),2026,June,Lambac,210000,Maria Santos\n';
+                        const targetFileName = 'pagsanjan_production_dataset_template.csv';
+
+                        try {
+                          String userProfile = Platform.environment['USERPROFILE'] ?? 'C:\\Users\\Public';
+                          String downloadsPath = '$userProfile\\Downloads\\$targetFileName';
+                          final file = File(downloadsPath);
+                          await file.writeAsString(templateCsv);
+
+                          setDialogState(() {
+                            fileNameCtrl.text = downloadsPath;
+                            csvContentCtrl.text = templateCsv;
+                          });
+
+                          if (ctx.mounted) {
+                            ScaffoldMessenger.of(ctx).showSnackBar(
+                              SnackBar(
+                                content: Text(
+                                  service.isTagalog
+                                      ? 'Matagumpay na na-save ang blank template sa Downloads folder: $targetFileName'
+                                      : 'Saved blank template to Downloads folder: $targetFileName',
+                                ),
+                                backgroundColor: const Color(0xFF0284C7),
+                              ),
+                            );
+                          }
+                        } catch (e) {
+                          setDialogState(() {
+                            csvContentCtrl.text = templateCsv;
+                          });
+                        }
+                      },
+                      icon: const Icon(Icons.download_rounded, size: 18),
+                      label: Text(
+                        service.isTagalog ? '📄 Kumuha ng Blank CSV Template (Download Template)' : '📄 Download Blank Production Dataset CSV Template',
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+
+                  // BROWSE FILE EXPLORER BUTTON
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF16A34A),
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 14),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      ),
+                      onPressed: () async {
+                        final pickedPath = await _pickFileWithSystemExplorer();
+                        if (pickedPath != null && pickedPath.isNotEmpty) {
+                          final file = File(pickedPath);
+                          if (await file.exists()) {
+                            final content = await _readFileSafely(file);
+                            setDialogState(() {
+                              fileNameCtrl.text = pickedPath;
+                              csvContentCtrl.text = content;
+                            });
+                          }
+                        }
+                      },
+                      icon: const Icon(Icons.folder_open_rounded, size: 18),
+                      label: Text(
+                        service.isTagalog ? '📁 Pumili ng .CSV File sa File Explorer (Browse)' : '📁 Choose .CSV File in File Explorer (Browse)',
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12.5),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+
+                  Text(
+                    service.isTagalog ? 'Default na Magsasaka / Uploader User' : 'Default Farmer / Uploader User',
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                  ),
+                  const SizedBox(height: 6),
+                  DropdownButtonFormField<String>(
+                    initialValue: selectedUploader,
+                    decoration: InputDecoration(
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                      prefixIcon: const Icon(Icons.person_outline_rounded, size: 20),
+                    ),
+                    items: [
+                      DropdownMenuItem(value: service.activeUserName, child: Text('${service.activeUserName} (Staff)')),
+                      ...service.farmers.map((f) => DropdownMenuItem(value: f.profileName, child: Text('${f.profileName} (${f.barangay})'))),
+                    ],
+                    onChanged: (val) {
+                      if (val != null) setDialogState(() => selectedUploader = val);
+                    },
+                  ),
+                  const SizedBox(height: 14),
+
+                  Text(
+                    service.isTagalog ? 'Dataset Preview / CSV Content Text:' : 'Dataset Preview / CSV Content Text:',
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                  ),
+                  const SizedBox(height: 6),
+                  TextField(
+                    controller: csvContentCtrl,
+                    maxLines: 8,
+                    style: const TextStyle(fontSize: 12, fontFamily: 'monospace'),
+                    decoration: InputDecoration(
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                      contentPadding: const EdgeInsets.all(12),
+                      hintText: 'Paste CSV rows here...',
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: Text(service.isTagalog ? 'Kanselahin' : 'Cancel', style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.grey)),
+            ),
+            ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF0284C7),
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+              ),
+              icon: const Icon(Icons.cloud_upload_rounded, size: 18),
+              label: Text(service.isTagalog ? 'I-import ang CSV' : 'Process & Import CSV', style: const TextStyle(fontWeight: FontWeight.bold)),
+              onPressed: () {
+                final text = csvContentCtrl.text.trim();
+                if (text.isEmpty) return;
+
+                final lines = text.split('\n');
+                int successCount = 0;
+
+                for (var line in lines) {
+                  final trimmed = line.trim();
+                  if (trimmed.isEmpty || trimmed.toLowerCase().startsWith('crop')) continue;
+
+                  final parts = trimmed.split(',');
+                  if (parts.isNotEmpty) {
+                    final crop = parts[0].trim();
+                    if (crop.isEmpty) continue;
+
+                    final yr = parts.length > 1 ? int.tryParse(parts[1].trim()) ?? 2026 : 2026;
+                    final m = parts.length > 2 ? parts[2].trim() : 'June';
+                    final brgy = parts.length > 3 ? parts[3].trim() : 'ALL';
+                    final prodKg = parts.length > 4 ? double.tryParse(parts[4].trim()) ?? 0.0 : 0.0;
+                    final uploader = parts.length > 5 && parts[5].trim().isNotEmpty ? parts[5].trim() : selectedUploader;
+
+                    service.addHistoricalRecord(
+                      crop: crop,
+                      year: yr,
+                      month: m,
+                      barangay: brgy,
+                      productionMT: prodKg >= 1000 ? (prodKg / 1000) : prodKg,
+                      pricePerKg: 0.0,
+                      uploadedBy: uploader,
+                    );
+                    successCount++;
+                  }
+                }
+
+                Navigator.pop(ctx);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(
+                      service.isTagalog
+                          ? 'Matagumpay na na-import ang $successCount na rekord ng produksyon!'
+                          : 'Successfully imported $successCount production records!',
+                    ),
+                    backgroundColor: const Color(0xFF0284C7),
+                  ),
+                );
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showUploadMarketPriceCsvDialog(BuildContext context, AccountService service) {
+    final csvContentCtrl = TextEditingController(
+      text: 'vegetable,farmgate_price,market_price,date,market_location\n'
+            'Ampalaya (Bitter Gourd),60.00,90.00,2026-06-15,Pagsanjan Public Market\n'
+            'Talong (Eggplant),45.00,70.00,2026-06-15,Pagsanjan Public Market\n'
+            'Kamatis (Tomato),50.00,85.00,2026-06-15,Pagsanjan Public Market\n'
+            'Sitaw (Yardlong Bean),45.00,75.00,2026-06-15,Pagsanjan Public Market\n'
+            'Saging (Saba),35.00,55.00,2026-06-15,Pagsanjan Public Market',
+    );
+    final defaultLocationCtrl = TextEditingController(text: 'Pagsanjan Public Market');
+    final fileNameCtrl = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(color: const Color(0xFF0056B3).withValues(alpha: 0.12), borderRadius: BorderRadius.circular(10)),
+                child: const Icon(Icons.file_upload_rounded, color: Color(0xFF0056B3)),
+              ),
+              const SizedBox(width: 12),
+              Text(
+                service.isTagalog ? 'Import Presyo sa Palengke at Bukid (CSV)' : 'Import Market & Farmgate Prices (CSV)',
+                style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
+              ),
+            ],
+          ),
+          content: SizedBox(
+            width: 540,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildExportImportButtons(context, 'Historical Data', locale, service),
+                  if (_historicalTableIndex == 1)
+                    ElevatedButton.icon(
+                      onPressed: () => _showAddMarketPriceDialog(context, service),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF0284C7),
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 14),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      ),
+                      onPressed: () async {
+                        final pickedPath = await _pickFileWithSystemExplorer();
+                        if (pickedPath != null && pickedPath.isNotEmpty) {
+                          final file = File(pickedPath);
+                          if (await file.exists()) {
+                            final content = await _readFileSafely(file);
+                            setDialogState(() {
+                              fileNameCtrl.text = pickedPath;
+                              csvContentCtrl.text = content;
+                            });
+                          }
+                        }
+                      },
+                      icon: const Icon(Icons.folder_open_rounded, size: 18),
+                      label: Text(
+                        service.isTagalog ? '📁 Pumili ng .CSV File sa File Explorer (Browse)' : '📁 Choose .CSV File in File Explorer (Browse)',
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12.5),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+
+                  Text(
+                    service.isTagalog ? 'Default na Lokasyon ng Palengke' : 'Default Market Location',
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                  ),
+                  const SizedBox(height: 6),
+                  TextField(
+                    controller: defaultLocationCtrl,
+                    decoration: InputDecoration(
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                      prefixIcon: const Icon(Icons.storefront_rounded, size: 20),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+
+                  Text(
+                    service.isTagalog ? 'Dataset Preview / CSV Content Text:' : 'Dataset Preview / CSV Content Text:',
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                  ),
+                  const SizedBox(height: 6),
+                  TextField(
+                    controller: csvContentCtrl,
+                    maxLines: 7,
+                    style: const TextStyle(fontSize: 12, fontFamily: 'monospace'),
+                    decoration: InputDecoration(
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                      contentPadding: const EdgeInsets.all(12),
+                      hintText: 'Paste CSV rows here...',
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: Text(service.isTagalog ? 'Kanselahin' : 'Cancel', style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.grey)),
+            ),
+            ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF0056B3),
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+              ),
+              icon: const Icon(Icons.cloud_upload_rounded, size: 18),
+              label: Text(service.isTagalog ? 'I-import ang CSV' : 'Process & Import CSV', style: const TextStyle(fontWeight: FontWeight.bold)),
+              onPressed: () {
+                final text = csvContentCtrl.text.trim();
+                if (text.isEmpty) return;
+
+                final lines = text.split('\n');
+                int successCount = 0;
+                final defaultLoc = defaultLocationCtrl.text.trim().isEmpty ? 'Pagsanjan Public Market' : defaultLocationCtrl.text.trim();
+
+                for (var line in lines) {
+                  final trimmed = line.trim();
+                  if (trimmed.isEmpty || trimmed.toLowerCase().startsWith('vegetable')) continue;
+
+                  final parts = trimmed.split(',');
+                  if (parts.isNotEmpty) {
+                    final veg = parts[0].trim();
+                    if (veg.isEmpty) continue;
+
+                    final fg = parts.length > 1 ? double.tryParse(parts[1].trim()) ?? 0.0 : 0.0;
+                    final mp = parts.length > 2 ? double.tryParse(parts[2].trim()) ?? (fg * 1.4) : (fg * 1.4);
+                    DateTime parsedDate = DateTime.now();
+                    if (parts.length > 3) {
+                      final dStr = parts[3].trim();
+                      try {
+                        parsedDate = DateTime.parse(dStr);
+                      } catch (_) {}
+                    }
+                    final loc = parts.length > 4 && parts[4].trim().isNotEmpty ? parts[4].trim() : defaultLoc;
+
+                    service.addMarketPriceRecord(
+                      vegetable: veg,
+                      farmgatePrice: fg,
+                      marketPrice: mp,
+                      date: parsedDate,
+                      marketLocation: loc,
+                      uploadedBy: service.activeUserName,
+                    );
+                    successCount++;
+                  }
+                }
+
+                Navigator.pop(ctx);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text(
+                      service.isTagalog
+                          ? 'Matagumpay na na-import ang $successCount na rekord ng presyo!'
+                          : 'Successfully imported $successCount vegetable market price records!',
+                    ),
+                    backgroundColor: const Color(0xFF0056B3),
+                  ),
+                );
+              },
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -4816,66 +7113,194 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
-          title: Text(service.isTagalog ? 'Magdagdag ng Presyo ng Gulay' : 'Add Vegetable Market & Farmgate Price'),
-          content: SingleChildScrollView(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          contentPadding: EdgeInsets.zero,
+          backgroundColor: const Color(0xFFF8FAFC),
+          content: SizedBox(
+            width: 500,
             child: Column(
               mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                TextField(controller: vegCtrl, decoration: InputDecoration(labelText: service.isTagalog ? 'Pangalan ng Gulay' : 'Vegetable Name')),
-                const SizedBox(height: 8),
-                TextField(controller: farmgateCtrl, keyboardType: TextInputType.number, decoration: InputDecoration(labelText: service.isTagalog ? 'Presyo sa Bukid / Farmgate (₱/kg)' : 'Farmgate Price (₱/kg)')),
-                const SizedBox(height: 8),
-                TextField(controller: marketCtrl, keyboardType: TextInputType.number, decoration: InputDecoration(labelText: service.isTagalog ? 'Presyo sa Palengke / Market Price (₱/kg)' : 'Market Price (₱/kg)')),
-                const SizedBox(height: 8),
-                TextField(controller: locationCtrl, decoration: InputDecoration(labelText: service.isTagalog ? 'Lokasyon ng Palengke' : 'Market Location')),
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    Text(service.isTagalog ? 'Petsa: ' : 'Date: ', style: const TextStyle(fontWeight: FontWeight.bold)),
-                    TextButton(
-                      onPressed: () async {
-                        final picked = await showDatePicker(
-                          context: context,
-                          initialDate: selectedDate,
-                          firstDate: DateTime(2020),
-                          lastDate: DateTime(2030),
-                        );
-                        if (picked != null) {
-                          setDialogState(() => selectedDate = picked);
-                        }
-                      },
-                      child: Text(DateFormat('yyyy-MM-dd').format(selectedDate)),
+                // BLUE HEADER BANNER
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                  decoration: const BoxDecoration(
+                    color: Color(0xFF0056B3),
+                    borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.2),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(Icons.storefront_rounded, color: Colors.white, size: 24),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          service.isTagalog ? 'Magdagdag ng Presyo sa Palengke & Bukid' : 'Add Market & Farmgate Price Record',
+                          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.close_rounded, color: Colors.white),
+                        onPressed: () => Navigator.pop(context),
+                      ),
+                    ],
+                  ),
+                ),
+
+                // SCROLLABLE FORM BODY
+                Flexible(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.all(20),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        TextField(
+                          controller: vegCtrl,
+                          decoration: InputDecoration(
+                            labelText: service.isTagalog ? 'Pangalan ng Gulay' : 'Vegetable Name',
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                            filled: true,
+                            fillColor: Colors.white,
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: TextField(
+                                controller: farmgateCtrl,
+                                keyboardType: TextInputType.number,
+                                decoration: InputDecoration(
+                                  labelText: service.isTagalog ? 'Presyo sa Bukid (₱/kg)' : 'Farmgate Price (₱/kg)',
+                                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                                  filled: true,
+                                  fillColor: Colors.white,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: TextField(
+                                controller: marketCtrl,
+                                keyboardType: TextInputType.number,
+                                decoration: InputDecoration(
+                                  labelText: service.isTagalog ? 'Presyo sa Palengke (₱/kg)' : 'Market Price (₱/kg)',
+                                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                                  filled: true,
+                                  fillColor: Colors.white,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 10),
+                        TextField(
+                          controller: locationCtrl,
+                          decoration: InputDecoration(
+                            labelText: service.isTagalog ? 'Lokasyon ng Palengke' : 'Market Location',
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                            filled: true,
+                            fillColor: Colors.white,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        Row(
+                          children: [
+                            Text(service.isTagalog ? 'Petsa ng Obserbasyon: ' : 'Observation Date: ', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                            const Spacer(),
+                            OutlinedButton.icon(
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: const Color(0xFF0056B3),
+                                side: const BorderSide(color: Color(0xFF0056B3)),
+                              ),
+                              onPressed: () async {
+                                final picked = await showDatePicker(
+                                  context: context,
+                                  initialDate: selectedDate,
+                                  firstDate: DateTime(2020),
+                                  lastDate: DateTime(2030),
+                                );
+                                if (picked != null) {
+                                  setDialogState(() => selectedDate = picked);
+                                }
+                              },
+                              icon: const Icon(Icons.calendar_today_rounded, size: 16),
+                              label: Text(DateFormat('MMM dd, yyyy').format(selectedDate)),
+                            ),
+                          ],
+                        ),
+                      ],
                     ),
-                  ],
+                  ),
+                ),
+
+                // ACTIONS FOOTER
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: const BorderRadius.vertical(bottom: Radius.circular(20)),
+                    border: Border(top: BorderSide(color: Colors.grey.shade200)),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(context),
+                        child: Text(
+                          service.isTagalog ? 'Kanselahin' : 'Cancel',
+                          style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF475569)),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      ElevatedButton.icon(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF0056B3),
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+                        ),
+                        icon: const Icon(Icons.check_circle_rounded, size: 18),
+                        label: Text(
+                          service.isTagalog ? 'I-save ang Presyo' : 'Save Price Record',
+                          style: const TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                        onPressed: () {
+                          final veg = vegCtrl.text.trim();
+                          final fg = double.tryParse(farmgateCtrl.text) ?? 0.0;
+                          final mp = double.tryParse(marketCtrl.text) ?? 0.0;
+                          if (veg.isNotEmpty) {
+                            service.addMarketPriceRecord(
+                              vegetable: veg,
+                              farmgatePrice: fg,
+                              marketPrice: mp,
+                              date: selectedDate,
+                              marketLocation: locationCtrl.text.trim().isEmpty ? 'Pagsanjan Public Market' : locationCtrl.text.trim(),
+                              uploadedBy: service.activeUserName,
+                            );
+                            Navigator.pop(context);
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(service.isTagalog ? 'Matagumpay na naidagdag ang presyo!' : 'Market price record added successfully!'),
+                                backgroundColor: const Color(0xFF0056B3),
+                              ),
+                            );
+                          }
+                        },
+                      ),
+                    ],
+                  ),
                 ),
               ],
             ),
           ),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(context), child: Text(service.isTagalog ? 'Kanselahin' : 'Cancel')),
-            ElevatedButton(
-              onPressed: () {
-                final veg = vegCtrl.text.trim();
-                final fg = double.tryParse(farmgateCtrl.text) ?? 0.0;
-                final mp = double.tryParse(marketCtrl.text) ?? 0.0;
-                if (veg.isNotEmpty) {
-                  service.addMarketPriceRecord(
-                    vegetable: veg,
-                    farmgatePrice: fg,
-                    marketPrice: mp,
-                    date: selectedDate,
-                    marketLocation: locationCtrl.text.trim().isEmpty ? 'Pagsanjan Public Market' : locationCtrl.text.trim(),
-                    uploadedBy: service.activeUserName,
-                  );
-                  Navigator.pop(context);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text(service.isTagalog ? 'Matagumpay na naidagdag ang presyo!' : 'Market price record added successfully!')),
-                  );
-                }
-              },
-              child: Text(service.isTagalog ? 'I-save' : 'Save'),
-            ),
-          ],
         ),
       ),
     );
@@ -4937,56 +7362,201 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
     final yearCtrl = TextEditingController(text: '2026');
     final monthCtrl = TextEditingController(text: 'February');
     String selectedBrgy = 'ALL';
-    final prodCtrl = TextEditingController(text: '500.0');
-    final priceCtrl = TextEditingController(text: '24.50');
+    final prodCtrl = TextEditingController(text: '500000');
+    String selectedUploader = service.farmers.isNotEmpty ? service.farmers.first.profileName : service.activeUserName;
 
     showDialog(
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
-          title: const Text('Upload / Add MAO Historical Record'),
-          content: SingleChildScrollView(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          contentPadding: EdgeInsets.zero,
+          backgroundColor: const Color(0xFFF8FAFC),
+          content: SizedBox(
+            width: 520,
             child: Column(
               mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                const Text('Validated input format for data cleaning:', style: TextStyle(fontSize: 12, color: Colors.grey)),
-                const SizedBox(height: 12),
-                TextField(controller: cropCtrl, decoration: const InputDecoration(labelText: 'Crop Name')),
-                TextField(controller: yearCtrl, decoration: const InputDecoration(labelText: 'Year'), keyboardType: TextInputType.number),
-                TextField(controller: monthCtrl, decoration: const InputDecoration(labelText: 'Month')),
-                const SizedBox(height: 8),
-                DropdownButtonFormField<String>(
-                  initialValue: selectedBrgy,
-                  decoration: const InputDecoration(labelText: 'Barangay'),
-                  items: ['ALL', ...AccountService.pagsanjanBarangays].map((b) => DropdownMenuItem(value: b, child: Text(b))).toList(),
-                  onChanged: (val) => setDialogState(() => selectedBrgy = val ?? 'ALL'),
+                // BLUE HEADER BANNER
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                  decoration: const BoxDecoration(
+                    color: Color(0xFF0056B3),
+                    borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.2),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(Icons.add_chart_rounded, color: Colors.white, size: 24),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          service.isTagalog ? 'Magdagdag ng Rekord ng Produksyon' : 'Add Production Record',
+                          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.close_rounded, color: Colors.white),
+                        onPressed: () => Navigator.pop(context),
+                      ),
+                    ],
+                  ),
                 ),
-                TextField(controller: prodCtrl, decoration: const InputDecoration(labelText: 'Production (Metric Tons)'), keyboardType: TextInputType.number),
-                TextField(controller: priceCtrl, decoration: const InputDecoration(labelText: 'Price per KG (PHP)'), keyboardType: TextInputType.number),
+
+                // SCROLLABLE FORM BODY
+                Flexible(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.all(20),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text('Validated input format for data cleaning:', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                        const SizedBox(height: 12),
+                        TextField(
+                          controller: cropCtrl,
+                          decoration: InputDecoration(
+                            labelText: 'Crop Name',
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                            filled: true,
+                            fillColor: Colors.white,
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: TextField(
+                                controller: yearCtrl,
+                                keyboardType: TextInputType.number,
+                                decoration: InputDecoration(
+                                  labelText: 'Year',
+                                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                                  filled: true,
+                                  fillColor: Colors.white,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: TextField(
+                                controller: monthCtrl,
+                                decoration: InputDecoration(
+                                  labelText: 'Month',
+                                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                                  filled: true,
+                                  fillColor: Colors.white,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 10),
+                        DropdownButtonFormField<String>(
+                          initialValue: selectedBrgy,
+                          decoration: InputDecoration(
+                            labelText: 'Barangay',
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                            filled: true,
+                            fillColor: Colors.white,
+                          ),
+                          items: ['ALL', ...AccountService.pagsanjanBarangays].map((b) => DropdownMenuItem(value: b, child: Text(b))).toList(),
+                          onChanged: (val) => setDialogState(() => selectedBrgy = val ?? 'ALL'),
+                        ),
+                        const SizedBox(height: 10),
+                        TextField(
+                          controller: prodCtrl,
+                          keyboardType: TextInputType.number,
+                          decoration: InputDecoration(
+                            labelText: service.isTagalog ? 'Produksyon (Kilograms / KG)' : 'Production (Kilograms / KG)',
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                            filled: true,
+                            fillColor: Colors.white,
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        DropdownButtonFormField<String>(
+                          initialValue: selectedUploader,
+                          decoration: InputDecoration(
+                            labelText: service.isTagalog ? 'Magsasaka / Uploader User' : 'Farmer / Uploader User',
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                            filled: true,
+                            fillColor: Colors.white,
+                          ),
+                          items: [
+                            DropdownMenuItem(value: service.activeUserName, child: Text('${service.activeUserName} (Staff)')),
+                            ...service.farmers.map((f) => DropdownMenuItem(value: f.profileName, child: Text('${f.profileName} (${f.barangay})'))),
+                          ],
+                          onChanged: (val) => setDialogState(() => selectedUploader = val ?? service.activeUserName),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+
+                // ACTIONS FOOTER
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: const BorderRadius.vertical(bottom: Radius.circular(20)),
+                    border: Border(top: BorderSide(color: Colors.grey.shade200)),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(context),
+                        child: Text(
+                          service.isTagalog ? 'Kanselahin' : 'Cancel',
+                          style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF475569)),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      ElevatedButton.icon(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF0056B3),
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+                        ),
+                        icon: const Icon(Icons.check_circle_rounded, size: 18),
+                        label: Text(
+                          service.isTagalog ? 'I-save ang Rekord' : 'Save Record',
+                          style: const TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                        onPressed: () {
+                          final inputVal = double.tryParse(prodCtrl.text) ?? 500000.0;
+                          service.addHistoricalRecord(
+                            crop: cropCtrl.text,
+                            year: int.tryParse(yearCtrl.text) ?? 2026,
+                            month: monthCtrl.text,
+                            barangay: selectedBrgy,
+                            productionMT: inputVal >= 1000 ? (inputVal / 1000) : inputVal,
+                            pricePerKg: 0.0,
+                            uploadedBy: selectedUploader,
+                          );
+                          Navigator.pop(context);
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(service.isTagalog ? 'Na-save na ang rekord ng produksyon!' : 'Production record saved!'),
+                              backgroundColor: const Color(0xFF0056B3),
+                            ),
+                          );
+                        },
+                      ),
+                    ],
+                  ),
+                ),
               ],
             ),
           ),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
-            ElevatedButton(
-              onPressed: () {
-                service.addHistoricalRecord(
-                  crop: cropCtrl.text,
-                  year: int.tryParse(yearCtrl.text) ?? 2026,
-                  month: monthCtrl.text,
-                  barangay: selectedBrgy,
-                  productionMT: double.tryParse(prodCtrl.text) ?? 100.0,
-                  pricePerKg: double.tryParse(priceCtrl.text) ?? 20.0,
-                  uploadedBy: service.activeUserName,
-                );
-                Navigator.pop(context);
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Historical record validated and saved!')),
-                );
-              },
-              child: const Text('Validate & Save'),
-            ),
-          ],
         ),
       ),
     );
@@ -5093,6 +7663,38 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
       }
     }
 
+    final farmBoundaryPolygons = <Polygon>[];
+    for (final farm in service.farms) {
+      if (farm.boundaryPoints.length >= 3) {
+        final cropLower = farm.cropType.toLowerCase();
+        Color polyColor;
+        Color borderColor;
+
+        if (cropLower.contains('rice') || cropLower.contains('palay')) {
+          polyColor = const Color(0xFF1E3A8A).withValues(alpha: 0.35);
+          borderColor = const Color(0xFF1E3A8A);
+        } else if (cropLower.contains('gulay') || cropLower.contains('veg')) {
+          polyColor = const Color(0xFF0284C7).withValues(alpha: 0.35);
+          borderColor = const Color(0xFF0284C7);
+        } else if (cropLower.contains('prutas') || cropLower.contains('fruit')) {
+          polyColor = const Color(0xFF2563EB).withValues(alpha: 0.35);
+          borderColor = const Color(0xFF2563EB);
+        } else {
+          polyColor = const Color(0xFF0056B3).withValues(alpha: 0.35);
+          borderColor = const Color(0xFF0056B3);
+        }
+
+        farmBoundaryPolygons.add(
+          Polygon(
+            points: farm.boundaryPoints,
+            color: polyColor,
+            borderColor: borderColor,
+            borderStrokeWidth: 3.0,
+          ),
+        );
+      }
+    }
+
     return Padding(
       padding: const EdgeInsets.all(22),
       child: Column(
@@ -5131,6 +7733,7 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
                         initialCenter: _mapCenter,
                         initialZoom: _mapZoom,
                         markers: mapMarkers,
+                        extraPolygons: farmBoundaryPolygons,
                       ),
                     ),
                   ),
@@ -5545,8 +8148,32 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
           f.username.toLowerCase().contains(query) ||
           f.organization.toLowerCase().contains(query);
       final matchesBarangay = _selectedBarangayFilter == 'All' || f.barangay.trim().toLowerCase() == _selectedBarangayFilter.trim().toLowerCase();
-      return matchesQuery && matchesBarangay;
+      final matchesAssoc = _selectedAssociationFilter == 'All' || f.organization.trim().toLowerCase() == _selectedAssociationFilter.trim().toLowerCase();
+      return matchesQuery && matchesBarangay && matchesAssoc;
     }).toList();
+
+    farmers.sort((a, b) {
+      int comparison = 0;
+      switch (_farmerSortField) {
+        case 'Barangay':
+          comparison = a.barangay.compareTo(b.barangay);
+          break;
+        case 'Status':
+          comparison = a.status.compareTo(b.status);
+          break;
+        case 'Organization':
+          comparison = a.organization.compareTo(b.organization);
+          break;
+        case 'Username':
+          comparison = a.username.compareTo(b.username);
+          break;
+        case 'Name':
+        default:
+          comparison = a.profileName.toLowerCase().compareTo(b.profileName.toLowerCase());
+          break;
+      }
+      return _farmerSortAscending ? comparison : -comparison;
+    });
 
     return Padding(
       padding: const EdgeInsets.all(22),
@@ -5599,27 +8226,99 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
                     filled: true,
                     fillColor: cardBg,
                     border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: cardBorder)),
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                   ),
                 ),
               ),
-              const SizedBox(width: 12),
+              const SizedBox(width: 10),
               SizedBox(
-                width: 200,
+                width: 135,
                 child: DropdownButtonFormField<String>(
                   initialValue: _selectedBarangayFilter,
                   dropdownColor: cardBg,
-                  style: TextStyle(color: textColor, fontSize: 13),
+                  style: TextStyle(color: textColor, fontSize: 12.5),
                   decoration: InputDecoration(
-                    labelText: 'Filter Barangay',
-                    labelStyle: TextStyle(color: subtextColor),
+                    labelText: 'Barangay',
+                    labelStyle: TextStyle(color: subtextColor, fontSize: 11.5),
                     filled: true,
                     fillColor: cardBg,
                     border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: cardBorder)),
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
                   ),
-                  items: ['All', ...AccountService.pagsanjanBarangays].map((b) => DropdownMenuItem(value: b, child: Text(b))).toList(),
+                  items: ['All', ...AccountService.pagsanjanBarangays].map((b) => DropdownMenuItem(value: b, child: Text(b, overflow: TextOverflow.ellipsis))).toList(),
                   onChanged: (val) => setState(() => _selectedBarangayFilter = val ?? 'All'),
+                ),
+              ),
+              const SizedBox(width: 10),
+              SizedBox(
+                width: 210,
+                child: DropdownButtonFormField<String>(
+                  isExpanded: true,
+                  initialValue: _selectedAssociationFilter,
+                  dropdownColor: cardBg,
+                  style: TextStyle(color: textColor, fontSize: 12.5),
+                  decoration: InputDecoration(
+                    labelText: locale.isTagalog ? 'Samahan' : 'Association',
+                    labelStyle: TextStyle(color: subtextColor, fontSize: 11.5),
+                    filled: true,
+                    fillColor: cardBg,
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: cardBorder)),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                  ),
+                  items: ['All', 'Not Associated', ...getUniqueOrganizations(service)]
+                      .map((org) => DropdownMenuItem(value: org, child: Text(org, overflow: TextOverflow.ellipsis, maxLines: 1)))
+                      .toList(),
+                  onChanged: (val) => setState(() => _selectedAssociationFilter = val ?? 'All'),
+                ),
+              ),
+              const SizedBox(width: 10),
+              SizedBox(
+                width: 135,
+                child: DropdownButtonFormField<String>(
+                  initialValue: _farmerSortField,
+                  dropdownColor: cardBg,
+                  style: TextStyle(color: textColor, fontSize: 12.5),
+                  decoration: InputDecoration(
+                    labelText: locale.isTagalog ? 'I-sort ayon sa' : 'Sort By',
+                    labelStyle: TextStyle(color: subtextColor, fontSize: 11.5),
+                    filled: true,
+                    fillColor: cardBg,
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: cardBorder)),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                  ),
+                  items: [
+                    DropdownMenuItem(value: 'Name', child: Text(locale.isTagalog ? 'Pangalan' : 'Name')),
+                    DropdownMenuItem(value: 'Barangay', child: Text(locale.isTagalog ? 'Barangay' : 'Barangay')),
+                    DropdownMenuItem(value: 'Status', child: Text(locale.isTagalog ? 'Status' : 'Status')),
+                    DropdownMenuItem(value: 'Organization', child: Text(locale.isTagalog ? 'Samahan' : 'Organization')),
+                    DropdownMenuItem(value: 'Username', child: Text(locale.isTagalog ? 'Username' : 'Username')),
+                  ],
+                  onChanged: (val) {
+                    if (val != null) setState(() => _farmerSortField = val);
+                  },
+                ),
+              ),
+              const SizedBox(width: 6),
+              Tooltip(
+                message: _farmerSortAscending
+                    ? (locale.isTagalog ? 'Pataas (A to Z)' : 'Sort Ascending (A to Z)')
+                    : (locale.isTagalog ? 'Pababang (Z to A)' : 'Sort Descending (Z to A)'),
+                child: InkWell(
+                  onTap: () => setState(() => _farmerSortAscending = !_farmerSortAscending),
+                  borderRadius: BorderRadius.circular(12),
+                  child: Container(
+                    padding: const EdgeInsets.all(9),
+                    decoration: BoxDecoration(
+                      color: cardBg,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: cardBorder),
+                    ),
+                    child: Icon(
+                      _farmerSortAscending ? Icons.arrow_upward_rounded : Icons.arrow_downward_rounded,
+                      color: primaryAccent,
+                      size: 18,
+                    ),
+                  ),
                 ),
               ),
             ],
@@ -5799,45 +8498,213 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
     final nameCtrl = TextEditingController();
     final userCtrl = TextEditingController();
     final emailCtrl = TextEditingController();
+    final passCtrl = TextEditingController(text: 'admin123');
     String selectedRole = 'Agricultural Technician';
+    bool obscurePassword = true;
 
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Add MAO Staff Account'),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(controller: nameCtrl, decoration: const InputDecoration(labelText: 'Staff Name')),
-              TextField(controller: userCtrl, decoration: const InputDecoration(labelText: 'Username')),
-              TextField(controller: emailCtrl, decoration: const InputDecoration(labelText: 'Email Address')),
-              DropdownButtonFormField<String>(
-                initialValue: selectedRole,
-                decoration: const InputDecoration(labelText: 'Role / Position'),
-                items: ['Municipal Agriculturist', 'Administrative Staff', 'Agricultural Technician'].map((r) => DropdownMenuItem(value: r, child: Text(r))).toList(),
-                onChanged: (val) => selectedRole = val ?? 'Agricultural Technician',
-              ),
-            ],
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          contentPadding: EdgeInsets.zero,
+          backgroundColor: const Color(0xFFF8FAFC),
+          content: SizedBox(
+            width: 480,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                // BLUE HEADER BANNER
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                  decoration: const BoxDecoration(
+                    color: Color(0xFF0056B3),
+                    borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.2),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(Icons.person_add_rounded, color: Colors.white, size: 24),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          service.isTagalog ? 'Magdagdag ng MAO Staff Account' : 'Add MAO Staff Account',
+                          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.close_rounded, color: Colors.white),
+                        onPressed: () => Navigator.pop(context),
+                      ),
+                    ],
+                  ),
+                ),
+
+                // SCROLLABLE FORM BODY
+                Flexible(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.all(20),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // SECTION HEADER
+                        Row(
+                          children: [
+                            const Icon(Icons.badge_rounded, size: 18, color: Color(0xFF0056B3)),
+                            const SizedBox(width: 6),
+                            Text(
+                              service.isTagalog ? 'IMPORMASYON NG STAFF' : 'STAFF ACCOUNT INFORMATION',
+                              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF0056B3), letterSpacing: 0.5),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+
+                        TextField(
+                          controller: nameCtrl,
+                          decoration: InputDecoration(
+                            labelText: service.isTagalog ? 'Buong Pangalan ng Staff' : 'Staff Full Name',
+                            hintText: 'e.g. Juan Dela Cruz',
+                            prefixIcon: const Icon(Icons.badge_rounded, size: 20),
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                            filled: true,
+                            fillColor: Colors.white,
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+
+                        Row(
+                          children: [
+                            Expanded(
+                              child: TextField(
+                                controller: userCtrl,
+                                decoration: InputDecoration(
+                                  labelText: 'Username',
+                                  hintText: 'e.g. juandela',
+                                  prefixIcon: const Icon(Icons.person_rounded, size: 20),
+                                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                                  filled: true,
+                                  fillColor: Colors.white,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: TextField(
+                                controller: passCtrl,
+                                obscureText: obscurePassword,
+                                decoration: InputDecoration(
+                                  labelText: 'Password',
+                                  hintText: 'Password',
+                                  prefixIcon: const Icon(Icons.lock_rounded, size: 20),
+                                  suffixIcon: IconButton(
+                                    icon: Icon(obscurePassword ? Icons.visibility_rounded : Icons.visibility_off_rounded, size: 20),
+                                    onPressed: () => setDialogState(() => obscurePassword = !obscurePassword),
+                                  ),
+                                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                                  filled: true,
+                                  fillColor: Colors.white,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 10),
+
+                        TextField(
+                          controller: emailCtrl,
+                          decoration: InputDecoration(
+                            labelText: service.isTagalog ? 'Email Address' : 'Email Address',
+                            hintText: 'e.g. jdelacruz@pagsanjan.gov.ph',
+                            prefixIcon: const Icon(Icons.email_rounded, size: 20),
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                            filled: true,
+                            fillColor: Colors.white,
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+
+                        DropdownButtonFormField<String>(
+                          initialValue: selectedRole,
+                          decoration: InputDecoration(
+                            labelText: service.isTagalog ? 'Posisyon / Role' : 'Role / Position',
+                            prefixIcon: const Icon(Icons.work_rounded, size: 20),
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                            filled: true,
+                            fillColor: Colors.white,
+                          ),
+                          items: ['Municipal Agriculturist', 'Administrative Staff', 'Agricultural Technician'].map((r) => DropdownMenuItem(value: r, child: Text(r))).toList(),
+                          onChanged: (val) => setDialogState(() => selectedRole = val ?? 'Agricultural Technician'),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+
+                // ACTIONS FOOTER
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: const BorderRadius.vertical(bottom: Radius.circular(20)),
+                    border: Border(top: BorderSide(color: Colors.grey.shade200)),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(context),
+                        child: Text(
+                          service.isTagalog ? 'Kanselahin' : 'Cancel',
+                          style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF475569)),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      ElevatedButton.icon(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF0056B3),
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+                        ),
+                        icon: const Icon(Icons.check_circle_rounded, size: 18),
+                        label: Text(
+                          service.isTagalog ? 'I-save ang Staff' : 'Save Staff Account',
+                          style: const TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                        onPressed: () {
+                          if (nameCtrl.text.isNotEmpty && userCtrl.text.isNotEmpty) {
+                            service.addAdminStaff(
+                              name: nameCtrl.text,
+                              username: userCtrl.text,
+                              email: emailCtrl.text.isEmpty ? '${userCtrl.text}@pagsanjan.gov.ph' : emailCtrl.text,
+                              role: selectedRole,
+                              password: passCtrl.text.isEmpty ? 'admin123' : passCtrl.text,
+                            );
+                            Navigator.pop(context);
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text(service.isTagalog ? 'Naidagdag na ang bagong MAO Staff!' : 'MAO staff account added successfully!'),
+                                backgroundColor: const Color(0xFF0056B3),
+                              ),
+                            );
+                          }
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
-          ElevatedButton(
-            onPressed: () {
-              if (nameCtrl.text.isNotEmpty && userCtrl.text.isNotEmpty) {
-                service.addAdminStaff(
-                  name: nameCtrl.text,
-                  username: userCtrl.text,
-                  email: emailCtrl.text.isEmpty ? '${userCtrl.text}@pagsanjan.gov.ph' : emailCtrl.text,
-                  role: selectedRole,
-                );
-                Navigator.pop(context);
-              }
-            },
-            child: const Text('Save'),
-          ),
-        ],
       ),
     );
   }
@@ -6118,9 +8985,9 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
                   Container(
                     padding: const EdgeInsets.all(10),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF16A34A).withValues(alpha: 0.08),
+                      color: const Color(0xFF0284C7).withValues(alpha: 0.08),
                       borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: const Color(0xFF16A34A).withValues(alpha: 0.3)),
+                      border: Border.all(color: const Color(0xFF0284C7).withValues(alpha: 0.3)),
                     ),
                     child: Row(
                       children: [
@@ -6137,7 +9004,7 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
                                 setDialogState(() => eventDate = pickedDate);
                               }
                             },
-                            icon: const Icon(Icons.event_rounded, size: 16, color: Color(0xFF16A34A)),
+                            icon: const Icon(Icons.event_rounded, size: 16, color: Color(0xFF0284C7)),
                             label: Text(DateFormat('MMM dd, yyyy').format(eventDate), style: const TextStyle(fontSize: 12)),
                           ),
                         ),
@@ -6153,7 +9020,7 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
                                 setDialogState(() => eventTime = pickedTime);
                               }
                             },
-                            icon: const Icon(Icons.access_time_filled_rounded, size: 16, color: Color(0xFF16A34A)),
+                            icon: const Icon(Icons.access_time_filled_rounded, size: 16, color: Color(0xFF0284C7)),
                             label: Text(eventTime.format(context), style: const TextStyle(fontSize: 12)),
                           ),
                         ),
@@ -6249,7 +9116,7 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
                             ? (locale.isTagalog ? 'Naka-iskedyul na ang anunsyo!' : 'Announcement scheduled successfully!')
                             : (locale.isTagalog ? 'Naipost na ang anunsyo sa lahat ng magsasaka!' : 'Announcement posted successfully to all farmers!'),
                       ),
-                      backgroundColor: Colors.green,
+                      backgroundColor: const Color(0xFF0056B3),
                     ),
                   );
                 }
@@ -6353,11 +9220,11 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
                                 const SizedBox(height: 4),
                                 Row(
                                   children: [
-                                    const Icon(Icons.event_available_rounded, size: 14, color: Color(0xFF16A34A)),
+                                    const Icon(Icons.event_available_rounded, size: 14, color: Color(0xFF0284C7)),
                                     const SizedBox(width: 4),
                                     Text(
                                       '${locale.isTagalog ? "Simula ng Event: " : "Event Start: "}$eventDate',
-                                      style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold, color: Color(0xFF16A34A)),
+                                      style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold, color: Color(0xFF0284C7)),
                                     ),
                                   ],
                                 ),

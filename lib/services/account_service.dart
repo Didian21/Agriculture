@@ -1,6 +1,10 @@
 import 'dart:async';
+import 'dart:convert';
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:latlong2/latlong.dart';
+import '../core/crop_data.dart';
 import '../models/farmer.dart';
 import 'supabase_service.dart';
 
@@ -218,6 +222,7 @@ class AccountService extends ChangeNotifier {
       email: 'acruz@pagsanjan.gov.ph',
       role: 'Agricultural Technician',
       status: 'Active',
+      password: 'admin123',
     ),
   ];
 
@@ -321,6 +326,8 @@ class AccountService extends ChangeNotifier {
   List<AdminStaff> get adminStaffList => List.unmodifiable(_adminStaffList);
   List<ActivityLogItem> get activityLogs => List.unmodifiable(_activityLogs);
   MLModelStatus get modelStatus => _modelStatus;
+  Map<String, double> get supabasePriceForecasts => Map.unmodifiable(_supabasePriceForecasts);
+  Map<String, String> get supabaseForecastModels => Map.unmodifiable(_supabaseForecastModels);
   List<Map<String, String>> get posts => List.unmodifiable(_posts);
 
   // AUTHENTICATION
@@ -343,12 +350,24 @@ class AccountService extends ChangeNotifier {
   }
 
   bool authenticateAdmin(String username, String password) {
-    return (username == 'admin' && password == 'admin123') ||
-        _adminStaffList.any((s) => s.username == username && s.status == 'Active');
+    if (username == 'admin' && (password == 'admin123' || _adminStaffList.any((s) => s.username == 'admin' && s.password == password))) {
+      return true;
+    }
+    return _adminStaffList.any((s) => s.username == username && s.password == password && s.status == 'Active');
   }
 
   Future<bool> authenticateAdminAsync(String username, String password) async {
-    if (authenticateAdmin(username, password)) return true;
+    if (authenticateAdmin(username, password)) {
+      try {
+        _activeStaff = _adminStaffList.firstWhere(
+          (s) => s.username == username && (s.password == password || (username == 'admin' && password == 'admin123')),
+        );
+      } catch (_) {
+        _activeStaff = _adminStaffList.first;
+      }
+      notifyListeners();
+      return true;
+    }
     try {
       final res = await SupabaseService.client
           .from('admin_staff')
@@ -367,6 +386,7 @@ class AccountService extends ChangeNotifier {
           email: res['email'] ?? '',
           role: res['role'] ?? 'Administrative Staff',
           status: res['status'] ?? 'Active',
+          password: res['password'] ?? password,
         );
         if (!_adminStaffList.any((s) => s.id == staff.id)) {
           _adminStaffList.add(staff);
@@ -521,6 +541,7 @@ class AccountService extends ChangeNotifier {
     required String tenureStatus,
     required String cropType,
     required String barangay,
+    List<LatLng> boundaryPoints = const [],
   }) async {
     _farms.add(FarmRecord(
       id: 'FARM${DateTime.now().millisecondsSinceEpoch}',
@@ -590,6 +611,38 @@ class AccountService extends ChangeNotifier {
       uploadedBy: uploadedBy,
     ));
     notifyListeners();
+
+    try {
+      // 1. Insert into market_farmgate_prices table in Supabase
+      await SupabaseService.client.from('market_farmgate_prices').insert({
+        'id': newId,
+        'vegetable': vegetable,
+        'farmgate_price': farmgatePrice,
+        'market_price': marketPrice,
+        'date': date.toIso8601String(),
+        'market_location': marketLocation,
+        'uploaded_by': author,
+      });
+    } catch (e) {
+      debugPrint('Supabase insert error (market_farmgate_prices): $e');
+    }
+
+    try {
+      // 2. Also sync to historical_records table for unified historical data analytics & ML model training
+      final monthName = DateFormat('MMMM').format(date);
+      final histId = 'HIST_$newId';
+      await SupabaseService.client.from('historical_records').insert({
+        'id': histId,
+        'crop': vegetable,
+        'year': date.year,
+        'month': monthName,
+        'production_mt': 0.0,
+        'price_per_kg': farmgatePrice,
+        'uploaded_by': author,
+      });
+    } catch (e) {
+      debugPrint('Supabase sync insert error (historical_records from market price): $e');
+    }
   }
 
   Future<void> deleteMarketPriceRecord(String id) async {

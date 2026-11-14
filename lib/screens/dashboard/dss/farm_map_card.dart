@@ -7,7 +7,6 @@ import '../../../l10n/app_localizations.dart';
 import '../../../main.dart';
 import '../../../models/farmer.dart';
 import '../../../providers/farm_input_provider.dart';
-import '../../../providers/dashboard_provider.dart';
 import '../../../services/account_service.dart';
 import '../../../services/farm_weather_service.dart';
 import '../../../widgets/common_widgets.dart';
@@ -136,34 +135,68 @@ class _FarmMapCardState extends State<FarmMapCard> {
     );
   }
 
+  Marker _buildBlueFarmMarker(FarmRecord farm, VoidCallback onTap) {
+    Color primaryBlue;
+    IconData cropIcon;
+
+    final cropLower = farm.cropType.toLowerCase();
+    if (cropLower.contains('rice') || cropLower.contains('palay')) {
+      primaryBlue = const Color(0xFF1E3A8A);
+      cropIcon = Icons.grass_rounded;
+    } else if (cropLower.contains('gulay') || cropLower.contains('veg')) {
+      primaryBlue = const Color(0xFF0284C7);
+      cropIcon = Icons.eco_rounded;
+    } else if (cropLower.contains('prutas') || cropLower.contains('fruit')) {
+      primaryBlue = const Color(0xFF2563EB);
+      cropIcon = Icons.apple_rounded;
+    } else {
+      primaryBlue = const Color(0xFF0056B3);
+      cropIcon = Icons.location_on_rounded;
+    }
+
+    return Marker(
+      point: LatLng(farm.latitude, farm.longitude),
+      width: 44,
+      height: 48,
+      alignment: Alignment.topCenter,
+      child: GestureDetector(
+        onTap: onTap,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(6),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [primaryBlue, primaryBlue.withValues(alpha: 0.85)],
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                ),
+                shape: BoxShape.circle,
+                border: Border.all(color: Colors.white, width: 2),
+                boxShadow: const [
+                  BoxShadow(color: Colors.black26, blurRadius: 4, offset: Offset(0, 2)),
+                ],
+              ),
+              child: Icon(cropIcon, color: Colors.white, size: 18),
+            ),
+            Icon(Icons.arrow_drop_down_rounded, color: primaryBlue, size: 18),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final t = AppLocalizations.of(context)!;
     final point = LatLng(widget.input.lat, widget.input.lon);
     final accountService = Provider.of<AccountService>(context);
-    final dashboardProvider = Provider.of<DashboardProvider>(context, listen: false);
-    final currentFarmerId = dashboardProvider.profile?.id ?? '';
-    final currentFarmerName = dashboardProvider.profile?.name ?? '';
     final allFarms = accountService.farms;
 
     final allMarkers = <Marker>[
       for (final f in allFarms)
-        Marker(
-          point: LatLng(f.latitude, f.longitude),
-          width: 38,
-          height: 38,
-          alignment: Alignment.topCenter,
-          child: GestureDetector(
-            onTap: () => _showFarmDetailsDialog(context, f),
-            child: Icon(
-              Icons.location_pin,
-              size: 38,
-              color: (f.farmerId == currentFarmerId || f.farmerName.trim().toLowerCase() == currentFarmerName.trim().toLowerCase())
-                  ? const Color(0xFF0056B3)
-                  : const Color(0xFF16A34A),
-            ),
-          ),
-        ),
+        _buildBlueFarmMarker(f, () => _showFarmDetailsDialog(context, f)),
       Marker(
         point: point,
         width: 48,
@@ -181,17 +214,14 @@ class _FarmMapCardState extends State<FarmMapCard> {
           ClipRRect(
             borderRadius: BorderRadius.circular(16),
             child: SizedBox(
-              height: 230,
+              height: 300,
               child: Stack(
                 children: [
                   PagsanjanMapWidget(
-                    initialCenter: point,
-                    initialZoom: 15,
+                    initialCenter: const LatLng(14.2750, 121.4550),
+                    initialZoom: 13.2,
                     markers: allMarkers,
-                    onTap: (p) => widget.input.setLocation(
-                      double.parse(p.latitude.toStringAsFixed(5)),
-                      double.parse(p.longitude.toStringAsFixed(5)),
-                    ),
+                    onTap: null, // Fixed pin location: tapping on map will NOT move the pin
                   ),
                   Positioned(
                     right: 0,
@@ -209,14 +239,21 @@ class _FarmMapCardState extends State<FarmMapCard> {
           const SizedBox(height: 10),
           Row(
             children: [
-              const Icon(Icons.touch_app_rounded, size: 16, color: AppColors.muted),
+              const Icon(Icons.info_outline_rounded, size: 16, color: AppColors.muted),
               const SizedBox(width: 6),
-              Expanded(child: Text(t.dssMapHint, style: const TextStyle(fontSize: 12.5, color: AppColors.muted))),
+              Expanded(
+                child: Text(
+                  Localizations.localeOf(context).languageCode == 'tl'
+                      ? 'I-tap ang mga pin sa mapa upang makita ang detalye ng sakahan.'
+                      : 'Tap on farm pins to view farm details.',
+                  style: const TextStyle(fontSize: 12.5, color: AppColors.muted),
+                ),
+              ),
             ],
           ),
           const SizedBox(height: 4),
           Text(
-            '${widget.input.lat.toStringAsFixed(4)}, ${widget.input.lon.toStringAsFixed(4)}',
+            'GPS: ${widget.input.lat.toStringAsFixed(4)}° N, ${widget.input.lon.toStringAsFixed(4)}° E',
             style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: AppColors.ink),
           ),
           Wrap(

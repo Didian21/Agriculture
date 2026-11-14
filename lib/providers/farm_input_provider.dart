@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../core/crop_data.dart';
 import '../main.dart';
 import '../models/farm_planting.dart';
 import '../models/harvest_record.dart';
@@ -208,7 +209,7 @@ class FarmInputProvider extends ChangeNotifier {
     selectedId = p.id;
     _changed();
 
-    // 1. Sync to main farms table
+    // 1. Sync primary crop category to main farms table
     try {
       final realLocation = (locationName.isNotEmpty && !locationName.startsWith('Pagsanjan Farm'))
           ? locationName
@@ -222,19 +223,19 @@ class FarmInputProvider extends ChangeNotifier {
         'longitude': lon,
         'land_area_hectares': p.hectares,
         'tenure_status': 'Owner',
-        'crop_type': p.crop,
+        'crop_type': getPrimaryCropCategory(p.crop),
         'barangay': barangay,
       };
       if (farmerId != null && farmerId!.isNotEmpty) {
         farmData['farmer_id'] = farmerId;
       }
       await SupabaseService.client.from('farms').upsert(farmData);
-      debugPrint('Successfully uploaded crop to Supabase farms table: ${p.crop}');
+      debugPrint('Successfully uploaded primary crop category to Supabase farms table: ${getPrimaryCropCategory(p.crop)}');
     } catch (e) {
       debugPrint('Supabase farms sync error (add): $e');
     }
 
-    // 2. Sync to farmer_plantings table (if created)
+    // 2. Sync specific crop type & variety to farmer_plantings table
     try {
       final plantingData = <String, dynamic>{
         'id': p.id,
@@ -250,7 +251,7 @@ class FarmInputProvider extends ChangeNotifier {
         plantingData['farmer_id'] = farmerId;
       }
       await SupabaseService.client.from('farmer_plantings').upsert(plantingData);
-      debugPrint('Successfully uploaded crop to Supabase farmer_plantings table: ${p.crop}');
+      debugPrint('Successfully uploaded specific crop & variety to Supabase farmer_plantings table: ${p.crop}');
     } catch (e) {
       debugPrint('Supabase farmer_plantings sync error (add): $e');
     }
@@ -263,7 +264,7 @@ class FarmInputProvider extends ChangeNotifier {
     try {
       await SupabaseService.client.from('farms').update({
         'land_area_hectares': p.hectares,
-        'crop_type': p.crop,
+        'crop_type': getPrimaryCropCategory(p.crop),
         'latitude': lat,
         'longitude': lon,
         'barangay': barangay,
