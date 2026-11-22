@@ -206,6 +206,7 @@ class _FarmerLoginScreenState extends State<FarmerLoginScreen> {
     final Set<String> selectedPrimaryCrops = {'Rice'};
     final List<String> specificCropsList = [];
     final List<LatLng> boundaryPoints = [];
+    final List<List<LatLng>> allSavedPlots = [];
     String? dialogError;
 
     showDialog(
@@ -677,33 +678,42 @@ class _FarmerLoginScreenState extends State<FarmerLoginScreen> {
                         final currentLat = double.tryParse(latCtrl.text) ?? 14.2790;
                         final currentLon = double.tryParse(lonCtrl.text) ?? 121.4550;
 
-                        final result = await Navigator.push<List<LatLng>>(
+                        final dynamic result = await Navigator.push(
                           context,
                           MaterialPageRoute(
                             builder: (_) => PagsanjanMapBoundaryPickerScreen(
                               initialCenter: LatLng(currentLat, currentLon),
                               initialBoundary: boundaryPoints,
+                              initialPlots: allSavedPlots,
                               existingFarms: accountService.farms,
                               primaryColor: const Color(0xFF166534),
                             ),
                           ),
                         );
 
-                        if (result != null && result.isNotEmpty) {
-                          setDialogState(() {
-                            boundaryPoints.clear();
-                            boundaryPoints.addAll(result);
-                            final centroid = calculatePolygonCentroid(boundaryPoints);
-                            final computedHa = calculatePolygonAreaHectares(boundaryPoints);
-                            final detectedBrgy = BarangayResolver.resolveBarangay(centroid);
-                            latCtrl.text = centroid.latitude.toStringAsFixed(5);
-                            lonCtrl.text = centroid.longitude.toStringAsFixed(5);
-                            selectedBrgy = detectedBrgy;
-                            if (computedHa > 0) {
-                              landAreaCtrl.text = computedHa.toStringAsFixed(2);
-                            }
-                            addressCtrl.text = 'Farm Lot, Brgy. $detectedBrgy, Pagsanjan';
-                          });
+                        if (result != null) {
+                          final List<List<LatLng>> returnedPlots = (result is List<List<LatLng>>)
+                              ? result
+                              : (result is List<LatLng> ? [result] : []);
+
+                          if (returnedPlots.isNotEmpty) {
+                            setDialogState(() {
+                              allSavedPlots.clear();
+                              allSavedPlots.addAll(returnedPlots);
+                              boundaryPoints.clear();
+                              boundaryPoints.addAll(returnedPlots.first);
+
+                              final centroid = calculatePolygonCentroid(boundaryPoints);
+                              final totalHa = returnedPlots.fold(0.0, (sum, p) => sum + calculatePolygonAreaHectares(p));
+                              final detectedBrgy = BarangayResolver.resolveBarangay(centroid);
+
+                              latCtrl.text = centroid.latitude.toStringAsFixed(5);
+                              lonCtrl.text = centroid.longitude.toStringAsFixed(5);
+                              selectedBrgy = detectedBrgy;
+                              landAreaCtrl.text = totalHa > 0 ? totalHa.toStringAsFixed(2) : '1.0';
+                              addressCtrl.text = 'Farm Lot, Brgy. $detectedBrgy, Pagsanjan';
+                            });
+                          }
                         }
                       },
                       icon: const Icon(Icons.map_rounded),
@@ -777,19 +787,43 @@ class _FarmerLoginScreenState extends State<FarmerLoginScreen> {
                 final finalCropType = '$primaryCropsStr ($specificCropsStr)';
                 final farmLocName = addressCtrl.text.trim().isEmpty ? 'Farm Lot, Brgy. $selectedBrgy, Pagsanjan' : addressCtrl.text.trim();
 
-                // Save pending farm record & boundary to Supabase
-                await accountService.addFarmRecord(
-                  farmerId: farmerId,
-                  farmerName: nameVal,
-                  locationName: farmLocName,
-                  latitude: double.tryParse(latCtrl.text) ?? 14.2790,
-                  longitude: double.tryParse(lonCtrl.text) ?? 121.4550,
-                  landAreaHectares: double.tryParse(landAreaCtrl.text) ?? 1.0,
-                  tenureStatus: selectedTenure,
-                  cropType: finalCropType,
-                  barangay: selectedBrgy,
-                  boundaryPoints: boundaryPoints,
-                );
+                // Save ALL pending farm records & boundaries to Supabase
+                if (allSavedPlots.isNotEmpty) {
+                  for (int pIdx = 0; pIdx < allSavedPlots.length; pIdx++) {
+                    final plotPts = allSavedPlots[pIdx];
+                    final centroid = calculatePolygonCentroid(plotPts);
+                    final plotHa = calculatePolygonAreaHectares(plotPts);
+                    final plotBrgy = BarangayResolver.resolveBarangay(centroid);
+
+                    await accountService.addFarmRecord(
+                      farmerId: farmerId,
+                      farmerName: nameVal,
+                      locationName: allSavedPlots.length > 1
+                          ? 'Lote ${pIdx + 1}, Brgy. $plotBrgy, Pagsanjan'
+                          : farmLocName,
+                      latitude: centroid.latitude,
+                      longitude: centroid.longitude,
+                      landAreaHectares: plotHa > 0 ? plotHa : 1.0,
+                      tenureStatus: selectedTenure,
+                      cropType: finalCropType,
+                      barangay: plotBrgy,
+                      boundaryPoints: plotPts,
+                    );
+                  }
+                } else {
+                  await accountService.addFarmRecord(
+                    farmerId: farmerId,
+                    farmerName: nameVal,
+                    locationName: farmLocName,
+                    latitude: double.tryParse(latCtrl.text) ?? 14.2790,
+                    longitude: double.tryParse(lonCtrl.text) ?? 121.4550,
+                    landAreaHectares: double.tryParse(landAreaCtrl.text) ?? 1.0,
+                    tenureStatus: selectedTenure,
+                    cropType: finalCropType,
+                    barangay: selectedBrgy,
+                    boundaryPoints: boundaryPoints,
+                  );
+                }
 
                 if (ctx.mounted) {
                   Navigator.pop(ctx);

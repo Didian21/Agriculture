@@ -67,25 +67,59 @@ class FarmRecord {
 
 class HistoricalDataRecord {
   final String id;
-  String crop;
   int year;
-  String month;
-  String barangay;
-  double productionMT; // Metric Tons
-  double pricePerKg; // PHP
-  String uploadedBy;
-  DateTime dateUploaded;
+  String? associationName;
+  String cropName;
+  String? cropVariety;
+  String? cropType;
+  String? season;
+  String? plantingDate;
+  String? firstHarvestDate;
+  String? lastHarvestDate;
+  String? harvestFrequency;
+  double? harvestDurationMonths;
+  int harvestVolumePieces;
+  double farmgatePricePhp;
+  double estimatedGrossValuePhp;
+
+  // Backward compatibility getters for UI tables & DSS
+  String get crop => cropName;
+  String get association => associationName ?? 'PAGRI / MAO';
+  String get month {
+    if (firstHarvestDate != null && firstHarvestDate!.length >= 7) {
+      final dt = DateTime.tryParse(firstHarvestDate!);
+      if (dt != null) {
+        const monthsList = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+        return monthsList[dt.month - 1];
+      }
+    }
+    return 'May';
+  }
+  double get productionMT => harvestVolumePieces > 0 ? (harvestVolumePieces / 1000.0) : 0.0;
+  double get harvestVolumeKg => harvestVolumePieces.toDouble();
+  double get pricePerKg => farmgatePricePhp;
+  double get grossValuePhp => estimatedGrossValuePhp;
+  String get harvestDate => firstHarvestDate ?? plantingDate ?? '';
+  String get barangay => 'ALL';
+  String get uploadedBy => 'MAO Admin';
+  DateTime get dateUploaded => DateTime.now();
 
   HistoricalDataRecord({
     required this.id,
-    required this.crop,
     required this.year,
-    required this.month,
-    this.barangay = 'ALL',
-    required this.productionMT,
-    required this.pricePerKg,
-    required this.uploadedBy,
-    required this.dateUploaded,
+    this.associationName,
+    required this.cropName,
+    this.cropVariety,
+    this.cropType,
+    this.season,
+    this.plantingDate,
+    this.firstHarvestDate,
+    this.lastHarvestDate,
+    this.harvestFrequency,
+    this.harvestDurationMonths,
+    required this.harvestVolumePieces,
+    required this.farmgatePricePhp,
+    required this.estimatedGrossValuePhp,
   });
 }
 
