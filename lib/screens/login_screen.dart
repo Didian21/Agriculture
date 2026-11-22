@@ -1,14 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
 
 import '../dashboard_data.dart';
 import '../l10n/app_localizations.dart';
 import '../main.dart';
-import '../services/account_service.dart';
-import 'admin_dashboard.dart';
-import 'dashboard/dashboard_screen.dart';
-
-enum LoginRole { farmer, admin }
 
 class LoginScreen extends StatefulWidget {
   final DashboardProvider p;
@@ -19,9 +13,8 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  LoginRole _selectedRole = LoginRole.farmer;
-  final _phoneCtrl = TextEditingController();
-  final _pinCtrl = TextEditingController();
+  final _phoneCtrl = TextEditingController(text: '+63 912 345 6789');
+  final _pinCtrl = TextEditingController(text: '1234');
 
   @override
   void dispose() {
@@ -30,52 +23,9 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
-  void _switchRole(LoginRole role) {
-    setState(() {
-      _selectedRole = role;
-      if (role == LoginRole.admin) {
-        _phoneCtrl.text = 'admin';
-        _pinCtrl.text = 'admin123';
-      } else {
-        _phoneCtrl.clear();
-        _pinCtrl.clear();
-      }
-    });
-  }
-
-  Future<void> _login() async {
-    final username = _phoneCtrl.text.trim();
-    final password = _pinCtrl.text.trim();
-
-    if (_selectedRole == LoginRole.admin) {
-      final accountService = Provider.of<AccountService>(context, listen: false);
-      final isValid = await accountService.authenticateAdminAsync(username, password);
-      if (!mounted) return;
-      if (isValid) {
-        Navigator.pushAndRemoveUntil(
-          context,
-          MaterialPageRoute(builder: (context) => const AdminDashboard()),
-          (route) => false        );
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Invalid Admin Username or Password')),
-        );
-      }
-    } else {
-      widget.p.login();
-      Navigator.pushAndRemoveUntil(
-        context,
-        MaterialPageRoute(builder: (context) => const DashboardScreen()),
-        (route) => false,
-      );
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     final t = AppLocalizations.of(context)!;
-    final isFarmer = _selectedRole == LoginRole.farmer;
-
     return Scaffold(
       backgroundColor: AppColors.paddy,
       body: SafeArea(
@@ -110,98 +60,16 @@ class _LoginScreenState extends State<LoginScreen> {
                         ),
                         const SizedBox(height: 6),
                         Text(
-                          isFarmer ? t.signInHint : 'Enter admin credentials to manage municipal records.',
+                          t.signInHint,
                           style: const TextStyle(fontSize: 13, color: Colors.black54),
                         ),
                         const SizedBox(height: 20),
-
-                        // Role Selector Tabs (Farmer / Admin)
-                        Container(
-                          padding: const EdgeInsets.all(4),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFF1F3F5),
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Row(
-                            children: [
-                              Expanded(
-                                child: GestureDetector(
-                                  onTap: () => _switchRole(LoginRole.farmer),
-                                  child: AnimatedContainer(
-                                    duration: const Duration(milliseconds: 200),
-                                    padding: const EdgeInsets.symmetric(vertical: 12),
-                                    decoration: BoxDecoration(
-                                      color: isFarmer ? AppColors.leaf : Colors.transparent,
-                                      borderRadius: BorderRadius.circular(8),
-                                    ),
-                                    child: Row(
-                                      mainAxisAlignment: MainAxisAlignment.center,
-                                      children: [
-                                        Icon(
-                                          Icons.agriculture_rounded,
-                                          size: 18,
-                                          color: isFarmer ? Colors.white : Colors.black54,
-                                        ),
-                                        const SizedBox(width: 8),
-                                        Text(
-                                          'Farmer',
-                                          style: TextStyle(
-                                            fontSize: 14,
-                                            fontWeight: FontWeight.bold,
-                                            color: isFarmer ? Colors.white : Colors.black54,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ),
-                              ),
-                              Expanded(
-                                child: GestureDetector(
-                                  onTap: () => _switchRole(LoginRole.admin),
-                                  child: AnimatedContainer(
-                                    duration: const Duration(milliseconds: 200),
-                                    padding: const EdgeInsets.symmetric(vertical: 12),
-                                    decoration: BoxDecoration(
-                                      color: !isFarmer ? const Color(0xFF0056B3) : Colors.transparent,
-                                      borderRadius: BorderRadius.circular(8),
-                                    ),
-                                    child: Row(
-                                      mainAxisAlignment: MainAxisAlignment.center,
-                                      children: [
-                                        Icon(
-                                          Icons.admin_panel_settings_rounded,
-                                          size: 18,
-                                          color: !isFarmer ? Colors.white : Colors.black54,
-                                        ),
-                                        const SizedBox(width: 8),
-                                        Text(
-                                          'Admin',
-                                          style: TextStyle(
-                                            fontSize: 14,
-                                            fontWeight: FontWeight.bold,
-                                            color: !isFarmer ? Colors.white : Colors.black54,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        const SizedBox(height: 20),
-
                         TextField(
                           controller: _phoneCtrl,
-                          keyboardType: TextInputType.text,
+                          keyboardType: TextInputType.phone,
                           decoration: InputDecoration(
-                            prefixIcon: Icon(
-                              isFarmer ? Icons.person_rounded : Icons.badge_rounded,
-                              color: isFarmer ? AppColors.leaf : const Color(0xFF0056B3),
-                            ),
-                            labelText: isFarmer ? 'Username or Phone Number' : 'Admin Username',
+                            prefixIcon: const Icon(Icons.phone_rounded, color: AppColors.leaf),
+                            labelText: t.phoneNumber,
                             border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
                           ),
                         ),
@@ -209,13 +77,10 @@ class _LoginScreenState extends State<LoginScreen> {
                         TextField(
                           controller: _pinCtrl,
                           obscureText: true,
-                          keyboardType: TextInputType.text,
+                          keyboardType: TextInputType.number,
                           decoration: InputDecoration(
-                            prefixIcon: Icon(
-                              Icons.lock_rounded,
-                              color: isFarmer ? AppColors.leaf : const Color(0xFF0056B3),
-                            ),
-                            labelText: 'Password',
+                            prefixIcon: const Icon(Icons.lock_rounded, color: AppColors.leaf),
+                            labelText: t.pinLabel,
                             border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
                           ),
                         ),
@@ -224,14 +89,14 @@ class _LoginScreenState extends State<LoginScreen> {
                           width: double.infinity,
                           child: FilledButton.icon(
                             style: FilledButton.styleFrom(
-                              backgroundColor: isFarmer ? AppColors.accentDark : const Color(0xFF0056B3),
+                              backgroundColor: AppColors.leaf,
                               padding: const EdgeInsets.symmetric(vertical: 16),
                               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                             ),
-                            onPressed: _login,
+                            onPressed: widget.p.login,
                             icon: const Icon(Icons.login_rounded),
                             label: Text(
-                              isFarmer ? t.signIn : 'Login as Admin',
+                              t.signIn,
                               style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900),
                             ),
                           ),

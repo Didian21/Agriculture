@@ -10,7 +10,6 @@ import '../models/farm_advice.dart';
 import '../models/farm_models.dart';
 import '../models/farm_planting.dart';
 import '../models/planting_guide.dart';
-import '../models/price_insight.dart';
 import '../models/price_prediction.dart';
 import '../models/weather_models.dart';
 import '../services/advice_service.dart';
@@ -52,50 +51,43 @@ class DashboardProvider extends ChangeNotifier {
   }
 
   // Auth & Session State
-  static const _authKeyLoggedIn = 'pagri_farmer_is_logged_in';
-  static const _authKeyUsername = 'pagri_farmer_username';
-  static const _authKeyPhone = 'pagri_farmer_phone';
-
   bool isLoggedIn = false;
-  String currentUsername = '';
+  String? currentUsername;
 
-  Future<void> loadAuthSession() async {
+  Future<void> loadSavedSession() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      isLoggedIn = prefs.getBool(_authKeyLoggedIn) ?? false;
-      currentUsername = prefs.getString(_authKeyUsername) ?? '';
-      phoneNumber = prefs.getString(_authKeyPhone) ?? phoneNumber;
+      final savedUser = prefs.getString('saved_farmer_username');
+      if (savedUser != null && savedUser.isNotEmpty) {
+        currentUsername = savedUser;
+        isLoggedIn = true;
+        notifyListeners();
+      }
     } catch (_) {}
-    notifyListeners();
   }
 
   Future<void> logout() async {
     isLoggedIn = false;
-    currentUsername = '';
+    currentUsername = null;
     try {
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setBool(_authKeyLoggedIn, false);
-      await prefs.remove(_authKeyUsername);
-      await prefs.remove(_authKeyPhone);
+      await prefs.remove('saved_farmer_username');
     } catch (_) {}
     notifyListeners();
   }
 
   Future<void> login({String? username, String? phone}) async {
-    isLoggedIn = true;
-    if (username != null && username.isNotEmpty) {
-      currentUsername = username;
-    }
     if (phone != null && phone.isNotEmpty) {
       phoneNumber = phone;
     }
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setBool(_authKeyLoggedIn, true);
-      await prefs.setString(_authKeyUsername, currentUsername);
-      await prefs.setString(_authKeyPhone, phoneNumber);
-    } catch (_) {}
-    load();
+    if (username != null && username.isNotEmpty) {
+      currentUsername = username;
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.setString('saved_farmer_username', username);
+      } catch (_) {}
+    }
+    isLoggedIn = true;
     notifyListeners();
   }
 
@@ -155,18 +147,6 @@ class DashboardProvider extends ChangeNotifier {
 
   List<WeatherDay> get forecast => weather?.daily ?? [];
 
-  List<Map<String, String>> posts = [];
-
-  /// Tinatawag kapag nagbago ang mga anunsyo mula sa Admin/MAO.
-  void syncPosts(List<Map<String, String>> list) {
-    final a = posts.map((e) => '${e['title']}|${e['content']}|${e['date']}').join(';');
-    final b = list.map((e) => '${e['title']}|${e['content']}|${e['date']}').join(';');
-    if (a == b) return;
-    posts = List.of(list);
-    _rebuildDerived();
-    Future.microtask(() => notifyListeners());
-  }
-
   /// Tinatawag kapag nagbago ang mga tanim sa DSS, para sumunod ang presyo, payo at mga abiso.
   void syncPlantings(List<FarmPlanting> list) {
     final a = farmPlantings.map((e) => '${e.id}|${e.crop}|${e.plantedOn}|${e.hectares}|${e.lastYieldKg}').join(';');
@@ -174,33 +154,24 @@ class DashboardProvider extends ChangeNotifier {
     if (a == b) return;
     farmPlantings = List.of(list);
     _rebuildDerived();
-    Future.microtask(() => notifyListeners());
+    notifyListeners();
   }
 
-  /// Mga datos na nakadepende sa panahon, mga anunsyo at mga tanim ng farmer.
+  /// Mga datos na nakadepende sa panahon at sa mga tanim ng farmer.
   void _rebuildDerived() {
     final w = weather;
-    if (w != null) {
-      predictions = _pricing.predict(farmCrops, w.daily);
-    }
-    final insights = w != null
-        ? PriceInsightService().build(crops: farmCrops, days: w.daily, guides: guides)
-        : <PriceInsight>[];
-
-    notifications = _notifService.build(
-      weather: w,
-      plantings: farmPlantings,
-      guides: guides,
-      insights: insights,
-      posts: posts,
-    );
+    if (w == null) return;
+    predictions = _pricing.predict(farmCrops, w.daily);
+    final insights = PriceInsightService().build(crops: farmCrops, days: w.daily, guides: guides);
+    notifications = _notifService.build(weather: w, plantings: farmPlantings, guides: guides, insights: insights);
     for (final n in notifications) {
       n.isRead = _readIds.contains(n.id);
     }
   }
 
   void start() {
-    loadAuthSession().then((_) => load());
+    loadSavedSession();
+    load();
     _timer = Timer.periodic(const Duration(minutes: 10), (_) => load(silent: true));
   }
 
@@ -211,30 +182,26 @@ class DashboardProvider extends ChangeNotifier {
     }
     hasError = false;
     try {
-      profile = await _repo.getProfile(username: currentUsername, phone: phoneNumber);
+      profile ??= await _repo.getProfile();
       guides = _repo.getPlantingGuides();
       // Isang kalendaryo para sa buong app (DSS, My Farm, abiso, presyo).
       for (final g in guides) {
         setCropCalendar(g.crop, g.bestMonths, g.possibleMonths);
       }
-      try {
-        weather = await _weather.fetch();
-        if (weather != null) {
-          advice = _advice.build(weather!);
-        }
-        weatherStale = false;
-      } catch (wxErr) {
-        debugPrint('Weather fetch error: $wxErr');
-        weatherStale = true;
-      }
+      weather = await _weather.fetch();
+      advice = _advice.build(weather!);
       _rebuildDerived();
+
       lastUpdated = DateTime.now();
+      weatherStale = false;
     } catch (e, st) {
+      // Ipinapakita ang tunay na dahilan sa Run/Debug console (para madaling hanapin ang problema).
       debugPrint('PAGRI load error: $e\n$st');
       if (weather == null) {
         hasError = true;
+      } else {
+        weatherStale = true;
       }
-      _rebuildDerived();
     }
     isLoading = false;
     notifyListeners();

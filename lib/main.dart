@@ -6,11 +6,6 @@ import 'dashboard_data.dart';
 import 'l10n/app_localizations.dart';
 import 'providers/farm_input_provider.dart';
 import 'screens/dashboard/dashboard_screen.dart';
-import 'screens/login_screen.dart';
-import 'screens/splash_screen.dart';
-import 'screens/thank_you_screen.dart';
-import 'services/account_service.dart';
-import 'services/supabase_service.dart';
 
 class AppConstants {
   // Pagsanjan, Laguna (default farm coordinates)
@@ -24,6 +19,8 @@ class AppConstants {
 }
 
 /// Magaan at malambot na berdeng tema ng PAGRI (light, frosted-glass).
+/// Ang mga lumang pangalan (leaf, fern, mint, paddy, ink...) ay pinanatili para
+/// hindi masira ang ibang screen - ang mga kulay lang ang nagbago.
 class AppColors {
   // Background at mga card
   static const bg0 = Color(0xFFD3E9CC); // ibaba ng background (mas matingkad na sage)
@@ -238,7 +235,7 @@ class PagriLogo extends StatelessWidget {
       AppConstants.logoAsset,
       height: height,
       fit: BoxFit.contain,
-      errorBuilder: (context, error, stackTrace) => CircleAvatar(
+      errorBuilder: (_, __, ___) => CircleAvatar(
         radius: height / 2,
         backgroundColor: AppColors.fern,
         child: Icon(Icons.eco, color: Colors.white, size: height * 0.6),
@@ -247,44 +244,32 @@ class PagriLogo extends StatelessWidget {
   }
 }
 
-Future<void> main() async {
-  WidgetsFlutterBinding.ensureInitialized();
-  try {
-    await SupabaseService.initialize();
-  } catch (_) {}
-  runApp(const AgricultureApp());
-}
+void main() => runApp(const PagriApp());
 
-class AgricultureApp extends StatelessWidget {
-  const AgricultureApp({super.key});
+class PagriApp extends StatelessWidget {
+  const PagriApp({super.key});
 
   @override
   Widget build(BuildContext context) {
     return MultiProvider(
       providers: [
-        ChangeNotifierProvider(create: (_) => AccountService()),
         ChangeNotifierProvider(create: (_) => DashboardProvider()..start()),
         ChangeNotifierProvider(create: (_) => FarmInputProvider()..load()),
       ],
       child: Consumer<DashboardProvider>(
-        builder: (context, p, child) => MaterialApp(
+        builder: (_, p, __) => MaterialApp(
           title: 'PAGRI - Pagsanjan Agriculture',
           debugShowCheckedModeBanner: false,
           theme: AppTheme.light,
           locale: Locale(p.isTagalog ? 'tl' : 'en'),
           localizationsDelegates: AppLocalizations.localizationsDelegates,
           supportedLocales: AppLocalizations.supportedLocales,
+          // Laki ng teksto (Settings > Itsura ng App)
           builder: (context, child) => MediaQuery(
             data: MediaQuery.of(context).copyWith(textScaler: TextScaler.linear(p.textScale)),
             child: child!,
           ),
-          initialRoute: '/splash',
-          routes: {
-            '/splash': (context) => SplashScreen(nextScreen: LoginScreen(p: p)),
-            '/': (context) => LoginScreen(p: p),
-            '/dashboard': (context) => const DashboardScreen(),
-            '/thank_you': (context) => const ThankYouScreen(),
-          },
+          home: const DashboardScreen(),
         ),
       ),
     );

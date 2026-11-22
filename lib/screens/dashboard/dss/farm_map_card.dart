@@ -1,17 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
-import 'package:provider/provider.dart';
 
 import '../../../l10n/app_localizations.dart';
 import '../../../main.dart';
-import '../../../models/farmer.dart';
 import '../../../providers/farm_input_provider.dart';
-import '../../../services/account_service.dart';
 import '../../../services/farm_weather_service.dart';
 import '../../../widgets/common_widgets.dart';
 import '../../../widgets/weather_icon.dart';
-import '../../map_screen.dart';
 
 /// Mapa ng sariling bukid + panahon sa mismong lokasyon (tap sa mapa para ilipat ang pin).
 class FarmMapCard extends StatefulWidget {
@@ -23,6 +19,7 @@ class FarmMapCard extends StatefulWidget {
 }
 
 class _FarmMapCardState extends State<FarmMapCard> {
+  final _map = MapController();
   final _service = FarmWeatherService();
   FarmWeather? _w;
   bool _loading = true;
@@ -33,19 +30,21 @@ class _FarmMapCardState extends State<FarmMapCard> {
   void initState() {
     super.initState();
     _load();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) {
-        Provider.of<AccountService>(context, listen: false).loadFromSupabase();
-      }
-    });
   }
 
   @override
   void didUpdateWidget(covariant FarmMapCard old) {
     super.didUpdateWidget(old);
     if (_loadedLat != widget.input.lat || _loadedLon != widget.input.lon) {
+      _map.move(LatLng(widget.input.lat, widget.input.lon), _map.camera.zoom);
       _load();
     }
+  }
+
+  @override
+  void dispose() {
+    _map.dispose();
+    super.dispose();
   }
 
   Future<void> _load() async {
@@ -72,139 +71,10 @@ class _FarmMapCardState extends State<FarmMapCard> {
     }
   }
 
-  void _showFarmDetailsDialog(BuildContext context, FarmRecord farm) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Row(
-          children: [
-            const Icon(Icons.agriculture_rounded, color: AppColors.leaf, size: 28),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                farm.farmerName,
-                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-              ),
-            ),
-          ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _detailRow(Icons.location_on_rounded, 'Lokasyon', '${farm.locationName}, Barangay ${farm.barangay}'),
-            const SizedBox(height: 8),
-            _detailRow(Icons.eco_rounded, 'Uri ng Tanim', farm.cropType),
-            const SizedBox(height: 8),
-            _detailRow(Icons.square_foot_rounded, 'Sukat ng Lupa', '${farm.landAreaHectares} Hektarya'),
-            const SizedBox(height: 8),
-            _detailRow(Icons.badge_rounded, 'Status ng Lupa', farm.tenureStatus),
-            const SizedBox(height: 8),
-            _detailRow(Icons.my_location_rounded, 'GPS Coordinates', '${farm.latitude.toStringAsFixed(4)}° N, ${farm.longitude.toStringAsFixed(4)}° E'),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Isara'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _detailRow(IconData icon, String label, String value) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Icon(icon, size: 18, color: AppColors.leaf),
-        const SizedBox(width: 8),
-        Expanded(
-          child: RichText(
-            text: TextSpan(
-              style: const TextStyle(fontSize: 13, color: AppColors.ink),
-              children: [
-                TextSpan(text: '$label: ', style: const TextStyle(fontWeight: FontWeight.bold)),
-                TextSpan(text: value),
-              ],
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Marker _buildBlueFarmMarker(FarmRecord farm, VoidCallback onTap) {
-    Color primaryBlue;
-    IconData cropIcon;
-
-    final cropLower = farm.cropType.toLowerCase();
-    if (cropLower.contains('rice') || cropLower.contains('palay')) {
-      primaryBlue = const Color(0xFF1E3A8A);
-      cropIcon = Icons.grass_rounded;
-    } else if (cropLower.contains('gulay') || cropLower.contains('veg')) {
-      primaryBlue = const Color(0xFF0284C7);
-      cropIcon = Icons.eco_rounded;
-    } else if (cropLower.contains('prutas') || cropLower.contains('fruit')) {
-      primaryBlue = const Color(0xFF2563EB);
-      cropIcon = Icons.apple_rounded;
-    } else {
-      primaryBlue = const Color(0xFF0056B3);
-      cropIcon = Icons.location_on_rounded;
-    }
-
-    return Marker(
-      point: LatLng(farm.latitude, farm.longitude),
-      width: 44,
-      height: 48,
-      alignment: Alignment.topCenter,
-      child: GestureDetector(
-        onTap: onTap,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              padding: const EdgeInsets.all(6),
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [primaryBlue, primaryBlue.withValues(alpha: 0.85)],
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                ),
-                shape: BoxShape.circle,
-                border: Border.all(color: Colors.white, width: 2),
-                boxShadow: const [
-                  BoxShadow(color: Colors.black26, blurRadius: 4, offset: Offset(0, 2)),
-                ],
-              ),
-              child: Icon(cropIcon, color: Colors.white, size: 18),
-            ),
-            Icon(Icons.arrow_drop_down_rounded, color: primaryBlue, size: 18),
-          ],
-        ),
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final t = AppLocalizations.of(context)!;
     final point = LatLng(widget.input.lat, widget.input.lon);
-    final accountService = Provider.of<AccountService>(context);
-    final allFarms = accountService.farms;
-
-    final allMarkers = <Marker>[
-      for (final f in allFarms)
-        _buildBlueFarmMarker(f, () => _showFarmDetailsDialog(context, f)),
-      Marker(
-        point: point,
-        width: 48,
-        height: 54,
-        alignment: Alignment.topCenter,
-        child: const Icon(Icons.location_on_rounded, size: 48, color: Color(0xFF0056B3)),
-      ),
-    ];
 
     return GlassCard(
       padding: const EdgeInsets.all(14),
@@ -214,14 +84,37 @@ class _FarmMapCardState extends State<FarmMapCard> {
           ClipRRect(
             borderRadius: BorderRadius.circular(16),
             child: SizedBox(
-              height: 300,
+              height: 230,
               child: Stack(
                 children: [
-                  PagsanjanMapWidget(
-                    initialCenter: const LatLng(14.2750, 121.4550),
-                    initialZoom: 13.2,
-                    markers: allMarkers,
-                    onTap: null, // Fixed pin location: tapping on map will NOT move the pin
+                  FlutterMap(
+                    mapController: _map,
+                    options: MapOptions(
+                      initialCenter: point,
+                      initialZoom: 15,
+                      interactionOptions: const InteractionOptions(
+                        flags: InteractiveFlag.drag | InteractiveFlag.pinchZoom | InteractiveFlag.doubleTapZoom,
+                      ),
+                      onTap: (_, p) => widget.input.setLocation(
+                        double.parse(p.latitude.toStringAsFixed(5)),
+                        double.parse(p.longitude.toStringAsFixed(5)),
+                      ),
+                    ),
+                    children: [
+                      TileLayer(
+                        urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                        userAgentPackageName: 'com.example.wency',
+                      ),
+                      MarkerLayer(markers: [
+                        Marker(
+                          point: point,
+                          width: 48,
+                          height: 54,
+                          alignment: Alignment.topCenter,
+                          child: const Icon(Icons.location_on_rounded, size: 48, color: AppColors.down),
+                        ),
+                      ]),
+                    ],
                   ),
                   Positioned(
                     right: 0,
@@ -229,7 +122,7 @@ class _FarmMapCardState extends State<FarmMapCard> {
                     child: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                       color: Colors.white70,
-                      child: const Text('© OpenStreetMap & Pagsanjan GIS', style: TextStyle(fontSize: 10)),
+                      child: const Text('© OpenStreetMap contributors', style: TextStyle(fontSize: 10)),
                     ),
                   ),
                 ],
@@ -239,57 +132,23 @@ class _FarmMapCardState extends State<FarmMapCard> {
           const SizedBox(height: 10),
           Row(
             children: [
-              const Icon(Icons.info_outline_rounded, size: 16, color: AppColors.muted),
+              const Icon(Icons.touch_app_rounded, size: 16, color: AppColors.muted),
               const SizedBox(width: 6),
-              Expanded(
-                child: Text(
-                  Localizations.localeOf(context).languageCode == 'tl'
-                      ? 'I-tap ang mga pin sa mapa upang makita ang detalye ng sakahan.'
-                      : 'Tap on farm pins to view farm details.',
-                  style: const TextStyle(fontSize: 12.5, color: AppColors.muted),
-                ),
-              ),
+              Expanded(child: Text(t.dssMapHint, style: const TextStyle(fontSize: 12.5, color: AppColors.muted))),
             ],
           ),
           const SizedBox(height: 4),
           Text(
-            'GPS: ${widget.input.lat.toStringAsFixed(4)}° N, ${widget.input.lon.toStringAsFixed(4)}° E',
+            '${widget.input.lat.toStringAsFixed(4)}, ${widget.input.lon.toStringAsFixed(4)}',
             style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: AppColors.ink),
           ),
-          Wrap(
-            alignment: WrapAlignment.spaceBetween,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            spacing: 8,
-            children: [
-              TextButton.icon(
-                onPressed: () {
-                  widget.input.setLocation(14.2790, 121.4550);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Inilipat ang pin sa lokasyon ng iyong GPS!'), backgroundColor: Colors.green),
-                  );
-                },
-                icon: const Icon(Icons.my_location_rounded, size: 18, color: AppColors.leaf),
-                label: const Text('My GPS'),
-              ),
-              TextButton.icon(
-                onPressed: () {
-                  widget.input.resetLocation();
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Ibinalik ang mapa sa gitna ng Pagsanjan!')),
-                  );
-                },
-                icon: const Icon(Icons.restart_alt_rounded, size: 18),
-                label: Text(t.dssResetLocation),
-              ),
-              OutlinedButton.icon(
-                onPressed: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => PagsanjanMapScreen(markers: allMarkers)),
-                ),
-                icon: const Icon(Icons.map_rounded, size: 18, color: AppColors.leaf),
-                label: const Text('Full Map'),
-              ),
-            ],
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton.icon(
+              onPressed: widget.input.resetLocation,
+              icon: const Icon(Icons.restart_alt_rounded, size: 18),
+              label: Text(t.dssResetLocation),
+            ),
           ),
           const Divider(height: 18),
           Text(t.dssWeatherHere, style: const TextStyle(fontWeight: FontWeight.w900, fontSize: 15, color: AppColors.ink)),

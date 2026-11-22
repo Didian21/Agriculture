@@ -202,9 +202,33 @@ class _HarvestFormState extends State<_HarvestForm> {
             ],
             const SizedBox(height: 16),
             Row(children: [
-              Expanded(child: OutlinedButton(onPressed: () => Navigator.pop(context), child: Text(t.cancel))),
+              Expanded(
+                child: OutlinedButton(
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: const Color(0xFF334155),
+                    backgroundColor: Colors.white,
+                    side: const BorderSide(color: Color(0xFF94A3B8), width: 1.5),
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                  onPressed: () => Navigator.pop(context),
+                  child: Text(t.cancel, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                ),
+              ),
               const SizedBox(width: 12),
-              Expanded(child: FilledButton(onPressed: () => _save(t), child: Text(t.save))),
+              Expanded(
+                child: FilledButton(
+                  style: FilledButton.styleFrom(
+                    backgroundColor: const Color(0xFF0056B3),
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    elevation: 2,
+                  ),
+                  onPressed: () => _save(t),
+                  child: Text(t.save, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                ),
+              ),
             ]),
           ],
         ),

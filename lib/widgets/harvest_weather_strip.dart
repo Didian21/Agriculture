@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import '../l10n/app_localizations.dart';
 import '../main.dart';
 import '../services/harvest_weather_service.dart';
+import 'common_widgets.dart';
 import 'weather_icon.dart';
 
 /// Panahon bawat araw mula sa pagtatanim hanggang anihan.
@@ -160,25 +161,20 @@ class _HarvestWeatherStripState extends State<HarvestWeatherStrip> {
         future: _future,
         builder: (context, snap) {
           if (snap.connectionState != ConnectionState.done) {
-            return const SizedBox(
-              height: 96,
-              child: Center(child: SizedBox(width: 22, height: 22, child: CircularProgressIndicator(strokeWidth: 2.5))),
-            );
+            return const SkeletonBox(height: 96, radius: 14);
           }
           if (snap.hasError || snap.data == null) {
-            return SizedBox(
-              height: 96,
+            return Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8),
               child: Center(
-                child: Column(mainAxisSize: MainAxisSize.min, children: [
-                  Text(t.farmWxLoadFail, style: const TextStyle(color: AppColors.muted, fontSize: 12.5)),
-                  TextButton(
-                    onPressed: () => setState(() {
-                      _scrolled = false;
-                      _future = _load();
-                    }),
-                    child: Text(t.farmWxRetry),
-                  ),
-                ]),
+                child: InlineError(
+                  message: t.farmWxLoadFail,
+                  retryLabel: t.farmWxRetry,
+                  onRetry: () => setState(() {
+                    _scrolled = false;
+                    _future = _load();
+                  }),
+                ),
               ),
             );
           }

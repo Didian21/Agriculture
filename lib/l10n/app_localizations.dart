@@ -977,31 +977,31 @@ abstract class AppLocalizations {
   /// No description provided for @howTo1.
   ///
   /// In en, this message translates to:
-  /// **'DSS (the green button in the middle): first set your total land size, then add your crops with land area, planting date, last yield and cost. You will see when to plant, an estimate of harvest and income, and price advice.'**
+  /// **'Home: see today\'s weather, warnings, the 7-day forecast, heat index, rain and soil moisture, and the status of your crop.'**
   String get howTo1;
 
   /// No description provided for @howTo2.
   ///
   /// In en, this message translates to:
-  /// **'Weather: see today\'s weather, the 7-day forecast, the heat index and advice for your crops.'**
+  /// **'DSS (the green button in the middle): draw your farm on the map, then choose your soil type, crop and planting date. You will see the right fertilizer and pesticide, cost, expected yield and possible income.'**
   String get howTo2;
 
   /// No description provided for @howTo3.
   ///
   /// In en, this message translates to:
-  /// **'My Farm: see your crops and how your land is shared (hectares or square meters). Tap a crop to open it in DSS. Your harvest records are here too.'**
+  /// **'My Farm: see the map of your farm, soil type and crop. This is view only; edit in DSS.'**
   String get howTo3;
 
   /// No description provided for @howTo4.
   ///
   /// In en, this message translates to:
-  /// **'Prices: only the crops you added in DSS appear here, with expected prices and when it is a good time to sell.'**
+  /// **'Advice: suggestions for this week (fertilizing, irrigation, harvest, disease) based on the weather and your crop\'s stage.'**
   String get howTo4;
 
   /// No description provided for @howTo5.
   ///
   /// In en, this message translates to:
-  /// **'After harvest, tap \"Record harvest\" in DSS so estimates get closer to your own farm. Tap the bell at the top to read notifications. Numbers are estimates only, not official.'**
+  /// **'Tap the bell at the top to read notifications. Numbers and advice are estimates only, not official. For official warnings, check PAGASA.'**
   String get howTo5;
 
   /// No description provided for @contactOffice.

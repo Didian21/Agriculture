@@ -15,7 +15,7 @@ class CropImage extends StatelessWidget {
       width: double.infinity,
       height: double.infinity,
       cacheWidth: 800,
-      errorBuilder: (_, _, _) => Container(
+      errorBuilder: (_, __, ___) => Container(
         color: guide.color.withValues(alpha: 0.15),
         alignment: Alignment.center,
         child: Icon(guide.icon, size: 40, color: guide.color),

@@ -6,16 +6,16 @@ import 'package:provider/provider.dart';
 import '../../dashboard_data.dart';
 import '../../l10n/app_localizations.dart';
 import '../../main.dart';
-import '../../providers/farm_input_provider.dart';
-import '../../services/account_service.dart';
 import '../../widgets/common_widgets.dart';
+import '../../core/tr.dart';
+import '../../core/ui.dart';
 import '../../widgets/field_background.dart';
 import '../login_screen.dart';
 import 'dialogs/notifications_modal.dart';
+import 'tabs/advisory_tab.dart';
 import 'tabs/dss_tab.dart';
 import 'tabs/farm_tab.dart';
-import 'tabs/weather_tab.dart';
-import 'tabs/prices_tab.dart';
+import 'tabs/home_tab.dart';
 import 'tabs/settings_tab.dart';
 
 /// Shell: app bar + language toggle + bottom navigation + tab switching.
@@ -29,15 +29,15 @@ class DashboardScreen extends StatefulWidget {
 class _DashboardScreenState extends State<DashboardScreen> {
   static const int _dssIndex = 2;
 
-  // Pagbukas ng app, DSS agad ang makikita.
-  int _tab = _dssIndex;
+  // Pagbukas ng app, Home ang makikita. Ang DSS ay nasa gitna.
+  int _tab = 0;
 
   // (outlined icon, filled icon) - ang mga label ay galing sa ARB
   static const _icons = [
     (Icons.home_outlined, Icons.home_rounded),
     (Icons.landscape_outlined, Icons.landscape_rounded),
     (Icons.insights_outlined, Icons.insights_rounded),
-    (Icons.sell_outlined, Icons.sell_rounded),
+    (Icons.tips_and_updates_outlined, Icons.tips_and_updates_rounded),
     (Icons.settings_outlined, Icons.settings_rounded),
   ];
 
@@ -46,22 +46,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
     if (p.hasError) return ErrorView(message: t.errorLoad, onRetry: p.load);
 
     final tabs = <Widget>[
-      WeatherTab(p: p, onOpenDss: () => setState(() => _tab = 2)),
-      FarmTab(p: p, onOpenDss: () => setState(() => _tab = 2)),
-      const DssTab(),
-      PricesTab(p: p),
+      HomeTab(p: p, onOpenDss: () => setState(() => _tab = _dssIndex)),
+      FarmTab(p: p),
+      DssTab(p: p),
+      AdvisoryTab(p: p),
       SettingsTab(p: p),
     ];
     return AnimatedSwitcher(
-      duration: const Duration(milliseconds: 350),
-      switchInCurve: Curves.easeOutCubic,
-      transitionBuilder: (child, anim) => FadeTransition(
-        opacity: anim,
-        child: SlideTransition(
-          position: Tween(begin: const Offset(0, 0.03), end: Offset.zero).animate(anim),
-          child: child,
-        ),
-      ),
+      duration: const Duration(milliseconds: 200),
+      switchInCurve: Curves.easeOut,
+      transitionBuilder: (child, anim) => FadeTransition(opacity: anim, child: child),
       child: KeyedSubtree(
         key: ValueKey('$_tab-${p.isTagalog}'),
         child: RefreshIndicator(
@@ -79,33 +73,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final p = context.watch<DashboardProvider>();
     if (!p.isLoggedIn) return LoginScreen(p: p);
 
-    // Ipasa sa dashboard ang mga pananim at mga anunsyo mula sa MAO (presyo, hula, abiso).
-    final farm = context.watch<FarmInputProvider>();
-    final accountService = context.watch<AccountService>();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) {
-        p.syncPlantings(farm.plantings);
-        p.syncPosts(accountService.posts);
-        if (p.profile != null) {
-          farm.setFarmerInfo(
-            id: p.profile!.id,
-            name: p.profile!.name,
-            brgy: p.profile!.barangay,
-            location: p.profile!.locationName,
-          );
-        }
-      }
-    });
-
     final t = AppLocalizations.of(context)!;
-    final labels = [t.navHome, t.navFarm, t.navDss, t.navPrices, t.navSettings];
+    final labels = [t.navHome, t.navFarm, t.navDss, tr(context, 'Payo', 'Advice'), t.navSettings];
 
     return Stack(children: [
       const Positioned.fill(child: FieldBackground()),
       Scaffold(
         backgroundColor: Colors.transparent,
         appBar: _DashboardAppBar(p: p),
-        body: _buildBody(p, t),
+        body: AppUi.wrap(context, _buildBody(p, t)),
         bottomNavigationBar: _FloatingNav(
           selected: _tab,
           icons: _icons,

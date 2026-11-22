@@ -1,15 +1,13 @@
-import 'dart:math' as math;
-import 'dart:ui' show ImageFilter;
-
 import 'package:flutter/material.dart';
 
+import '../core/ui.dart';
 import '../l10n/app_localizations.dart';
 import '../main.dart';
 
-/// Marahang lumilitaw (fade + bahagyang slide) - may pagkakasunod-sunod.
+/// Payak na paglitaw: dahan-dahang fade lang (walang pagkakasunod-sunod).
 class FadeSlideIn extends StatefulWidget {
   final Widget child;
-  final int index;
+  final int index; // hindi na ginagamit; pinanatili para hindi masira ang lumang tawag
   const FadeSlideIn({super.key, required this.child, this.index = 0});
 
   @override
@@ -17,16 +15,7 @@ class FadeSlideIn extends StatefulWidget {
 }
 
 class _FadeSlideInState extends State<FadeSlideIn> with SingleTickerProviderStateMixin {
-  late final AnimationController _c = AnimationController(vsync: this, duration: const Duration(milliseconds: 550));
-  late final Animation<double> _curve = CurvedAnimation(parent: _c, curve: Curves.easeOutCubic);
-
-  @override
-  void initState() {
-    super.initState();
-    Future.delayed(Duration(milliseconds: 70 * widget.index), () {
-      if (mounted) _c.forward();
-    });
-  }
+  late final AnimationController _c = AnimationController(vsync: this, duration: const Duration(milliseconds: 220))..forward();
 
   @override
   void dispose() {
@@ -35,29 +24,23 @@ class _FadeSlideInState extends State<FadeSlideIn> with SingleTickerProviderStat
   }
 
   @override
-  Widget build(BuildContext context) {
-    return FadeTransition(
-      opacity: _curve,
-      child: SlideTransition(
-        position: Tween(begin: const Offset(0, 0.06), end: Offset.zero).animate(_curve),
-        child: widget.child,
-      ),
-    );
-  }
+  Widget build(BuildContext context) => FadeTransition(opacity: CurvedAnimation(parent: _c, curve: Curves.easeOut), child: widget.child);
 }
 
 /// Shared scrolling list used by every tab: pads, scrolls, and fades items in.
 class AnimatedTabList extends StatelessWidget {
   final List<Widget> items;
-  const AnimatedTabList({super.key, required this.items});
+  final ScrollController? controller;
+  const AnimatedTabList({super.key, required this.items, this.controller});
 
   @override
   Widget build(BuildContext context) {
     return ListView.builder(
+      controller: controller,
       physics: const AlwaysScrollableScrollPhysics(),
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+      padding: const EdgeInsets.fromLTRB(AppSpace.l, AppSpace.s, AppSpace.l, AppSpace.xl),
       itemCount: items.length,
-      itemBuilder: (_, i) => FadeSlideIn(index: math.min(i, 6), child: items[i]),
+      itemBuilder: (_, i) => FadeSlideIn(child: items[i]),
     );
   }
 }
@@ -93,15 +76,14 @@ class _PressableScaleState extends State<PressableScale> {
   }
 }
 
-/// "Frosted glass" na card: malabong salamin na may manipis na puting guhit at malambot na anino.
-/// Nakikita nang bahagya ang burol sa likod nito.
+/// Payak na card: puti, manipis na gilid, at halos walang anino. Ito ang iisang card ng buong app.
 class GlassCard extends StatelessWidget {
   final Widget child;
   final EdgeInsetsGeometry padding;
   final VoidCallback? onTap;
   final Color? tint;
   final double radius;
-  final bool blur;
+  final bool blur; // hindi na ginagamit; pinanatili para hindi masira ang lumang tawag
 
   const GlassCard({
     super.key,
@@ -109,42 +91,23 @@ class GlassCard extends StatelessWidget {
     this.padding = EdgeInsets.zero,
     this.onTap,
     this.tint,
-    this.radius = 24,
-    this.blur = true,
+    this.radius = AppRadius.card,
+    this.blur = false,
   });
 
   @override
   Widget build(BuildContext context) {
     final r = BorderRadius.circular(radius);
-    Widget inner = Container(
+    final content = Container(
       width: double.infinity,
       padding: padding,
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            (tint ?? Colors.white).withValues(alpha: 0.80),
-            Colors.white.withValues(alpha: 0.58),
-          ],
-        ),
+        color: (tint ?? Colors.white).withValues(alpha: 0.96),
         borderRadius: r,
-        border: Border.all(color: Colors.white.withValues(alpha: 0.85), width: 1.2),
+        border: Border.all(color: AppColors.border),
+        boxShadow: const [BoxShadow(color: Color(0x0F1B5E20), blurRadius: 8, offset: Offset(0, 2))],
       ),
       child: child,
-    );
-    if (blur) {
-      inner = ClipRRect(
-        borderRadius: r,
-        child: BackdropFilter(filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14), child: inner),
-      );
-    }
-    final content = DecoratedBox(
-      decoration: BoxDecoration(
-        borderRadius: r,
-        boxShadow: const [BoxShadow(color: Color(0x1F1B5E20), blurRadius: 24, offset: Offset(0, 10))],
-      ),
-      child: inner,
     );
     if (onTap == null) return content;
     return PressableScale(onTap: onTap, child: content);
@@ -196,7 +159,7 @@ class CountUp extends StatelessWidget {
       tween: Tween(begin: 0, end: value),
       duration: const Duration(milliseconds: 900),
       curve: Curves.easeOutCubic,
-      builder: (_, v, _) => Text('$prefix${v.toStringAsFixed(decimals)}$suffix', style: style),
+      builder: (_, v, __) => Text('$prefix${v.toStringAsFixed(decimals)}$suffix', style: style),
     );
   }
 }
@@ -216,8 +179,8 @@ class SectionTitle extends StatelessWidget {
         const SizedBox(width: 8),
         Expanded(
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(text, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900)),
-            if (subtitle != null) Text(subtitle!, style: const TextStyle(fontSize: 12, color: AppColors.muted)),
+            Text(text, style: AppText.section),
+            if (subtitle != null) Text(subtitle!, style: AppText.small),
           ]),
         ),
       ]),
@@ -234,8 +197,9 @@ class TabHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Text(title, style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w900)),
-      Text(subtitle, style: const TextStyle(color: AppColors.muted)),
+      Text(title, style: AppText.pageTitle),
+      const SizedBox(height: 2),
+      Text(subtitle, style: const TextStyle(fontSize: 13.5, color: AppColors.muted)),
     ]);
   }
 }
@@ -268,14 +232,15 @@ class LoadingView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = AppLocalizations.of(context)!;
-    return Center(
-      child: Column(mainAxisSize: MainAxisSize.min, children: [
-        const PagriLogo(height: 90),
-        const SizedBox(height: 24),
-        const CircularProgressIndicator(color: AppColors.leaf),
-        const SizedBox(height: 16),
-        Text(t.loadingWeather, style: const TextStyle(fontWeight: FontWeight.w700)),
-      ]),
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(AppSpace.l, AppSpace.xl, AppSpace.l, AppSpace.xl),
+      children: [
+        const Center(child: PagriLogo(height: 72)),
+        const SizedBox(height: AppSpace.m),
+        Center(child: Text(t.loadingWeather, style: const TextStyle(fontWeight: FontWeight.w700, color: AppColors.muted))),
+        const SizedBox(height: AppSpace.xl),
+        const SkeletonList(count: 3),
+      ],
     );
   }
 }
@@ -293,10 +258,15 @@ class ErrorView extends StatelessWidget {
       child: Padding(
         padding: const EdgeInsets.all(32),
         child: Column(mainAxisSize: MainAxisSize.min, children: [
-          const Icon(Icons.wifi_off_rounded, size: 64, color: AppColors.muted),
-          const SizedBox(height: 16),
-          Text(message, textAlign: TextAlign.center, style: const TextStyle(fontSize: 16)),
-          const SizedBox(height: 20),
+          Container(
+            width: 84,
+            height: 84,
+            decoration: BoxDecoration(color: StatusColor.warn.withValues(alpha: 0.12), shape: BoxShape.circle),
+            child: const Icon(Icons.wifi_off_rounded, size: 40, color: StatusColor.warn),
+          ),
+          const SizedBox(height: AppSpace.l),
+          Text(message, textAlign: TextAlign.center, style: const TextStyle(fontSize: 16, height: 1.35)),
+          const SizedBox(height: AppSpace.xl),
           FilledButton.icon(
             onPressed: onRetry,
             icon: const Icon(Icons.refresh_rounded),
@@ -305,5 +275,133 @@ class ErrorView extends StatelessWidget {
         ]),
       ),
     );
+  }
+}
+
+/// Kulay-abong hugis na dahan-dahang kumukurap habang naglo-load (mas maayos kaysa umiikot na bilog).
+class SkeletonBox extends StatefulWidget {
+  final double height;
+  final double? width;
+  final double radius;
+  const SkeletonBox({super.key, this.height = 16, this.width, this.radius = 10});
+
+  @override
+  State<SkeletonBox> createState() => _SkeletonBoxState();
+}
+
+class _SkeletonBoxState extends State<SkeletonBox> with SingleTickerProviderStateMixin {
+  late final AnimationController _c = AnimationController(vsync: this, duration: const Duration(milliseconds: 1100))..repeat(reverse: true);
+
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _c,
+      builder: (_, __) => Container(
+        height: widget.height,
+        width: widget.width,
+        decoration: BoxDecoration(
+          color: Color.lerp(const Color(0xFFE3EDE0), const Color(0xFFF1F6EF), _c.value),
+          borderRadius: BorderRadius.circular(widget.radius),
+        ),
+      ),
+    );
+  }
+}
+
+/// Skeleton ng isang card (pamagat at ilang linya).
+class SkeletonCard extends StatelessWidget {
+  final double height;
+  const SkeletonCard({super.key, this.height = 110});
+
+  @override
+  Widget build(BuildContext context) {
+    return GlassCard(
+      padding: const EdgeInsets.all(AppSpace.l),
+      child: SizedBox(
+        height: height,
+        child: const Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          SkeletonBox(height: 16, width: 140),
+          SizedBox(height: AppSpace.m),
+          SkeletonBox(height: 12),
+          SizedBox(height: AppSpace.s),
+          SkeletonBox(height: 12, width: 220),
+        ]),
+      ),
+    );
+  }
+}
+
+class SkeletonList extends StatelessWidget {
+  final int count;
+  const SkeletonList({super.key, this.count = 3});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(children: [
+      for (var i = 0; i < count; i++) const Padding(padding: EdgeInsets.only(bottom: AppSpace.m), child: SkeletonCard()),
+    ]);
+  }
+}
+
+/// Walang laman na bahagi: maliit na larawan, maikling paliwanag, at (opsyonal) buton ng susunod na gagawin.
+class EmptyState extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String? body;
+  final String? actionLabel;
+  final VoidCallback? onAction;
+  const EmptyState({super.key, required this.icon, required this.title, this.body, this.actionLabel, this.onAction});
+
+  @override
+  Widget build(BuildContext context) {
+    return GlassCard(
+      padding: const EdgeInsets.all(AppSpace.xl),
+      child: Column(children: [
+        Container(
+          width: 56,
+          height: 56,
+          decoration: BoxDecoration(color: AppColors.leaf.withValues(alpha: 0.12), shape: BoxShape.circle),
+          child: Icon(icon, color: AppColors.leaf, size: 28),
+        ),
+        const SizedBox(height: AppSpace.m),
+        Text(title, textAlign: TextAlign.center, style: AppText.cardTitle),
+        if (body != null) ...[
+          const SizedBox(height: AppSpace.s),
+          Text(body!, textAlign: TextAlign.center, style: AppText.small),
+        ],
+        if (actionLabel != null && onAction != null) ...[
+          const SizedBox(height: AppSpace.l),
+          FilledButton(
+            onPressed: onAction,
+            style: FilledButton.styleFrom(backgroundColor: AppColors.leaf),
+            child: Text(actionLabel!),
+          ),
+        ],
+      ]),
+    );
+  }
+}
+
+/// Maliit na error sa loob ng card, may buton na "Subukan ulit".
+class InlineError extends StatelessWidget {
+  final String message;
+  final String retryLabel;
+  final VoidCallback onRetry;
+  const InlineError({super.key, required this.message, required this.retryLabel, required this.onRetry});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(mainAxisSize: MainAxisSize.min, children: [
+      const Icon(Icons.cloud_off_rounded, color: StatusColor.warn, size: 26),
+      const SizedBox(height: AppSpace.s),
+      Text(message, textAlign: TextAlign.center, style: AppText.small),
+      TextButton.icon(onPressed: onRetry, icon: const Icon(Icons.refresh_rounded, size: 18), label: Text(retryLabel)),
+    ]);
   }
 }

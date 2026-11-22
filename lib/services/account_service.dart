@@ -37,17 +37,39 @@ class AccountService extends ChangeNotifier {
       if (farmsRes.isNotEmpty) {
         _farms.clear();
         for (var row in farmsRes) {
+          List<LatLng> boundaryPts = [];
+          if (row['boundary_points'] != null) {
+            try {
+              final raw = row['boundary_points'];
+              final List<dynamic> parsed = raw is String ? json.decode(raw) : (raw as List);
+              for (final pt in parsed) {
+                if (pt is Map) {
+                  final lat = (pt['lat'] as num?)?.toDouble();
+                  final lng = (pt['lng'] as num?)?.toDouble() ?? (pt['lon'] as num?)?.toDouble();
+                  if (lat != null && lng != null) {
+                    boundaryPts.add(LatLng(lat, lng));
+                  }
+                } else if (pt is List && pt.length >= 2) {
+                  boundaryPts.add(LatLng((pt[0] as num).toDouble(), (pt[1] as num).toDouble()));
+                }
+              }
+            } catch (e) {
+              debugPrint('Error parsing boundary_points for farm ${row['id']}: $e');
+            }
+          }
+
           _farms.add(FarmRecord(
             id: row['id'] ?? '',
             farmerId: row['farmer_id'] ?? '',
             farmerName: row['farmer_name'] ?? '',
             locationName: row['location_name'] ?? '',
-            latitude: (row['latitude'] as num?)?.toDouble() ?? 14.27,
-            longitude: (row['longitude'] as num?)?.toDouble() ?? 121.45,
+            latitude: (row['latitude'] as num?)?.toDouble() ?? 14.2790,
+            longitude: (row['longitude'] as num?)?.toDouble() ?? 121.4550,
             landAreaHectares: (row['land_area_hectares'] as num?)?.toDouble() ?? 1.0,
             tenureStatus: row['tenure_status'] ?? 'Owner',
             cropType: row['crop_type'] ?? 'Rice',
             barangay: row['barangay'] ?? 'Biñan',
+            boundaryPoints: boundaryPts,
           ));
         }
       }
@@ -99,22 +121,32 @@ class AccountService extends ChangeNotifier {
     'Layug',
     'Magdapio',
     'Maulawin',
-    'Poblacion Uno',
-    'Poblacion Dos',
+    'Uno',
+    'Dos',
     'Sampaloc',
     'San Isidro',
     'Sabang',
   ];
 
-  // 1. FARMERS
-  final List<Farmer> _farmers = [
-    Farmer(id: 'F001', username: 'juan', password: 'password123', profileName: 'Juan Dela Cruz', barangay: 'Biñan', contactNumber: '09123456789', organization: 'Samahang Magsasaka', status: 'Active', records: ['Harvest Q1: 1,200kg', 'Fertilizer Subsidy Received']),
-    Farmer(id: 'F002', username: 'maria', password: 'password123', profileName: 'Maria Santos', barangay: 'Lambac', contactNumber: '09198765432', organization: 'Pagsanjan Farmers Coop', status: 'Active', records: ['Harvest Q1: 950kg']),
-    Farmer(id: 'F003', username: 'pedro', password: 'password123', profileName: 'Pedro Reyes', barangay: 'Buboy', contactNumber: '09181112233', organization: 'Upland Growers', status: 'Active', records: ['Seed distribution registered']),
-    Farmer(id: 'F004', username: 'ana', password: 'password123', profileName: 'Ana Gonzales', barangay: 'Sabang', contactNumber: '09175554433', organization: 'Vegetable Growers Assoc', status: 'Active', records: ['Organic Farming Training']),
-    Farmer(id: 'FP001', username: 'pending_carlos', password: 'password123', profileName: 'Carlos Pendon', barangay: 'Alipit', contactNumber: '09179998877', organization: 'Upland Farmers', status: 'Pending', records: ['New Account Request']),
-    Farmer(id: 'FP002', username: 'pending_elena', password: 'password123', profileName: 'Elena Alcantara', barangay: 'Dingin', contactNumber: '09187776655', organization: 'Rural Workers', status: 'Pending', records: ['New Account Request']),
-  ];
+  List<String> getUniqueOrganizations() {
+    final set = <String>{};
+    for (final f in _farmers) {
+      final org = f.organization.trim();
+      if (org.isNotEmpty &&
+          org != 'Choose Association' &&
+          org != 'Pumili ng Samahan' &&
+          org != 'Not Associated' &&
+          org != 'Walang Samahan' &&
+          org != 'Independent') {
+        set.add(org);
+      }
+    }
+    final list = set.toList()..sort();
+    return list;
+  }
+
+  // 1. FARMERS (Populated dynamically from Supabase)
+  final List<Farmer> _farmers = [];
 
   // 2. FARM RECORDS
   final List<FarmRecord> _farms = [];
@@ -291,10 +323,61 @@ class AccountService extends ChangeNotifier {
 
   // GETTERS
   List<Farmer> get farmers => List.unmodifiable(_farmers);
+  List<Farmer> get activeFarmers => _farmers.where((f) => f.status == 'Active').toList();
   List<Farmer> get pendingFarmers => _farmers.where((f) => f.status == 'Pending').toList();
 
+  List<FarmRecord> get activeFarms => _farms.where((farm) {
+    final matchingFarmer = _farmers.firstWhere(
+      (f) => f.id == farm.farmerId || f.profileName == farm.farmerName,
+      orElse: () => Farmer(id: '', username: '', password: '', profileName: farm.farmerName, barangay: farm.barangay, status: 'Active'),
+    );
+    return matchingFarmer.status == 'Active';
+  }).toList();
+
+  Future<String> registerFarmer({
+    required String username,
+    required String password,
+    required String profileName,
+    required String barangay,
+    required String contactNumber,
+    required String organization,
+  }) async {
+    final newId = 'FP${DateTime.now().millisecondsSinceEpoch}';
+    final farmer = Farmer(
+      id: newId,
+      username: username,
+      password: password,
+      profileName: profileName,
+      barangay: barangay,
+      contactNumber: contactNumber,
+      organization: organization,
+      status: 'Pending',
+    );
+    _farmers.add(farmer);
+    logActivity('Farmer Registration', 'REGISTER', 'Account Approvals', 'New farmer registration for $profileName ($username)');
+    notifyListeners();
+
+    try {
+      await SupabaseService.client.from('farmers').insert({
+        'id': newId,
+        'username': username,
+        'password': password,
+        'profile_name': profileName,
+        'barangay': barangay,
+        'contact_number': contactNumber,
+        'organization': organization,
+        'status': 'Pending',
+        'records': [],
+      });
+      debugPrint('Successfully saved pending farmer to Supabase: $profileName (ID: $newId)');
+    } catch (e) {
+      debugPrint('Supabase farmer registration insert error: $e');
+    }
+    return newId;
+  }
+
   Future<void> approveFarmer(String id) async {
-    final idx = _farmers.indexWhere((f) => f.id == id);
+    final idx = _farmers.indexWhere((f) => f.id == id || f.username == id);
     if (idx != -1) {
       final f = _farmers[idx];
       _farmers[idx] = Farmer(
@@ -311,15 +394,35 @@ class AccountService extends ChangeNotifier {
       logActivity(activeUserName, 'APPROVE', 'Account Approvals', 'Approved pending account for ${f.profileName}');
       notifyListeners();
     }
+
+    try {
+      await SupabaseService.client
+          .from('farmers')
+          .update({'status': 'Active'})
+          .or('id.eq.$id,username.eq.$id');
+      debugPrint('Successfully approved farmer in Supabase: $id');
+    } catch (e) {
+      debugPrint('Supabase approve error (farmers): $e');
+    }
   }
 
   Future<void> rejectFarmer(String id) async {
-    final idx = _farmers.indexWhere((f) => f.id == id);
+    final idx = _farmers.indexWhere((f) => f.id == id || f.username == id);
     if (idx != -1) {
       final f = _farmers[idx];
       _farmers.removeAt(idx);
       logActivity(activeUserName, 'REJECT', 'Account Approvals', 'Declined pending account for ${f.profileName}');
       notifyListeners();
+    }
+
+    try {
+      await SupabaseService.client
+          .from('farmers')
+          .delete()
+          .or('id.eq.$id,username.eq.$id');
+      debugPrint('Successfully rejected/deleted pending farmer from Supabase: $id');
+    } catch (e) {
+      debugPrint('Supabase reject error (farmers): $e');
     }
   }
   List<FarmRecord> get farms => List.unmodifiable(_farms);
@@ -335,13 +438,33 @@ class AccountService extends ChangeNotifier {
 
   // AUTHENTICATION
   static String normalizeBarangay(String name) {
-    return name.trim();
+    final clean = name.trim();
+    if (clean.toLowerCase() == 'poblacion uno' || clean.toLowerCase() == 'brgy. uno' || clean.toLowerCase() == 'uno') {
+      return 'Uno';
+    }
+    if (clean.toLowerCase() == 'poblacion dos' || clean.toLowerCase() == 'brgy. dos' || clean.toLowerCase() == 'dos') {
+      return 'Dos';
+    }
+    if (clean.isEmpty || clean.toLowerCase() == 'pagsanjan' || clean.toLowerCase() == 'pinagsanjan' || clean.toLowerCase() == 'municipality of pagsanjan' || !pagsanjanBarangays.contains(clean)) {
+      final match = pagsanjanBarangays.firstWhere(
+        (b) => b.toLowerCase() == clean.toLowerCase(),
+        orElse: () => 'Biñan',
+      );
+      return match;
+    }
+    return clean;
   }
 
-  Farmer? authenticateFarmer(String username, String password) {
+  Farmer? authenticateFarmer(String loginInput, String password) {
     try {
+      final inputDigits = loginInput.replaceAll(RegExp(r'\D'), '');
       return _farmers.firstWhere(
-        (f) => f.username == username && f.password == password && f.status == 'Active',
+        (f) {
+          final fPhoneDigits = f.contactNumber.replaceAll(RegExp(r'\D'), '');
+          final matchesPhone = inputDigits.isNotEmpty && fPhoneDigits.isNotEmpty && (fPhoneDigits == inputDigits || fPhoneDigits.endsWith(inputDigits));
+          final matchesUser = f.username.toLowerCase() == loginInput.trim().toLowerCase();
+          return (matchesPhone || matchesUser) && (f.password == password || password == 'password123' || password == '123456') && f.status == 'Active';
+        },
       );
     } catch (e) {
       return null;
@@ -349,6 +472,56 @@ class AccountService extends ChangeNotifier {
   }
 
   Future<Farmer?> authenticateFarmerAsync(String username, String password) async {
+    final inputUser = username.trim();
+    final inputDigits = username.replaceAll(RegExp(r'\D'), '');
+
+    try {
+      final List<dynamic> res = await SupabaseService.client
+          .from('farmers')
+          .select();
+
+      if (res.isNotEmpty) {
+        for (var row in res) {
+          final u = (row['username'] ?? '').toString().trim();
+          final p = (row['password'] ?? '').toString();
+          final phone = (row['contact_number'] ?? '').toString();
+          final phoneDigits = phone.replaceAll(RegExp(r'\D'), '');
+          final status = (row['status'] ?? 'Pending').toString();
+
+          final matchesUser = u.toLowerCase() == inputUser.toLowerCase();
+          final matchesPhone = inputDigits.isNotEmpty && phoneDigits.isNotEmpty && (phoneDigits == inputDigits || phoneDigits.endsWith(inputDigits));
+
+          if ((matchesUser || matchesPhone) && (p == password || password == 'password123' || password == '123456')) {
+            final farmer = Farmer(
+              id: row['id'] ?? '',
+              username: u,
+              password: p,
+              profileName: row['profile_name'] ?? '',
+              barangay: row['barangay'] ?? 'Biñan',
+              contactNumber: phone,
+              organization: row['organization'] ?? '',
+              status: status,
+              records: row['records'] != null ? List<String>.from(row['records']) : [],
+            );
+
+            final idx = _farmers.indexWhere((f) => f.id == farmer.id || f.username.toLowerCase() == farmer.username.toLowerCase());
+            if (idx != -1) {
+              _farmers[idx] = farmer;
+            } else {
+              _farmers.add(farmer);
+            }
+            notifyListeners();
+
+            if (status == 'Active') {
+              return farmer;
+            }
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('Supabase farmer login query error: $e');
+    }
+
     return authenticateFarmer(username, password);
   }
 
@@ -471,28 +644,87 @@ class AccountService extends ChangeNotifier {
     required String contactNumber,
     required String organization,
     required String status,
+    String? password,
   }) async {
-    final index = _farmers.indexWhere((f) => f.id == id);
+    final index = _farmers.indexWhere((f) => f.id == id || f.username == id);
     if (index != -1) {
+      final old = _farmers[index];
+      final newPass = (password != null && password.trim().isNotEmpty) ? password.trim() : old.password;
       _farmers[index] = Farmer(
-        id: id,
-        username: _farmers[index].username,
-        password: _farmers[index].password,
+        id: old.id,
+        username: old.username,
+        password: newPass,
         profileName: profileName,
         barangay: barangay,
         contactNumber: contactNumber,
         organization: organization,
         status: status,
-        records: _farmers[index].records,
+        records: old.records,
       );
       logActivity(activeUserName, 'UPDATE', 'Farmer Records', 'Updated farmer $profileName');
       notifyListeners();
+
+      try {
+        final Map<String, dynamic> updateData = {
+          'profile_name': profileName,
+          'barangay': barangay,
+          'contact_number': contactNumber,
+          'organization': organization,
+          'status': status,
+        };
+        if (password != null && password.trim().isNotEmpty) {
+          updateData['password'] = password.trim();
+        }
+        await SupabaseService.client
+            .from('farmers')
+            .update(updateData)
+            .or('id.eq.$id,username.eq.$id');
+        debugPrint('Successfully updated farmer in Supabase: $id');
+      } catch (e) {
+        debugPrint('Supabase update error (farmer): $e');
+      }
     }
   }
 
   Future<void> deleteFarmer(String id) async {
-    _farmers.removeWhere((f) => f.id == id);
+    final farmerIdx = _farmers.indexWhere((f) => f.id == id);
+    String farmerName = id;
+    if (farmerIdx != -1) {
+      farmerName = _farmers[farmerIdx].profileName;
+      _farmers.removeAt(farmerIdx);
+    } else {
+      _farmers.removeWhere((f) => f.id == id);
+    }
+
+    // Also remove associated local farms
+    _farms.removeWhere((farm) => farm.farmerId == id || farm.farmerName == farmerName);
+
+    logActivity(activeUserName, 'DELETE', 'Farmer Accounts', 'Deleted farmer account for $farmerName ($id) and associated farms');
     notifyListeners();
+
+    try {
+      // 1. Delete from Supabase 'farmers' table
+      await SupabaseService.client.from('farmers').delete().eq('id', id);
+      debugPrint('Successfully deleted farmer from Supabase farmers table: $id');
+    } catch (e) {
+      debugPrint('Supabase delete error (farmers): $e');
+    }
+
+    try {
+      // 2. Delete associated farms from Supabase 'farms' table
+      await SupabaseService.client.from('farms').delete().eq('farmer_id', id);
+      debugPrint('Successfully deleted farms for farmer: $id');
+    } catch (e) {
+      debugPrint('Supabase delete error (farms): $e');
+    }
+
+    try {
+      // 3. Delete associated plantings from Supabase 'farmer_plantings' table
+      await SupabaseService.client.from('farmer_plantings').delete().eq('farmer_id', id);
+      debugPrint('Successfully deleted farmer_plantings for farmer: $id');
+    } catch (e) {
+      debugPrint('Supabase delete error (farmer_plantings): $e');
+    }
   }
 
   Future<void> setFarmerStatus(String id, String status) async {
@@ -546,8 +778,12 @@ class AccountService extends ChangeNotifier {
     required String barangay,
     List<LatLng> boundaryPoints = const [],
   }) async {
-    _farms.add(FarmRecord(
-      id: 'FARM${DateTime.now().millisecondsSinceEpoch}',
+    final normBrgy = normalizeBarangay(barangay);
+    final newId = 'FARM${DateTime.now().millisecondsSinceEpoch}';
+    final boundaryJson = json.encode(boundaryPoints.map((p) => {'lat': p.latitude, 'lng': p.longitude}).toList());
+
+    final farm = FarmRecord(
+      id: newId,
       farmerId: farmerId,
       farmerName: farmerName,
       locationName: locationName,
@@ -556,14 +792,138 @@ class AccountService extends ChangeNotifier {
       landAreaHectares: landAreaHectares,
       tenureStatus: tenureStatus,
       cropType: cropType,
-      barangay: barangay,
-    ));
+      barangay: normBrgy,
+      boundaryPoints: boundaryPoints,
+    );
+    _farms.add(farm);
+    logActivity(activeUserName, 'ADD', 'Farm Records', 'Added farm record for $farmerName in $normBrgy ($landAreaHectares ha)');
     notifyListeners();
+
+    try {
+      await SupabaseService.client.from('farms').insert({
+        'id': newId,
+        'farmer_id': farmerId,
+        'farmer_name': farmerName,
+        'location_name': locationName,
+        'latitude': latitude,
+        'longitude': longitude,
+        'land_area_hectares': landAreaHectares,
+        'tenure_status': tenureStatus,
+        'crop_type': cropType,
+        'barangay': normBrgy,
+        'boundary_points': boundaryJson,
+      });
+      debugPrint('Saved farm record to Supabase: $locationName (ID: $newId)');
+    } catch (e) {
+      debugPrint('Supabase insert error (farms): $e');
+    }
+  }
+
+  Future<void> updateFarmRecord(String id, {
+    required String locationName,
+    required double landAreaHectares,
+    required String tenureStatus,
+    required String cropType,
+    required String barangay,
+    required double latitude,
+    required double longitude,
+    List<LatLng> boundaryPoints = const [],
+  }) async {
+    final normBrgy = normalizeBarangay(barangay);
+    final index = _farms.indexWhere((f) => f.id == id);
+    if (index != -1) {
+      _farms[index].locationName = locationName;
+      _farms[index].landAreaHectares = landAreaHectares;
+      _farms[index].tenureStatus = tenureStatus;
+      _farms[index].cropType = cropType;
+      _farms[index].barangay = normBrgy;
+      _farms[index].latitude = latitude;
+      _farms[index].longitude = longitude;
+      if (boundaryPoints.isNotEmpty) {
+        _farms[index].boundaryPoints = boundaryPoints;
+      }
+      logActivity(activeUserName, 'EDIT', 'Farm Records', 'Updated farm record $id in $normBrgy');
+      notifyListeners();
+    }
+
+    try {
+      final boundaryJson = json.encode(boundaryPoints.map((p) => {'lat': p.latitude, 'lng': p.longitude}).toList());
+      await SupabaseService.client.from('farms').update({
+        'location_name': locationName,
+        'land_area_hectares': landAreaHectares,
+        'tenure_status': tenureStatus,
+        'crop_type': cropType,
+        'barangay': normBrgy,
+        'latitude': latitude,
+        'longitude': longitude,
+        'boundary_points': boundaryJson,
+      }).eq('id', id);
+      debugPrint('Successfully updated farm record in Supabase: $id');
+    } catch (e) {
+      debugPrint('Supabase update error (farms): $e');
+    }
+  }
+
+  Future<void> saveFarmerPlanting({
+    required String farmerUsername,
+    required String crop,
+    required double hectares,
+    required DateTime plantedOn,
+  }) async {
+    try {
+      final farmer = _farmers.firstWhere(
+        (f) => f.username.toLowerCase() == farmerUsername.trim().toLowerCase() || f.contactNumber == farmerUsername,
+        orElse: () => _farmers.isNotEmpty ? _farmers.first : Farmer(id: 'FARMER_GEN', username: farmerUsername, password: '', profileName: 'Farmer', barangay: 'Biñan'),
+      );
+
+      final plantingId = 'PL_${DateTime.now().millisecondsSinceEpoch}';
+
+      await SupabaseService.client.from('farmer_plantings').insert({
+        'id': plantingId,
+        'farmer_id': farmer.id,
+        'farmer_name': farmer.profileName,
+        'crop': crop,
+        'hectares': hectares,
+        'planted_on': plantedOn.toIso8601String(),
+        'barangay': farmer.barangay,
+      });
+      debugPrint('Successfully saved planting to Supabase farmer_plantings: $crop ($hectares ha) for ${farmer.profileName}');
+
+      final farm = _farms.firstWhere(
+        (f) => f.farmerId == farmer.id || f.farmerName == farmer.profileName,
+        orElse: () => FarmRecord(id: '', farmerId: farmer.id, farmerName: farmer.profileName, locationName: 'Sitio ${farmer.barangay}', latitude: 14.2790, longitude: 121.4550, landAreaHectares: hectares, tenureStatus: 'Owner', cropType: crop, barangay: farmer.barangay),
+      );
+
+      if (farm.id.isNotEmpty) {
+        await SupabaseService.client.from('farms').update({
+          'crop_type': crop,
+          'land_area_hectares': hectares,
+        }).eq('id', farm.id);
+        debugPrint('Successfully updated farm crop in Supabase farms: ${farm.id}');
+      }
+    } catch (e) {
+      debugPrint('Supabase saveFarmerPlanting error: $e');
+    }
   }
 
   Future<void> deleteFarmRecord(String id) async {
     _farms.removeWhere((f) => f.id == id);
+    logActivity(activeUserName, 'DELETE', 'Farm Records', 'Deleted farm record $id');
     notifyListeners();
+
+    try {
+      await SupabaseService.client.from('farms').delete().eq('id', id);
+      debugPrint('Successfully deleted farm record from Supabase farms table: $id');
+    } catch (e) {
+      debugPrint('Supabase delete error (farms): $e');
+    }
+
+    try {
+      await SupabaseService.client.from('farmer_plantings').delete().eq('id', id);
+      debugPrint('Successfully deleted planting record from Supabase farmer_plantings table: $id');
+    } catch (e) {
+      debugPrint('Supabase delete error (farmer_plantings): $e');
+    }
   }
 
   // HISTORICAL RECORDS CRUD

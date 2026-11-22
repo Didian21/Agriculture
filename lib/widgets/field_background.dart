@@ -30,7 +30,7 @@ class _FieldPainter extends CustomPainter {
         ..shader = const LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
-          colors: [Color(0xFFEAF5EC), Color(0xFFD5EAD6)],
+          colors: [Color(0xFFF8FAFC), Color(0xFFEFF6FF), Color(0xFFF0FDF4)],
         ).createShader(rect),
     );
 
@@ -41,7 +41,7 @@ class _FieldPainter extends CustomPainter {
         ..shader = RadialGradient(
           center: const Alignment(0.7, -0.85),
           radius: 0.9,
-          colors: [Colors.white.withValues(alpha: 0.65), Colors.white.withValues(alpha: 0)],
+          colors: [Colors.white.withValues(alpha: 0.85), Colors.white.withValues(alpha: 0)],
         ).createShader(rect),
     );
 
@@ -66,10 +66,9 @@ class _FieldPainter extends CustomPainter {
       );
     }
 
-    hill(0.36, 0.030, 0.8, 0.4, const Color(0xFFC3DEBD), const Color(0xFFB2D3AB));
-    hill(0.52, 0.035, 1.1, 2.2, const Color(0xFFA3CC9B), const Color(0xFF8DBD86));
-    hill(0.68, 0.030, 0.9, 4.1, const Color(0xFF86B97F), const Color(0xFF6FA86C));
-    hill(0.84, 0.025, 1.3, 1.0, const Color(0xFF6BA468), const Color(0xFF5A9459));
+    hill(0.48, 0.025, 0.8, 0.4, const Color(0xFFE2E8F0).withValues(alpha: 0.3), const Color(0xFFCBD5E1).withValues(alpha: 0.2));
+    hill(0.68, 0.025, 1.1, 2.2, const Color(0xFFDCFCE7).withValues(alpha: 0.4), const Color(0xFFBBF7D0).withValues(alpha: 0.3));
+    hill(0.85, 0.020, 0.9, 4.1, const Color(0xFF86EFAC).withValues(alpha: 0.3), const Color(0xFF4ADE80).withValues(alpha: 0.2));
   }
 
   @override

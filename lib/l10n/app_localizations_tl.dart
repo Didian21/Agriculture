@@ -515,23 +515,23 @@ class AppLocalizationsTl extends AppLocalizations {
 
   @override
   String get howTo1 =>
-      'DSS (ang berdeng button sa gitna): ilagay muna ang kabuuang sukat ng lupa, tapos idagdag ang pananim, sukat ng taniman, petsa ng pagtatanim, huling ani at gastos. Makikita mo ang payo kung kailan magtanim, tantiya ng ani at kita, at payo sa presyo.';
+      'Home: makikita ang panahon ngayon, mga babala, 7-araw na pagtaya, heat index, ulan at halumigmig ng lupa, at ang kalagayan ng inyong pananim.';
 
   @override
   String get howTo2 =>
-      'Panahon: tingnan ang panahon ngayon, ang 7-araw na pagtaya, ang heat index at payo para sa inyong mga pananim.';
+      'DSS (ang berdeng button sa gitna): iguhit ang inyong bukid sa mapa, piliin ang uri ng lupa, ang pananim at ang petsa ng pagtatanim. Makikita ang angkop na abono at pestisidyo, gastos, inaasahang ani at posibleng kita.';
 
   @override
   String get howTo3 =>
-      'Aking Bukid: tingnan ang inyong mga pananim at kung paano hinati ang inyong lupa (hektarya o metro kuwadrado). Pindutin ang pananim para buksan ito sa DSS. Nandito rin ang tala ng inyong mga ani.';
+      'Aking Bukid: tingnan ang mapa ng inyong bukid, ang uri ng lupa at ang pananim. View lang ito; ang pag-edit ay sa DSS.';
 
   @override
   String get howTo4 =>
-      'Presyo: ang mga pananim lang na inilagay ninyo sa DSS ang lalabas dito, kasama ang inaasahang presyo at kung kailan magandang magbenta.';
+      'Payo: mga mungkahi para sa linggong ito (pagpapataba, patubig, pag-aani, sakit) batay sa panahon at sa yugto ng inyong pananim.';
 
   @override
   String get howTo5 =>
-      'Pagkatapos mag-ani, pindutin ang \"I-record ang ani\" sa DSS para mas lumapit ang tantiya sa sarili ninyong bukid. Pindutin ang kampana sa taas para mabasa ang mga abiso. Ang mga numero ay tantiya lang at hindi opisyal.';
+      'Pindutin ang kampana sa taas para mabasa ang mga abiso. Ang mga numero at payo ay tantiya lang at hindi opisyal. Para sa opisyal na babala, tingnan ang PAGASA.';
 
   @override
   String get contactOffice => 'Tanggapan ng Pambayang Agrikultura';

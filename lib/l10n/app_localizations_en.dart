@@ -508,23 +508,23 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get howTo1 =>
-      'DSS (the green button in the middle): first set your total land size, then add your crops with land area, planting date, last yield and cost. You will see when to plant, an estimate of harvest and income, and price advice.';
+      'Home: see today\'s weather, warnings, the 7-day forecast, heat index, rain and soil moisture, and the status of your crop.';
 
   @override
   String get howTo2 =>
-      'Weather: see today\'s weather, the 7-day forecast, the heat index and advice for your crops.';
+      'DSS (the green button in the middle): draw your farm on the map, then choose your soil type, crop and planting date. You will see the right fertilizer and pesticide, cost, expected yield and possible income.';
 
   @override
   String get howTo3 =>
-      'My Farm: see your crops and how your land is shared (hectares or square meters). Tap a crop to open it in DSS. Your harvest records are here too.';
+      'My Farm: see the map of your farm, soil type and crop. This is view only; edit in DSS.';
 
   @override
   String get howTo4 =>
-      'Prices: only the crops you added in DSS appear here, with expected prices and when it is a good time to sell.';
+      'Advice: suggestions for this week (fertilizing, irrigation, harvest, disease) based on the weather and your crop\'s stage.';
 
   @override
   String get howTo5 =>
-      'After harvest, tap \"Record harvest\" in DSS so estimates get closer to your own farm. Tap the bell at the top to read notifications. Numbers are estimates only, not official.';
+      'Tap the bell at the top to read notifications. Numbers and advice are estimates only, not official. For official warnings, check PAGASA.';
 
   @override
   String get contactOffice => 'Municipal Agriculture Office';
