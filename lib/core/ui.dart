@@ -14,13 +14,13 @@ class AppRadius {
 
 /// Iisang estilo ng teksto: pamagat ng pahina, seksyon, card, katawan, tala, at malalaking numero.
 class AppText {
-  static const pageTitle = TextStyle(fontSize: 24, fontWeight: FontWeight.w900, color: AppColors.ink, height: 1.15);
-  static const section = TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: AppColors.ink);
-  static const cardTitle = TextStyle(fontSize: 15, fontWeight: FontWeight.w900, color: AppColors.ink);
-  static const body = TextStyle(fontSize: 14, height: 1.4, color: AppColors.ink);
-  static const small = TextStyle(fontSize: 12, height: 1.35, color: AppColors.muted);
-  static const label = TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: AppColors.muted);
-  static const number = TextStyle(fontSize: 24, fontWeight: FontWeight.w900, color: AppColors.ink, height: 1.1);
+  static const pageTitle = TextStyle(fontSize: 24, fontWeight: FontWeight.w900, color: Color(0xFF0F172A), height: 1.15);
+  static const section = TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: Color(0xFF0F172A));
+  static const cardTitle = TextStyle(fontSize: 15, fontWeight: FontWeight.w900, color: Color(0xFF0F172A));
+  static const body = TextStyle(fontSize: 14, height: 1.4, color: Color(0xFF0F172A), fontWeight: FontWeight.w500);
+  static const small = TextStyle(fontSize: 12.5, height: 1.35, color: Color(0xFF334155), fontWeight: FontWeight.w600);
+  static const label = TextStyle(fontSize: 12.5, fontWeight: FontWeight.w800, color: Color(0xFF1E293B));
+  static const number = TextStyle(fontSize: 24, fontWeight: FontWeight.w900, color: Color(0xFF0F172A), height: 1.1);
 }
 
 /// Iisang kahulugan ng kulay ng katayuan: berde = maganda, dilaw = mag-ingat, pula = babala, asul = impormasyon.

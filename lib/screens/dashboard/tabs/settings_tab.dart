@@ -150,7 +150,7 @@ class SettingsTab extends StatelessWidget {
   void _showEditProfileDialog(BuildContext context, DashboardProvider p) {
     final accountService = Provider.of<AccountService>(context, listen: false);
     final currentFarmer = accountService.farmers.firstWhere(
-      (f) => f.username == p.currentUsername || f.contactNumber == p.phoneNumber,
+      (f) => f.username.toLowerCase() == (p.currentUsername ?? '').toLowerCase() || f.contactNumber == p.phoneNumber,
       orElse: () => Farmer(
         id: 'CURRENT',
         username: p.currentUsername ?? 'farmer',
@@ -158,13 +158,17 @@ class SettingsTab extends StatelessWidget {
         profileName: p.profile?.name ?? 'Juan Dela Cruz',
         barangay: p.profile?.barangay ?? 'Biñan',
         contactNumber: p.phoneNumber,
+        organization: 'Not Associated',
+        birthdate: '1990-01-01',
       ),
     );
 
     final nameCtrl = TextEditingController(text: currentFarmer.profileName);
     final phoneCtrl = TextEditingController(text: currentFarmer.contactNumber);
+    final bdayCtrl = TextEditingController(text: currentFarmer.birthdate ?? '1990-01-01');
     final passCtrl = TextEditingController();
-    String selectedBrgy = currentFarmer.barangay;
+    String selectedBrgy = AccountService.normalizeBarangay(currentFarmer.barangay);
+    String selectedOrg = currentFarmer.organization.trim().isEmpty ? 'Not Associated' : currentFarmer.organization;
     bool obscurePass = true;
 
     showDialog(
@@ -189,7 +193,7 @@ class SettingsTab extends StatelessWidget {
             ],
           ),
           content: SizedBox(
-            width: 420,
+            width: 440,
             child: SingleChildScrollView(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -205,13 +209,14 @@ class SettingsTab extends StatelessWidget {
                   ),
                   const SizedBox(height: 12),
                   DropdownButtonFormField<String>(
+                    isExpanded: true,
                     initialValue: AccountService.pagsanjanBarangays.contains(selectedBrgy) ? selectedBrgy : AccountService.pagsanjanBarangays.first,
                     decoration: InputDecoration(
                       labelText: 'Barangay',
                       prefixIcon: const Icon(Icons.location_on_rounded, color: Color(0xFF166534)),
                       border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                     ),
-                    items: AccountService.pagsanjanBarangays.map((b) => DropdownMenuItem(value: b, child: Text(b))).toList(),
+                    items: AccountService.pagsanjanBarangays.map((b) => DropdownMenuItem(value: b, child: Text(b, overflow: TextOverflow.ellipsis, maxLines: 1))).toList(),
                     onChanged: (val) => setDialogState(() => selectedBrgy = val ?? 'Biñan'),
                   ),
                   const SizedBox(height: 12),
@@ -223,6 +228,48 @@ class SettingsTab extends StatelessWidget {
                       prefixIcon: const Icon(Icons.phone_android_rounded, color: Color(0xFF166534)),
                       border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
                     ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: bdayCtrl,
+                    readOnly: true,
+                    decoration: InputDecoration(
+                      labelText: tr(ctx, 'Petsa ng Kaarawan (Birthday)', 'Birthday'),
+                      prefixIcon: const Icon(Icons.cake_rounded, color: Color(0xFF166534)),
+                      suffixIcon: const Icon(Icons.calendar_today_rounded, size: 18, color: Color(0xFF166534)),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    onTap: () async {
+                      final parsed = DateTime.tryParse(bdayCtrl.text) ?? DateTime(1990, 1, 1);
+                      final picked = await showDatePicker(
+                        context: ctx,
+                        initialDate: parsed,
+                        firstDate: DateTime(1930),
+                        lastDate: DateTime.now(),
+                      );
+                      if (picked != null) {
+                        setDialogState(() {
+                          bdayCtrl.text = "${picked.year}-${picked.month.toString().padLeft(2, '0')}-${picked.day.toString().padLeft(2, '0')}";
+                        });
+                      }
+                    },
+                  ),
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<String>(
+                    isExpanded: true,
+                    initialValue: (['Choose Association', 'Not Associated', ...accountService.getUniqueOrganizations()].contains(selectedOrg))
+                        ? selectedOrg
+                        : 'Not Associated',
+                    decoration: InputDecoration(
+                      labelText: tr(ctx, 'Samahan / Asosasyon', 'Association / Organization'),
+                      prefixIcon: const Icon(Icons.groups_rounded, color: Color(0xFF166534)),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    items: ['Choose Association', 'Not Associated', ...accountService.getUniqueOrganizations()].map((org) => DropdownMenuItem(
+                      value: org,
+                      child: Text(org, overflow: TextOverflow.ellipsis, maxLines: 1),
+                    )).toList(),
+                    onChanged: (val) => setDialogState(() => selectedOrg = val ?? 'Not Associated'),
                   ),
                   const SizedBox(height: 12),
                   TextField(
@@ -255,33 +302,52 @@ class SettingsTab extends StatelessWidget {
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                 padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
               ),
-              icon: const Icon(Icons.check_circle_rounded, size: 18),
-              label: Text(tr(ctx, 'I-save sa Supabase', 'Save to Supabase'), style: const TextStyle(fontWeight: FontWeight.bold)),
+              icon: const Icon(Icons.send_rounded, size: 18),
+              label: Text(tr(ctx, 'I-submit sa MAO Admin', 'Submit to MAO Admin'), style: const TextStyle(fontWeight: FontWeight.bold)),
               onPressed: () async {
                 final newName = nameCtrl.text.trim();
                 final newPhone = phoneCtrl.text.trim();
+                final newBday = bdayCtrl.text.trim();
                 final newPass = passCtrl.text.trim();
 
                 if (newName.isEmpty) return;
 
-                await accountService.updateFarmer(
-                  currentFarmer.id,
+                await accountService.requestProfileEdit(
+                  farmerId: currentFarmer.id,
                   profileName: newName,
-                  barangay: selectedBrgy,
                   contactNumber: newPhone.isEmpty ? currentFarmer.contactNumber : newPhone,
-                  organization: currentFarmer.organization,
-                  status: currentFarmer.status,
-                  password: newPass.isNotEmpty ? newPass : null,
+                  barangay: selectedBrgy,
+                  organization: selectedOrg,
+                  birthdate: newBday.isEmpty ? (currentFarmer.birthdate ?? '1990-01-01') : newBday,
+                  newPassword: newPass.isNotEmpty ? newPass : null,
                 );
 
                 if (ctx.mounted) {
                   Navigator.pop(ctx);
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(
-                        tr(context, 'Matagumpay na na-update ang profile at password sa Supabase!', 'Successfully updated profile and password in Supabase!'),
+                  showDialog(
+                    context: context,
+                    builder: (alertCtx) => AlertDialog(
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                      title: const Row(
+                        children: [
+                          Icon(Icons.hourglass_top_rounded, color: Color(0xFFD97706), size: 28),
+                          SizedBox(width: 8),
+                          Text('Kahilingan Naisumite!', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                        ],
                       ),
-                      backgroundColor: const Color(0xFF166534),
+                      content: Text(
+                        tr(context,
+                            '⏳ Naisumite na sa MAO Admin sa Pagsanjan ang inyong kahilingan sa pagbabago ng profile. Kumpirmahin muna ito ng Admin bago mag-bago sa Supabase.',
+                            '⏳ Your profile edit request has been submitted to the Pagsanjan MAO Admin for approval before taking effect.'),
+                        style: const TextStyle(fontSize: 13.5, height: 1.4),
+                      ),
+                      actions: [
+                        FilledButton(
+                          style: FilledButton.styleFrom(backgroundColor: const Color(0xFF166534)),
+                          onPressed: () => Navigator.pop(alertCtx),
+                          child: const Text('OK'),
+                        ),
+                      ],
                     ),
                   );
                 }
@@ -296,15 +362,58 @@ class SettingsTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final t = AppLocalizations.of(context)!;
-    final profile = p.profile;
-    final name = profile?.name ?? '-';
-    final initial = name.trim().isNotEmpty && name != '-' ? name.trim()[0].toUpperCase() : 'P';
+    final accountService = Provider.of<AccountService>(context);
+    final farmerUsername = p.currentUsername ?? '';
+
+    final currentFarmer = accountService.farmers.firstWhere(
+      (f) => f.username.toLowerCase() == farmerUsername.toLowerCase() || f.contactNumber == p.phoneNumber,
+      orElse: () => Farmer(
+        id: 'CURRENT',
+        username: farmerUsername,
+        password: 'password123',
+        profileName: p.profile?.name ?? 'Juan Dela Cruz',
+        barangay: p.profile?.barangay ?? 'Biñan',
+        contactNumber: p.phoneNumber,
+        organization: 'Not Associated',
+        birthdate: '1990-01-01',
+      ),
+    );
+
+    final name = currentFarmer.profileName;
+    final initial = name.trim().isNotEmpty ? name.trim()[0].toUpperCase() : 'P';
+    final hasPendingEdit = currentFarmer.pendingEditJson != null && currentFarmer.pendingEditJson!.isNotEmpty;
 
     return AnimatedTabList(items: [
       TabHeader(title: t.appSettings, subtitle: t.appSettingsSub),
       const SizedBox(height: 16),
 
-      // Profile
+      if (hasPendingEdit) ...[
+        Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: const Color(0xFFFEF3C7),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: const Color(0xFFFDE68A)),
+          ),
+          child: Row(
+            children: [
+              const Icon(Icons.hourglass_top_rounded, color: Color(0xFFD97706), size: 22),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  tr(context,
+                      '⏳ NAKABINBING KAHILINGAN SA PAGBABAGO NG PROFILE:\nNaisumite na ang iyong kahilingan sa pagbabago ng profile. Tinitingnan at a-a-kseptuhin pa ito ng MAO Admin bago pormal na magbago.',
+                      '⏳ PENDING PROFILE UPDATE REQUEST:\nYour profile edit request has been submitted and is currently awaiting review and approval by the Pagsanjan MAO Admin.'),
+                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF92400E), height: 1.35),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 14),
+      ],
+
+      // Profile Card
       GlassCard(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -320,9 +429,9 @@ class SettingsTab extends StatelessWidget {
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
                   Text(name, maxLines: 2, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w900, color: AppColors.ink)),
                   const SizedBox(height: 2),
-                  Text(profile == null ? '-' : '${profile.barangay}, Pagsanjan, Laguna', style: const TextStyle(fontSize: 13, color: AppColors.muted)),
+                  Text('Brgy. ${currentFarmer.barangay}, Pagsanjan, Laguna', style: const TextStyle(fontSize: 13, color: AppColors.muted)),
                   const SizedBox(height: 2),
-                  Text(p.phoneNumber, style: const TextStyle(fontSize: 12.5, color: AppColors.muted)),
+                  Text('${currentFarmer.contactNumber} · ${currentFarmer.organization}', style: const TextStyle(fontSize: 12, color: AppColors.muted)),
                 ]),
               ),
             ]),
@@ -351,7 +460,7 @@ class SettingsTab extends StatelessWidget {
       const SizedBox(height: 12),
       Card(
         child: Column(children: [
-          _info(Icons.cake_rounded, t.birthday, p.birthday),
+          _info(Icons.cake_rounded, t.birthday, currentFarmer.birthdate ?? '1990-01-01'),
           const Divider(height: 1, indent: 56),
           ListenableBuilder(
             listenable: FarmStore.instance,

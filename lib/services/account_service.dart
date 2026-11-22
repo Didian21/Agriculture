@@ -28,6 +28,8 @@ class AccountService extends ChangeNotifier {
             contactNumber: row['contact_number'] ?? '',
             organization: row['organization'] ?? '',
             status: row['status'] ?? 'Active',
+            birthdate: row['birthdate'] ?? '1990-01-01',
+            pendingEditJson: row['pending_edit_json'],
             records: row['records'] != null ? List<String>.from(row['records']) : [],
           ));
         }
@@ -374,6 +376,105 @@ class AccountService extends ChangeNotifier {
       debugPrint('Supabase farmer registration insert error: $e');
     }
     return newId;
+  }
+
+  Future<void> requestProfileEdit({
+    required String farmerId,
+    required String profileName,
+    required String contactNumber,
+    required String barangay,
+    required String organization,
+    required String birthdate,
+    String? newPassword,
+  }) async {
+    final idx = _farmers.indexWhere((f) => f.id == farmerId || f.username == farmerId);
+    if (idx == -1) return;
+
+    final farmer = _farmers[idx];
+    final editData = {
+      'profile_name': profileName,
+      'contact_number': contactNumber,
+      'barangay': barangay,
+      'organization': organization,
+      'birthdate': birthdate,
+      if (newPassword != null && newPassword.isNotEmpty) 'password': newPassword,
+      'requested_at': DateTime.now().toIso8601String(),
+    };
+
+    final jsonStr = jsonEncode(editData);
+    farmer.pendingEditJson = jsonStr;
+    logActivity(farmer.profileName, 'EDIT_REQUEST', 'Profile Approvals', 'Requested profile edits for approval');
+    notifyListeners();
+
+    try {
+      await SupabaseService.client.from('farmers').update({
+        'pending_edit_json': jsonStr,
+      }).eq('id', farmer.id);
+      debugPrint('Successfully submitted pending profile edit to Supabase: ${farmer.profileName}');
+    } catch (e) {
+      debugPrint('Supabase requestProfileEdit error: $e');
+    }
+  }
+
+  Future<void> approveProfileEdit(String farmerId) async {
+    final idx = _farmers.indexWhere((f) => f.id == farmerId || f.username == farmerId);
+    if (idx == -1) return;
+
+    final farmer = _farmers[idx];
+    if (farmer.pendingEditJson == null || farmer.pendingEditJson!.isEmpty) return;
+
+    try {
+      final Map<String, dynamic> data = jsonDecode(farmer.pendingEditJson!);
+      final newName = data['profile_name'] ?? farmer.profileName;
+      final newContact = data['contact_number'] ?? farmer.contactNumber;
+      final newBrgy = data['barangay'] ?? farmer.barangay;
+      final newOrg = data['organization'] ?? farmer.organization;
+      final newBday = data['birthdate'] ?? farmer.birthdate;
+      final newPass = data['password'] ?? farmer.password;
+
+      farmer.profileName = newName;
+      farmer.contactNumber = newContact;
+      farmer.barangay = newBrgy;
+      farmer.organization = newOrg;
+      farmer.birthdate = newBday;
+      farmer.password = newPass;
+      farmer.pendingEditJson = null;
+
+      logActivity(activeUserName, 'APPROVE_EDIT', 'Profile Approvals', 'Approved profile changes for $newName');
+      notifyListeners();
+
+      await SupabaseService.client.from('farmers').update({
+        'profile_name': newName,
+        'contact_number': newContact,
+        'barangay': newBrgy,
+        'organization': newOrg,
+        'birthdate': newBday,
+        'password': newPass,
+        'pending_edit_json': null,
+      }).eq('id', farmer.id);
+      debugPrint('Successfully approved profile edit in Supabase: $newName');
+    } catch (e) {
+      debugPrint('Supabase approveProfileEdit error: $e');
+    }
+  }
+
+  Future<void> rejectProfileEdit(String farmerId) async {
+    final idx = _farmers.indexWhere((f) => f.id == farmerId || f.username == farmerId);
+    if (idx == -1) return;
+
+    final farmer = _farmers[idx];
+    farmer.pendingEditJson = null;
+    logActivity(activeUserName, 'REJECT_EDIT', 'Profile Approvals', 'Rejected profile changes for ${farmer.profileName}');
+    notifyListeners();
+
+    try {
+      await SupabaseService.client.from('farmers').update({
+        'pending_edit_json': null,
+      }).eq('id', farmer.id);
+      debugPrint('Successfully rejected profile edit in Supabase: ${farmer.profileName}');
+    } catch (e) {
+      debugPrint('Supabase rejectProfileEdit error: $e');
+    }
   }
 
   Future<void> approveFarmer(String id) async {

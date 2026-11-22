@@ -1,14 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
 
 import '../../../core/dss_catalog.dart';
 import '../../../core/tr.dart';
 import '../../../dashboard_data.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../main.dart';
+import '../../../models/farmer.dart' hide FarmRecord;
 import '../../../models/farm_record.dart';
 import '../../../models/farm_store.dart';
 import '../../../models/pagsanjan_boundary.dart';
+import '../../../services/account_service.dart';
 import '../../../services/crop_calendar.dart';
 import '../../../widgets/common_widgets.dart';
 import '../../../widgets/crop_calendar_card.dart';
@@ -47,6 +50,19 @@ class _FarmTabState extends State<FarmTab> {
     final tl = isTl(context);
     final locale = Localizations.localeOf(context).languageCode;
     final farm = _store.current;
+
+    final accountService = Provider.of<AccountService>(context, listen: false);
+    final farmerUsername = widget.p.currentUsername ?? '';
+    final farmer = accountService.farmers.firstWhere(
+      (f) => f.username.toLowerCase() == farmerUsername.toLowerCase(),
+      orElse: () => Farmer(id: '', username: farmerUsername, password: '', profileName: 'Farmer', barangay: 'Biñan'),
+    );
+
+    final dynamic supabaseFarm = accountService.farms.cast<dynamic>().firstWhere(
+      (f) => f.farmerId == farmer.id || f.farmerName == farmer.profileName,
+      orElse: () => null,
+    );
+
     final ha = farm.areaHa;
     final name = dssCropName(farm.crop, tl) + (farm.variety != null ? ' (${farm.variety})' : '');
 
@@ -60,6 +76,7 @@ class _FarmTabState extends State<FarmTab> {
         future: _boundary,
         builder: (context, bs) => FarmPolygonMap(
           farm: farm,
+          outerLandBoundary: (supabaseFarm != null && supabaseFarm.boundaryPoints != null && supabaseFarm.boundaryPoints.isNotEmpty) ? supabaseFarm.boundaryPoints : farm.polygon,
           boundary: bs.data,
         ),
       ),
@@ -136,11 +153,26 @@ class _FarmTabState extends State<FarmTab> {
           Padding(
             padding: const EdgeInsets.only(right: 8),
             child: ChoiceChip(
-              avatar: Icon(items[i].$1, size: 17, color: _sec == i ? AppColors.leaf : AppColors.muted),
-              label: Text(items[i].$2),
+              avatar: Icon(items[i].$1, size: 18, color: _sec == i ? const Color(0xFF166534) : const Color(0xFF0F172A)),
+              label: Text(
+                items[i].$2,
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w900,
+                  color: _sec == i ? const Color(0xFF166534) : const Color(0xFF0F172A),
+                ),
+              ),
               selected: _sec == i,
               showCheckmark: false,
-              selectedColor: AppColors.leaf.withValues(alpha: 0.2),
+              selectedColor: const Color(0xFFDCFCE7),
+              backgroundColor: const Color(0xFFF0FDF4),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+                side: BorderSide(
+                  color: _sec == i ? const Color(0xFF166534) : const Color(0xFF86EFAC),
+                  width: 1.5,
+                ),
+              ),
               onSelected: (_) => setState(() => _sec = i),
             ),
           ),

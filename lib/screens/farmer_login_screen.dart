@@ -215,11 +215,12 @@ class _FarmerLoginScreenState extends State<FarmerLoginScreen> {
         builder: (ctx, setDialogState) => AlertDialog(
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
           contentPadding: EdgeInsets.zero,
+          insetPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 16),
           backgroundColor: const Color(0xFFF8FCF5),
           title: Container(
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
             decoration: const BoxDecoration(
-              color: Color(0xFF0056B3),
+              color: Color(0xFF166534),
               borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
             ),
             child: Row(
@@ -243,10 +244,13 @@ class _FarmerLoginScreenState extends State<FarmerLoginScreen> {
               ],
             ),
           ),
-          content: SizedBox(
-            width: 540,
+          content: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxWidth: 580,
+              maxHeight: MediaQuery.of(ctx).size.height * 0.85,
+            ),
             child: SingleChildScrollView(
-              padding: const EdgeInsets.all(20),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -262,11 +266,11 @@ class _FarmerLoginScreenState extends State<FarmerLoginScreen> {
                   // SECTION 1: FARMER ACCOUNT INFORMATION
                   const Row(
                     children: [
-                      Icon(Icons.badge_rounded, size: 16, color: Color(0xFF0056B3)),
+                      Icon(Icons.badge_rounded, size: 16, color: Color(0xFF166534)),
                       SizedBox(width: 6),
                       Text(
                         'FARMER ACCOUNT INFORMATION',
-                        style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF0056B3), letterSpacing: 0.5),
+                        style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF166534), letterSpacing: 0.5),
                       ),
                     ],
                   ),
@@ -375,11 +379,11 @@ class _FarmerLoginScreenState extends State<FarmerLoginScreen> {
                   // SECTION 2: FARM LAND & CROP INFORMATION
                   const Row(
                     children: [
-                      Icon(Icons.agriculture_rounded, size: 16, color: Color(0xFF0056B3)),
+                      Icon(Icons.agriculture_rounded, size: 16, color: Color(0xFF166534)),
                       SizedBox(width: 6),
                       Text(
                         'FARM LAND & CROP INFORMATION',
-                        style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF0056B3), letterSpacing: 0.5),
+                        style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF166534), letterSpacing: 0.5),
                       ),
                     ],
                   ),
@@ -413,7 +417,7 @@ class _FarmerLoginScreenState extends State<FarmerLoginScreen> {
                     }).toList(),
                   ),
                   const SizedBox(height: 12),
-                  const Text('SPECIFIC CROP TYPES & VARIETIES (OPTIONAL)', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Color(0xFF0056B3))),
+                  const Text('SPECIFIC CROP TYPES & VARIETIES (OPTIONAL)', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Color(0xFF166534))),
                   const SizedBox(height: 6),
                   Row(
                     children: [
@@ -422,6 +426,7 @@ class _FarmerLoginScreenState extends State<FarmerLoginScreen> {
                           controller: specificCropCtrl,
                           decoration: InputDecoration(
                             hintText: 'Type specific crop (e.g. Mango, Banana, Eggplant, NS...',
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
                             border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
                             filled: true,
                             fillColor: Colors.white,
@@ -430,7 +435,7 @@ class _FarmerLoginScreenState extends State<FarmerLoginScreen> {
                       ),
                       const SizedBox(width: 8),
                       Material(
-                        color: const Color(0xFF0056B3),
+                        color: const Color(0xFF166534),
                         shape: const CircleBorder(),
                         child: IconButton(
                           icon: const Icon(Icons.add_rounded, color: Colors.white),
@@ -453,11 +458,11 @@ class _FarmerLoginScreenState extends State<FarmerLoginScreen> {
                       spacing: 6,
                       runSpacing: 6,
                       children: specificCropsList.map((item) => Chip(
-                        label: Text(item, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF0056B3))),
-                        backgroundColor: const Color(0xFFEFF6FF),
-                        deleteIcon: const Icon(Icons.cancel, size: 16, color: Color(0xFF0056B3)),
+                        label: Text(item, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF166534))),
+                        backgroundColor: const Color(0xFFF0FDF4),
+                        deleteIcon: const Icon(Icons.cancel, size: 16, color: Color(0xFF166534)),
                         onDeleted: () => setDialogState(() => specificCropsList.remove(item)),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: const BorderSide(color: Color(0xFFBFDBFE))),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: const BorderSide(color: Color(0xFF86EFAC))),
                       )).toList(),
                     ),
                   ],
@@ -603,7 +608,8 @@ class _FarmerLoginScreenState extends State<FarmerLoginScreen> {
                     controller: addressCtrl,
                     decoration: InputDecoration(
                       hintText: 'Complete Address / Farm Location',
-                      prefixIcon: const Icon(Icons.home_work_rounded, color: Color(0xFF0056B3)),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                      prefixIcon: const Icon(Icons.home_work_rounded, color: Color(0xFF166534)),
                       border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
                       filled: true,
                       fillColor: Colors.white,
@@ -615,11 +621,11 @@ class _FarmerLoginScreenState extends State<FarmerLoginScreen> {
                   // SECTION 3: FARM GPS COORDINATES (FROM MAP)
                   const Row(
                     children: [
-                      Icon(Icons.map_rounded, size: 16, color: Color(0xFF0056B3)),
+                      Icon(Icons.map_rounded, size: 16, color: Color(0xFF166534)),
                       SizedBox(width: 6),
                       Text(
                         'FARM GPS COORDINATES (FROM MAP)',
-                        style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF0056B3), letterSpacing: 0.5),
+                        style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF166534), letterSpacing: 0.5),
                       ),
                     ],
                   ),
@@ -632,7 +638,8 @@ class _FarmerLoginScreenState extends State<FarmerLoginScreen> {
                           readOnly: true,
                           decoration: InputDecoration(
                             hintText: 'Latitude (°N)',
-                            prefixIcon: const Icon(Icons.my_location_rounded, color: Color(0xFF0056B3)),
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                            prefixIcon: const Icon(Icons.my_location_rounded, color: Color(0xFF166534)),
                             border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
                             filled: true,
                             fillColor: Colors.grey.shade100,
@@ -646,7 +653,8 @@ class _FarmerLoginScreenState extends State<FarmerLoginScreen> {
                           readOnly: true,
                           decoration: InputDecoration(
                             hintText: 'Longitude (°E)',
-                            prefixIcon: const Icon(Icons.my_location_rounded, color: Color(0xFF0056B3)),
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                            prefixIcon: const Icon(Icons.my_location_rounded, color: Color(0xFF166534)),
                             border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
                             filled: true,
                             fillColor: Colors.grey.shade100,
@@ -660,8 +668,8 @@ class _FarmerLoginScreenState extends State<FarmerLoginScreen> {
                     width: double.infinity,
                     child: OutlinedButton.icon(
                       style: OutlinedButton.styleFrom(
-                        foregroundColor: const Color(0xFF0056B3),
-                        side: const BorderSide(color: Color(0xFF0056B3), width: 1.5),
+                        foregroundColor: const Color(0xFF166534),
+                        side: const BorderSide(color: Color(0xFF166534), width: 1.5),
                         padding: const EdgeInsets.symmetric(vertical: 14),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                       ),
@@ -676,7 +684,7 @@ class _FarmerLoginScreenState extends State<FarmerLoginScreen> {
                               initialCenter: LatLng(currentLat, currentLon),
                               initialBoundary: boundaryPoints,
                               existingFarms: accountService.farms,
-                              primaryColor: const Color(0xFF0056B3),
+                              primaryColor: const Color(0xFF166534),
                             ),
                           ),
                         );
@@ -723,7 +731,7 @@ class _FarmerLoginScreenState extends State<FarmerLoginScreen> {
             const SizedBox(width: 8),
             FilledButton.icon(
               style: FilledButton.styleFrom(
-                backgroundColor: const Color(0xFF0056B3),
+                backgroundColor: const Color(0xFF166534),
                 foregroundColor: Colors.white,
                 padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),

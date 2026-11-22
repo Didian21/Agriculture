@@ -5496,6 +5496,74 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
                         ),
                         const SizedBox(height: 12),
 
+                        if (farmer.pendingEditJson != null && farmer.pendingEditJson!.isNotEmpty) ...[
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFFEF3C7),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: const Color(0xFFFDE68A)),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    const Icon(Icons.hourglass_top_rounded, color: Color(0xFFD97706), size: 20),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: Text(
+                                        isTagalog ? '⏳ NAKABINBING KAHILINGAN SA PAGBABAGO NG PROFILE' : '⏳ PENDING PROFILE EDIT REQUEST',
+                                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF92400E)),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 8),
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: OutlinedButton.icon(
+                                        style: OutlinedButton.styleFrom(foregroundColor: Colors.redAccent, side: const BorderSide(color: Colors.redAccent)),
+                                        icon: const Icon(Icons.close_rounded, size: 16),
+                                        label: Text(isTagalog ? 'Tanggihan' : 'Reject Edits'),
+                                        onPressed: () async {
+                                          await service.rejectProfileEdit(farmer.id);
+                                          if (context.mounted) {
+                                            Navigator.pop(context);
+                                            ScaffoldMessenger.of(context).showSnackBar(
+                                              SnackBar(content: Text(isTagalog ? 'Tinanggihan ang pagbabago sa profile.' : 'Rejected profile edits.')),
+                                            );
+                                          }
+                                        },
+                                      ),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: ElevatedButton.icon(
+                                        style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF16A34A), foregroundColor: Colors.white),
+                                        icon: const Icon(Icons.check_circle_rounded, size: 16),
+                                        label: Text(isTagalog ? 'I-approve' : 'Accept Edits'),
+                                        onPressed: () async {
+                                          await service.approveProfileEdit(farmer.id);
+                                          if (context.mounted) {
+                                            Navigator.pop(context);
+                                            ScaffoldMessenger.of(context).showSnackBar(
+                                              SnackBar(content: Text(isTagalog ? 'In-approve na sa Supabase ang bagong profile details!' : 'Approved new profile details in Supabase!'), backgroundColor: const Color(0xFF16A34A)),
+                                            );
+                                          }
+                                        },
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                        ],
+
                         TextField(
                           controller: nameCtrl,
                           decoration: InputDecoration(

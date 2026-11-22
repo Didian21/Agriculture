@@ -2,14 +2,53 @@ import 'package:flutter/material.dart';
 
 import '../models/farm_models.dart';
 import '../models/planting_guide.dart';
+import 'supabase_service.dart';
 
 class FarmerRepository {
-  Future<FarmerProfile> getProfile() async => const FarmerProfile(
-    name: 'Wency Babaan',
-    barangay: 'Barangay Sampaloc',
-    landSizeHectares: 2.5,
-    cropTypes: ['Rice', 'Eggplant', 'Tomato'],
-  );
+  Future<FarmerProfile> getProfile({String? username}) async {
+    if (username != null && username.trim().isNotEmpty) {
+      try {
+        final cleanUsername = username.trim().toLowerCase();
+        final farmerRes = await SupabaseService.client
+            .from('farmers')
+            .select()
+            .or('username.ilike.$cleanUsername,contact_number.eq.$username')
+            .maybeSingle();
+
+        if (farmerRes != null) {
+          final profileName = farmerRes['profile_name'] ?? username;
+          final barangay = farmerRes['barangay'] ?? 'Biñan';
+          final farmerId = farmerRes['id'] ?? '';
+
+          final farmRes = await SupabaseService.client
+              .from('farms')
+              .select()
+              .or('farmer_id.eq.$farmerId,farmer_name.eq.$profileName')
+              .maybeSingle();
+
+          final area = (farmRes?['land_area_hectares'] as num?)?.toDouble() ?? 1.5;
+          final cropTypeStr = (farmRes?['crop_type'] ?? 'Rice').toString();
+          final cropTypes = cropTypeStr.split(',').map((c) => c.trim()).where((c) => c.isNotEmpty).toList();
+
+          return FarmerProfile(
+            name: profileName,
+            barangay: 'Brgy. $barangay',
+            landSizeHectares: area,
+            cropTypes: cropTypes.isNotEmpty ? cropTypes : ['Rice'],
+          );
+        }
+      } catch (e) {
+        debugPrint('FarmerRepository getProfile error: $e');
+      }
+    }
+
+    return const FarmerProfile(
+      name: 'Magsasaka',
+      barangay: 'Brgy. Biñan',
+      landSizeHectares: 1.5,
+      cropTypes: ['Rice'],
+    );
+  }
 
   Future<List<FarmPlot>> getPlots() async => const [
     FarmPlot(crop: 'Rice', hectares: 1.2, status: PlotStatus.harvested),

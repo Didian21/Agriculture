@@ -1,5 +1,8 @@
 import 'package:latlong2/latlong.dart';
 
+import 'farm_record.dart';
+export 'farm_record.dart';
+
 class Farmer {
   final String id;
   final String username;
@@ -10,6 +13,8 @@ class Farmer {
   String organization;
   String status; // 'Active', 'Pending', 'Deactivated'
   String? employerName; // Landowner / Employer for Hired Farmworkers
+  String? birthdate; // e.g. '1990-01-01'
+  String? pendingEditJson; // Requested profile edits awaiting Admin approval
   final List<String> records;
 
   Farmer({
@@ -22,6 +27,8 @@ class Farmer {
     this.organization = 'Pagsanjan Farmers Association',
     this.status = 'Active',
     this.employerName,
+    this.birthdate = '1990-01-01',
+    this.pendingEditJson,
     this.records = const [],
   });
 }

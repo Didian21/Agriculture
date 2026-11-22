@@ -37,11 +37,11 @@ class AppColors {
   static const lime = Color(0xFF7CB342); // light green (logo)
 
   // Mga lumang pangalan
-  static const mint = Color(0xFFE3F1DF); // panloob na kahon / tint
+  static const mint = Color(0xFFDCFCE7); // panloob na kahon / tint (high contrast)
   static const paddy = Color(0xFFEFF7EB); // background
   static const soil = Color(0xFF8D6E63); // accent (kayumanggi)
-  static const ink = Color(0xFF17391F); // pangunahing teksto (madilim na berde)
-  static const muted = Color(0xFF5E7C64); // pangalawang teksto
+  static const ink = Color(0xFF0F172A); // pangunahing teksto (bold dark slate)
+  static const muted = Color(0xFF334155); // pangalawang teksto (high contrast)
   static const sun = Color(0xFFF9A825);
   static const rain = Color(0xFF1E88E5);
 
@@ -184,10 +184,12 @@ class AppTheme {
       segmentedButtonTheme: SegmentedButtonThemeData(
         style: ButtonStyle(
           backgroundColor: WidgetStateProperty.resolveWith(
-                  (s) => s.contains(WidgetState.selected) ? AppColors.accentDark : Colors.transparent),
+                  (s) => s.contains(WidgetState.selected) ? const Color(0xFF166534) : const Color(0xFFDCFCE7)),
           foregroundColor: WidgetStateProperty.resolveWith(
-                  (s) => s.contains(WidgetState.selected) ? Colors.white : AppColors.muted),
-          side: const WidgetStatePropertyAll(BorderSide(color: AppColors.border)),
+                  (s) => s.contains(WidgetState.selected) ? Colors.white : const Color(0xFF0F172A)),
+          textStyle: WidgetStateProperty.resolveWith(
+                  (s) => TextStyle(fontWeight: FontWeight.w900, fontSize: 13, color: s.contains(WidgetState.selected) ? Colors.white : const Color(0xFF0F172A))),
+          side: const WidgetStatePropertyAll(BorderSide(color: Color(0xFF86EFAC), width: 1.2)),
         ),
       ),
       chipTheme: const ChipThemeData(

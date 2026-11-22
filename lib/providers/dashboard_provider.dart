@@ -182,7 +182,7 @@ class DashboardProvider extends ChangeNotifier {
     }
     hasError = false;
     try {
-      profile ??= await _repo.getProfile();
+      profile = await _repo.getProfile(username: currentUsername);
       guides = _repo.getPlantingGuides();
       // Isang kalendaryo para sa buong app (DSS, My Farm, abiso, presyo).
       for (final g in guides) {
