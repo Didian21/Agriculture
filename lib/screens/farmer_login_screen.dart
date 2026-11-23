@@ -617,118 +617,10 @@ class _FarmerLoginScreenState extends State<FarmerLoginScreen> {
                     ),
                   ),
 
-                  const Divider(height: 28),
-
-                  // SECTION 3: FARM GPS COORDINATES (FROM MAP)
-                  const Row(
-                    children: [
-                      Icon(Icons.map_rounded, size: 16, color: Color(0xFF166534)),
-                      SizedBox(width: 6),
-                      Text(
-                        'FARM GPS COORDINATES (FROM MAP)',
-                        style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF166534), letterSpacing: 0.5),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: TextField(
-                          controller: latCtrl,
-                          readOnly: true,
-                          decoration: InputDecoration(
-                            hintText: 'Latitude (°N)',
-                            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                            prefixIcon: const Icon(Icons.my_location_rounded, color: Color(0xFF166534)),
-                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
-                            filled: true,
-                            fillColor: Colors.grey.shade100,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: TextField(
-                          controller: lonCtrl,
-                          readOnly: true,
-                          decoration: InputDecoration(
-                            hintText: 'Longitude (°E)',
-                            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                            prefixIcon: const Icon(Icons.my_location_rounded, color: Color(0xFF166534)),
-                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
-                            filled: true,
-                            fillColor: Colors.grey.shade100,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  SizedBox(
-                    width: double.infinity,
-                    child: OutlinedButton.icon(
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: const Color(0xFF166534),
-                        side: const BorderSide(color: Color(0xFF166534), width: 1.5),
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                      ),
-                      onPressed: () async {
-                        final currentLat = double.tryParse(latCtrl.text) ?? 14.2790;
-                        final currentLon = double.tryParse(lonCtrl.text) ?? 121.4550;
-
-                        final dynamic result = await Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => PagsanjanMapBoundaryPickerScreen(
-                              initialCenter: LatLng(currentLat, currentLon),
-                              initialBoundary: boundaryPoints,
-                              initialPlots: allSavedPlots,
-                              existingFarms: accountService.farms,
-                              primaryColor: const Color(0xFF166534),
-                            ),
-                          ),
-                        );
-
-                        if (result != null) {
-                          final List<List<LatLng>> returnedPlots = (result is List<List<LatLng>>)
-                              ? result
-                              : (result is List<LatLng> ? [result] : []);
-
-                          if (returnedPlots.isNotEmpty) {
-                            setDialogState(() {
-                              allSavedPlots.clear();
-                              allSavedPlots.addAll(returnedPlots);
-                              boundaryPoints.clear();
-                              boundaryPoints.addAll(returnedPlots.first);
-
-                              final centroid = calculatePolygonCentroid(boundaryPoints);
-                              final totalHa = returnedPlots.fold(0.0, (sum, p) => sum + calculatePolygonAreaHectares(p));
-                              final detectedBrgy = BarangayResolver.resolveBarangay(centroid);
-
-                              latCtrl.text = centroid.latitude.toStringAsFixed(5);
-                              lonCtrl.text = centroid.longitude.toStringAsFixed(5);
-                              selectedBrgy = detectedBrgy;
-                              landAreaCtrl.text = totalHa > 0 ? totalHa.toStringAsFixed(2) : '1.0';
-                              addressCtrl.text = 'Farm Lot, Brgy. $detectedBrgy, Pagsanjan';
-                            });
-                          }
-                        }
-                      },
-                      icon: const Icon(Icons.map_rounded),
-                      label: Text(
-                        boundaryPoints.length >= 3
-                            ? '🌾 Boundary Na-set (${boundaryPoints.length} puntos) - Pindutin para Baguhin'
-                            : '🗺️ Pick Location & Set Farm Land Boundary',
-                        style: const TextStyle(fontWeight: FontWeight.bold),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
+              ],
             ),
           ),
+        ),
           actionsPadding: const EdgeInsets.fromLTRB(20, 0, 20, 18),
           actions: [
             TextButton(
@@ -787,43 +679,19 @@ class _FarmerLoginScreenState extends State<FarmerLoginScreen> {
                 final finalCropType = '$primaryCropsStr ($specificCropsStr)';
                 final farmLocName = addressCtrl.text.trim().isEmpty ? 'Farm Lot, Brgy. $selectedBrgy, Pagsanjan' : addressCtrl.text.trim();
 
-                // Save ALL pending farm records & boundaries to Supabase
-                if (allSavedPlots.isNotEmpty) {
-                  for (int pIdx = 0; pIdx < allSavedPlots.length; pIdx++) {
-                    final plotPts = allSavedPlots[pIdx];
-                    final centroid = calculatePolygonCentroid(plotPts);
-                    final plotHa = calculatePolygonAreaHectares(plotPts);
-                    final plotBrgy = BarangayResolver.resolveBarangay(centroid);
-
-                    await accountService.addFarmRecord(
-                      farmerId: farmerId,
-                      farmerName: nameVal,
-                      locationName: allSavedPlots.length > 1
-                          ? 'Lote ${pIdx + 1}, Brgy. $plotBrgy, Pagsanjan'
-                          : farmLocName,
-                      latitude: centroid.latitude,
-                      longitude: centroid.longitude,
-                      landAreaHectares: plotHa > 0 ? plotHa : 1.0,
-                      tenureStatus: selectedTenure,
-                      cropType: finalCropType,
-                      barangay: plotBrgy,
-                      boundaryPoints: plotPts,
-                    );
-                  }
-                } else {
-                  await accountService.addFarmRecord(
-                    farmerId: farmerId,
-                    farmerName: nameVal,
-                    locationName: farmLocName,
-                    latitude: double.tryParse(latCtrl.text) ?? 14.2790,
-                    longitude: double.tryParse(lonCtrl.text) ?? 121.4550,
-                    landAreaHectares: double.tryParse(landAreaCtrl.text) ?? 1.0,
-                    tenureStatus: selectedTenure,
-                    cropType: finalCropType,
-                    barangay: selectedBrgy,
-                    boundaryPoints: boundaryPoints,
-                  );
-                }
+                // Save pending farm record (without boundary points - technician will plot and assign soil type during visit)
+                await accountService.addFarmRecord(
+                  farmerId: farmerId,
+                  farmerName: nameVal,
+                  locationName: farmLocName,
+                  latitude: 14.2790,
+                  longitude: 121.4550,
+                  landAreaHectares: double.tryParse(landAreaCtrl.text) ?? 1.0,
+                  tenureStatus: selectedTenure,
+                  cropType: finalCropType,
+                  barangay: selectedBrgy,
+                  boundaryPoints: [],
+                );
 
                 if (ctx.mounted) {
                   Navigator.pop(ctx);
@@ -840,7 +708,7 @@ class _FarmerLoginScreenState extends State<FarmerLoginScreen> {
                         ],
                       ),
                       content: Text(
-                        '🎉 Thank you, $nameVal!\n\nYour registration, farm details, and land boundary have been submitted to the Pagsanjan Municipal Agriculture Office (MAO). An Admin will review and approve your account before you can log in.',
+                        '🎉 Thank you, $nameVal!\n\nYour registration and farm details have been submitted to the Pagsanjan Municipal Agriculture Office (MAO). An Admin will review and approve your account, after which a Technician will visit your farm to map your land boundary and record the soil type.',
                         style: const TextStyle(fontSize: 13.5, height: 1.4),
                       ),
                       actions: [
