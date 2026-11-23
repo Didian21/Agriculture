@@ -206,6 +206,7 @@ class _FarmerLoginScreenState extends State<FarmerLoginScreen> {
     final Set<String> selectedPrimaryCrops = {'Rice'};
     final List<String> specificCropsList = [];
     final List<LatLng> boundaryPoints = [];
+    final List<List<LatLng>> allSavedPlots = [];
     String? dialogError;
 
     showDialog(
