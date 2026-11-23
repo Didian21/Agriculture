@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:latlong2/latlong.dart';
 import 'package:provider/provider.dart';
 
 import '../../../core/dss_catalog.dart';
@@ -51,19 +52,63 @@ class _FarmTabState extends State<FarmTab> {
     final locale = Localizations.localeOf(context).languageCode;
     final farm = _store.current;
 
-    final accountService = Provider.of<AccountService>(context, listen: false);
+    final accountService = Provider.of<AccountService>(context);
     final farmerUsername = widget.p.currentUsername ?? '';
+
     final farmer = accountService.farmers.firstWhere(
-      (f) => f.username.toLowerCase() == farmerUsername.toLowerCase(),
-      orElse: () => Farmer(id: '', username: farmerUsername, password: '', profileName: 'Farmer', barangay: 'Biñan'),
+      (f) => f.username.trim().toLowerCase() == farmerUsername.trim().toLowerCase() ||
+             f.profileName.trim().toLowerCase() == farmerUsername.trim().toLowerCase() ||
+             f.contactNumber == farmerUsername,
+      orElse: () => Farmer(id: '', username: farmerUsername, password: '', profileName: farmerUsername, barangay: 'Biñan'),
     );
 
     final dynamic supabaseFarm = accountService.farms.cast<dynamic>().firstWhere(
-      (f) => f.farmerId == farmer.id || f.farmerName == farmer.profileName,
+      (f) => f != null && (
+        f.farmerId == farmer.id ||
+        (f.farmerName != null && f.farmerName.trim().isNotEmpty && f.farmerName.trim().toLowerCase() == farmer.profileName.trim().toLowerCase()) ||
+        (f.farmerName != null && f.farmerName.trim().isNotEmpty && f.farmerName.trim().toLowerCase() == farmer.username.trim().toLowerCase())
+      ),
       orElse: () => null,
     );
 
-    final ha = farm.areaHa;
+    List<LatLng> registeredLandBoundary = [];
+    if (supabaseFarm != null && supabaseFarm.boundaryPoints != null) {
+      try {
+        final List<dynamic> pts = supabaseFarm.boundaryPoints as List<dynamic>;
+        registeredLandBoundary = pts.cast<LatLng>().toList();
+      } catch (_) {
+        if (supabaseFarm.boundaryPoints is List<LatLng>) {
+          registeredLandBoundary = supabaseFarm.boundaryPoints as List<LatLng>;
+        }
+      }
+    }
+
+    final bool hasSupabaseBoundary = registeredLandBoundary.length >= 3;
+
+    final LatLng supabaseCenter = hasSupabaseBoundary
+        ? (() {
+            double sumLat = 0.0;
+            double sumLng = 0.0;
+            for (final p in registeredLandBoundary) {
+              sumLat += p.latitude;
+              sumLng += p.longitude;
+            }
+            return LatLng(sumLat / registeredLandBoundary.length, sumLng / registeredLandBoundary.length);
+          })()
+        : ((supabaseFarm != null && supabaseFarm.latitude != 0 && supabaseFarm.longitude != 0)
+            ? LatLng(supabaseFarm.latitude, supabaseFarm.longitude)
+            : farm.home);
+
+    // REMOVE OLD SAMPLE BLUE POLYGON! Use registered Supabase boundary and GPS location
+    final farmForMap = farm.copyWith(
+      polygon: hasSupabaseBoundary ? registeredLandBoundary : const [],
+      home: supabaseCenter,
+    );
+
+    final double ha = (supabaseFarm != null && supabaseFarm.landAreaHectares != null && supabaseFarm.landAreaHectares > 0)
+        ? (supabaseFarm.landAreaHectares as num).toDouble()
+        : farm.areaHa;
+
     final name = dssCropName(farm.crop, tl) + (farm.variety != null ? ' (${farm.variety})' : '');
 
     return AnimatedTabList(items: [
@@ -75,8 +120,8 @@ class _FarmTabState extends State<FarmTab> {
       FutureBuilder<PagsanjanBoundary?>(
         future: _boundary,
         builder: (context, bs) => FarmPolygonMap(
-          farm: farm,
-          outerLandBoundary: (supabaseFarm != null && supabaseFarm.boundaryPoints != null && supabaseFarm.boundaryPoints.isNotEmpty) ? supabaseFarm.boundaryPoints : farm.polygon,
+          farm: farmForMap,
+          outerLandBoundary: registeredLandBoundary,
           boundary: bs.data,
         ),
       ),

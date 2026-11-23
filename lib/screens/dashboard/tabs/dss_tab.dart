@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../core/dss_catalog.dart';
@@ -8,6 +9,8 @@ import '../../../core/tr.dart';
 import '../../../dashboard_data.dart';
 import '../../../main.dart';
 import '../../../models/farm_store.dart';
+import '../../../models/farmer.dart' hide FarmRecord;
+import '../../../services/account_service.dart';
 import '../../../services/crop_calendar.dart';
 import '../../../services/dss_planner.dart';
 import '../../../widgets/common_widgets.dart';
@@ -253,6 +256,31 @@ class _DssTabState extends State<DssTab> {
     if (d != null) setState(() => _harvestOn = d);
   }
 
+  // Totoo kung ang kabuuang lupa ay galing sa rehistrasyon ng account (Supabase).
+  bool _fromRegistration = false;
+
+  /// Sukat ng lupa (ha) na nakarehistro sa account ng farmer. Null kung wala.
+  double? _registeredHectares(BuildContext context) {
+    final accountService = Provider.of<AccountService>(context);
+    final username = widget.p.currentUsername ?? '';
+    final key = username.trim().toLowerCase();
+    final farmer = accountService.farmers.firstWhere(
+          (f) => f.username.trim().toLowerCase() == key || f.profileName.trim().toLowerCase() == key || f.contactNumber == username,
+      orElse: () => Farmer(id: '', username: username, password: '', profileName: username, barangay: ''),
+    );
+    final dynamic farm = accountService.farms.cast<dynamic>().firstWhere(
+          (f) =>
+      f != null &&
+          (f.farmerId == farmer.id ||
+              (f.farmerName != null && f.farmerName.trim().isNotEmpty && f.farmerName.trim().toLowerCase() == farmer.profileName.trim().toLowerCase()) ||
+              (f.farmerName != null && f.farmerName.trim().isNotEmpty && f.farmerName.trim().toLowerCase() == farmer.username.trim().toLowerCase())),
+      orElse: () => null,
+    );
+    if (farm == null || farm.landAreaHectares == null) return null;
+    final v = (farm.landAreaHectares as num).toDouble();
+    return v > 0 ? v : null;
+  }
+
   Future<void> _openEditor() async {
     await Navigator.of(context).push(MaterialPageRoute(builder: (_) => const FarmShapeEditor()));
     if (mounted) setState(() {});
@@ -275,7 +303,9 @@ class _DssTabState extends State<DssTab> {
     final tl = isTl(context);
     final locale = Localizations.localeOf(context).languageCode;
     final plan = _plan;
-    final total = _store.totalHa;
+    final registeredHa = _registeredHectares(context);
+    _fromRegistration = registeredHa != null;
+    final total = registeredHa ?? _store.totalHa;
     final others = _store.usedHa(exceptId: _editingId);
     final avail = total == null ? null : total - others;
     final areaNow = _areaHa;
@@ -388,7 +418,9 @@ class _DssTabState extends State<DssTab> {
                 ),
               ActionChip(
                 avatar: const Icon(Icons.edit_location_alt_rounded, size: 16),
-                label: Text(_store.isCustom ? tr(context, 'Baguhin ang hugis ng bukid', 'Edit farm shape') : tr(context, 'Iguhit ang bukid sa mapa', 'Draw farm on the map')),
+                label: Text(_store.isCustom
+                    ? tr(context, 'Baguhin ang pwesto ng taniman', 'Edit planting location plot')
+                    : tr(context, 'Iguhit ang pwesto kung saan magtatanim', 'Draw planting location plot on map')),
                 onPressed: _openEditor,
               ),
             ]),
@@ -402,7 +434,7 @@ class _DssTabState extends State<DssTab> {
                 ),
               ),
             Text(
-              tr(context, 'Ang hugis na iginuhit ay makikita sa Aking Bukid.', 'The shape you draw appears in My Farm.'),
+              tr(context, 'Ang pwesto ng tanim na iginuhit ay makikita sa Aking Bukid.', 'The planting location plot drawn on the map appears in My Farm.'),
               style: const TextStyle(fontSize: 11.5, color: AppColors.muted, height: 1.3),
             ),
           ]),
@@ -664,7 +696,7 @@ class _DssTabState extends State<DssTab> {
             ),
           ),
         if (_allocOpen) ...[
-          _AllocationCard(store: _store),
+          _AllocationCard(store: _store, total: total, fromRegistration: _fromRegistration),
           const SizedBox(height: 12),
           if (_store.hasProfile)
             _MyCropsCard(
@@ -1030,31 +1062,16 @@ const _kAllocColors = [
 ];
 
 /// Paghahati ng lupa: ilang ektarya ang para sa bawat tanim, at kung ilan ang natitira.
-class _AllocationCard extends StatefulWidget {
+class _AllocationCard extends StatelessWidget {
   final FarmStore store;
-  const _AllocationCard({required this.store});
-
-  @override
-  State<_AllocationCard> createState() => _AllocationCardState();
-}
-
-class _AllocationCardState extends State<_AllocationCard> {
-  late final TextEditingController _c = TextEditingController(
-    text: widget.store.manualTotalHa == null ? '' : widget.store.manualTotalHa!.toStringAsFixed(2),
-  );
-
-  @override
-  void dispose() {
-    _c.dispose();
-    super.dispose();
-  }
+  final double? total; // kabuuang lupa (ha): mula sa rehistrasyon ng account
+  final bool fromRegistration;
+  const _AllocationCard({required this.store, required this.total, required this.fromRegistration});
 
   @override
   Widget build(BuildContext context) {
     final tl = isTl(context);
-    final store = widget.store;
-    final fromMap = store.isCustom && (store.totalHa ?? 0) > 0;
-    final total = store.totalHa;
+    final total = this.total; // lokal na kopya para ma-promote bilang hindi null
     final profiles = store.profiles;
     final used = store.usedHa();
     final base = total == null ? used : (used > total ? used : total);
@@ -1077,42 +1094,27 @@ class _AllocationCardState extends State<_AllocationCard> {
           style: const TextStyle(fontSize: 11.5, color: AppColors.muted, height: 1.3),
         ),
         const SizedBox(height: 10),
-        if (fromMap)
-          Row(children: [
-            const Icon(Icons.map_rounded, size: 18, color: AppColors.leaf),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                tr(context, 'Kabuuang lupa: ${(total ?? 0).toStringAsFixed(2)} ha (mula sa iginuhit na mapa)', 'Total land: ${(total ?? 0).toStringAsFixed(2)} ha (from the drawn map)'),
-                style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w800),
-              ),
-            ),
-          ])
-        else
-          Row(children: [
-            Expanded(
-              child: TextField(
-                controller: _c,
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                onChanged: (v) => store.setManualTotalHa(double.tryParse(v.trim().replaceAll(',', '.'))),
-                decoration: InputDecoration(
-                  labelText: tr(context, 'Kabuuang lupa', 'Total land'),
-                  hintText: tr(context, 'hal. 1.5', 'e.g. 1.5'),
-                  suffixText: 'ha',
-                  isDense: true,
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
-                ),
-              ),
-            ),
-          ]),
-        if (!fromMap)
-          Padding(
-            padding: const EdgeInsets.only(top: 4),
+        Row(children: [
+          Icon(fromRegistration ? Icons.verified_user_rounded : Icons.map_rounded, size: 18, color: AppColors.leaf),
+          const SizedBox(width: 8),
+          Expanded(
             child: Text(
-              tr(context, 'O iguhit ang bukid sa mapa (Hakbang 1) para awtomatikong makuha ang sukat.', 'Or draw the farm on the map (Step 1) to get the size automatically.'),
-              style: const TextStyle(fontSize: 11, color: AppColors.muted),
+              total == null
+                  ? tr(context, 'Wala pang nakarehistrong sukat ng lupa sa inyong account.', 'No land size is registered on your account yet.')
+                  : fromRegistration
+                  ? tr(context, 'Kabuuang lupa: ${total.toStringAsFixed(2)} ha (ayon sa rehistrasyon ng account)', 'Total land: ${total.toStringAsFixed(2)} ha (from your account registration)')
+                  : tr(context, 'Kabuuang lupa: ${total.toStringAsFixed(2)} ha (mula sa iginuhit na pwesto)', 'Total land: ${total.toStringAsFixed(2)} ha (from the drawn plot)'),
+              style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w800),
             ),
           ),
+        ]),
+        Padding(
+          padding: const EdgeInsets.only(top: 4),
+          child: Text(
+            tr(context, 'Ang sukat ng lupa ay binabago sa account o sa MAO, hindi sa app na ito.', 'The land size is changed on the account or with the MAO, not in this app.'),
+            style: const TextStyle(fontSize: 11, color: AppColors.muted),
+          ),
+        ),
         const SizedBox(height: 12),
         if (profiles.isEmpty)
           Text(tr(context, 'Wala pang naka-save na tanim. I-save ang una sa ibaba.', 'No saved crops yet. Save your first one below.'),
