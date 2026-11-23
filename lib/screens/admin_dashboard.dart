@@ -5088,6 +5088,22 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
     );
   }
 
+  String _formatCleanFarmAddress(String locationName, String brgy) {
+    String cleanLoc = locationName
+        .replaceFirst(RegExp(r'^(biñan|binan|uno|dos|pagsanjan)\b[\s,:-]*', caseSensitive: false), '')
+        .replaceAll(RegExp(r'brgy\.?.*?(?=\b|$)', caseSensitive: false), '')
+        .replaceAll(RegExp(r'barangay.*?(?=\b|$)', caseSensitive: false), '')
+        .replaceAll(RegExp(r'pagsanjan.*?(?=\b|$)', caseSensitive: false), '')
+        .replaceAll(RegExp(r'laguna.*?(?=\b|$)', caseSensitive: false), '')
+        .replaceAll(RegExp(r':', caseSensitive: false), ',')
+        .trim();
+    if (cleanLoc.endsWith(',')) cleanLoc = cleanLoc.substring(0, cleanLoc.length - 1).trim();
+    if (cleanLoc.isEmpty || cleanLoc.toLowerCase() == 'farm lot' || cleanLoc.toLowerCase() == 'sitio' || cleanLoc.toLowerCase() == 'sitio ' || cleanLoc.toLowerCase() == 'uno' || cleanLoc.toLowerCase() == 'dos' || cleanLoc.toLowerCase() == 'biñan' || cleanLoc.toLowerCase() == 'binan') {
+      cleanLoc = 'Farm Lot';
+    }
+    return '$cleanLoc, Brgy. $brgy, Pagsanjan, Laguna';
+  }
+
   void _showCheckFarmerInfoDialog(BuildContext context, AccountService service, Farmer farmer, AdminLocale locale) {
     final isTagalog = locale.isTagalog;
     final nameCtrl = TextEditingController(text: farmer.profileName);
@@ -5177,13 +5193,13 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
                     ),
                     child: Row(
                       children: [
-                        const Icon(Icons.info_outline_rounded, color: Color(0xFFB45309), size: 20),
+                        const Icon(Icons.lock_clock_rounded, color: Color(0xFFB45309), size: 20),
                         const SizedBox(width: 10),
                         Expanded(
                           child: Text(
                             isTagalog
-                                ? 'Maaari mong baguhin o i-correct ang impormasyon sa ibaba bago i-accept ang akawnt sa Supabase.'
-                                : 'You may review, edit, or correct the details below before approving the account in Supabase.',
+                                ? 'Suriin ang opisyal na impormasyong ipinasok ng magsasaka (Read-Only). I-accept o I-decline ang rehistrasyon bilang admin.'
+                                : 'Review the exact details submitted by the farmer (Read-Only AS-IS). Accept or Decline the registration as admin.',
                             style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: Color(0xFF92400E)),
                           ),
                         ),
@@ -5192,128 +5208,46 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
                   ),
                   const SizedBox(height: 16),
 
-                  const Row(
-                    children: [
-                      Icon(Icons.badge_rounded, size: 16, color: Color(0xFFD97706)),
-                      SizedBox(width: 6),
-                      Text('1. PERSONAL NA IMPORMASYON', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFFD97706))),
-                    ],
-                  ),
-                  const SizedBox(height: 10),
-                  TextField(
-                    controller: nameCtrl,
-                    decoration: InputDecoration(
-                      labelText: isTagalog ? 'Buong Pangalan' : 'Full Name',
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                      filled: true,
-                      fillColor: Colors.white,
-                    ),
-                  ),
-                  const SizedBox(height: 10),
                   Row(
                     children: [
-                      Expanded(
-                        child: DropdownButtonFormField<String>(
-                          isExpanded: true,
-                          initialValue: AccountService.pagsanjanBarangays.contains(selectedBrgy) ? selectedBrgy : AccountService.pagsanjanBarangays.first,
-                          decoration: InputDecoration(
-                            labelText: 'Barangay',
-                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                            filled: true,
-                            fillColor: Colors.white,
-                          ),
-                          items: AccountService.pagsanjanBarangays.map((b) => DropdownMenuItem(value: b, child: Text(b))).toList(),
-                          onChanged: (val) => setDialogState(() => selectedBrgy = val ?? 'Biñan'),
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: TextField(
-                          controller: contactCtrl,
-                          keyboardType: TextInputType.phone,
-                          decoration: InputDecoration(
-                            labelText: isTagalog ? 'Numero ng Telepono' : 'Phone Number',
-                            errorText: contactErrorText,
-                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                            filled: true,
-                            fillColor: Colors.white,
-                          ),
-                        ),
-                      ),
+                      const Icon(Icons.badge_rounded, size: 16, color: Color(0xFFD97706)),
+                      const SizedBox(width: 6),
+                      Text(isTagalog ? '1. PERSONAL NA IMPORMASYON' : '1. PERSONAL INFORMATION', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFFD97706))),
                     ],
                   ),
                   const SizedBox(height: 10),
-                  DropdownButtonFormField<String>(
-                    isExpanded: true,
-                    initialValue: (['Choose Association', 'Not Associated', ...service.getUniqueOrganizations()].contains(selectedOrg))
-                        ? selectedOrg
-                        : 'Not Associated',
-                    decoration: InputDecoration(
-                      labelText: isTagalog ? 'Asosasyon / Samahan' : 'Association',
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                      filled: true,
-                      fillColor: Colors.white,
-                    ),
-                    items: ['Choose Association', 'Not Associated', ...service.getUniqueOrganizations()].map((org) => DropdownMenuItem(value: org, child: Text(org))).toList(),
-                    onChanged: (val) => setDialogState(() => selectedOrg = val ?? 'Not Associated'),
-                  ),
+                  _infoRow(Icons.person_rounded, isTagalog ? 'Buong Pangalan' : 'Full Name', farmer.profileName),
+                  const SizedBox(height: 8),
+                  _infoRow(Icons.alternate_email_rounded, 'Username', '@${farmer.username}'),
+                  const SizedBox(height: 8),
+                  _infoRow(Icons.location_on_rounded, 'Barangay', farmer.barangay),
+                  const SizedBox(height: 8),
+                  _infoRow(Icons.phone_rounded, isTagalog ? 'Numero ng Telepono' : 'Phone Number', farmer.contactNumber.isEmpty ? 'N/A' : farmer.contactNumber),
+                  const SizedBox(height: 8),
+                  _infoRow(Icons.group_rounded, isTagalog ? 'Asosasyon / Samahan' : 'Association', farmer.organization.isEmpty ? 'Independent' : farmer.organization),
 
                   const Divider(height: 28),
 
-                  const Row(
-                    children: [
-                      Icon(Icons.agriculture_rounded, size: 16, color: Color(0xFFD97706)),
-                      SizedBox(width: 6),
-                      Text('2. IMPORMASYON NG SAKAHAN AT TANIM', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFFD97706))),
-                    ],
-                  ),
-                  const SizedBox(height: 10),
                   Row(
                     children: [
-                      Expanded(
-                        child: TextField(
-                          controller: landAreaCtrl,
-                          keyboardType: TextInputType.number,
-                          decoration: InputDecoration(
-                            labelText: isTagalog ? 'Laki ng Lupa (ha)' : 'Land Area (ha)',
-                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                            filled: true,
-                            fillColor: Colors.white,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: DropdownButtonFormField<String>(
-                          isExpanded: true,
-                          initialValue: selectedTenure,
-                          decoration: InputDecoration(
-                            labelText: isTagalog ? 'Katayuan sa Lupa' : 'Tenure Status',
-                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                            filled: true,
-                            fillColor: Colors.white,
-                          ),
-                          items: ['Owner', 'Tenant', 'Lease', 'CLT', 'Hired Farmworkers', 'Not Employed'].map((t) => DropdownMenuItem(value: t, child: Text(t))).toList(),
-                          onChanged: (val) => setDialogState(() => selectedTenure = val ?? 'Owner'),
-                        ),
-                      ),
+                      const Icon(Icons.agriculture_rounded, size: 16, color: Color(0xFFD97706)),
+                      const SizedBox(width: 6),
+                      Text(isTagalog ? '2. IMPORMASYON NG SAKAHAN AT TANIM' : '2. FARM LAND & CROP DETAILS', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFFD97706))),
                     ],
                   ),
                   const SizedBox(height: 10),
-                  TextField(
-                    controller: addressCtrl,
-                    decoration: InputDecoration(
-                      labelText: isTagalog ? 'Address ng Sakahan' : 'Farm Address',
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
-                      filled: true,
-                      fillColor: Colors.white,
-                    ),
-                  ),
+                  _infoRow(Icons.square_foot_rounded, isTagalog ? 'Laki ng Lupa' : 'Land Area', '${farmerFarm.landAreaHectares.toStringAsFixed(1)} ha'),
+                  const SizedBox(height: 8),
+                  _infoRow(Icons.assignment_ind_rounded, isTagalog ? 'Katayuan sa Lupa' : 'Tenure Status', farmerFarm.tenureStatus),
+                  const SizedBox(height: 8),
+                  _infoRow(Icons.eco_rounded, isTagalog ? 'Mga Tanim' : 'Crop Types', farmerFarm.cropType),
+                  const SizedBox(height: 8),
+                  _infoRow(Icons.place_rounded, isTagalog ? 'Address ng Sakahan' : 'Farm Address', _formatCleanFarmAddress(farmerFarm.locationName, farmerFarm.barangay)),
 
                   if (farmerFarm.boundaryPoints.length >= 3) ...[
                     const SizedBox(height: 14),
                     Text(
-                      isTagalog ? '🗺️ MAPA NG BOUNDARY NG LUPA:' : '🗺️ REGISTERED GPS BOUNDARY MAP:',
+                      isTagalog ? 'MAPA NG BOUNDARY NG LUPA:' : 'REGISTERED GPS BOUNDARY MAP:',
                       style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFFD97706)),
                     ),
                     const SizedBox(height: 6),
@@ -8345,31 +8279,28 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
 
         final cropLower = farm.cropType.toLowerCase();
         Color polyColor;
-        Color borderColor;
 
         if (isSelected) {
-          polyColor = const Color(0xFF22C55E).withValues(alpha: 0.55);
-          borderColor = const Color(0xFF15803D);
+          polyColor = const Color(0xFF22C55E).withValues(alpha: 0.65);
         } else if (cropLower.contains('rice') || cropLower.contains('palay')) {
-          polyColor = const Color(0xFF15803D).withValues(alpha: 0.35);
-          borderColor = const Color(0xFF166534);
+          polyColor = const Color(0xFF15803D).withValues(alpha: 0.45);
         } else if (cropLower.contains('gulay') || cropLower.contains('veg')) {
-          polyColor = const Color(0xFF0284C7).withValues(alpha: 0.35);
-          borderColor = const Color(0xFF0284C7);
+          polyColor = const Color(0xFF0284C7).withValues(alpha: 0.45);
         } else if (cropLower.contains('prutas') || cropLower.contains('fruit')) {
-          polyColor = const Color(0xFFD97706).withValues(alpha: 0.35);
-          borderColor = const Color(0xFFD97706);
+          polyColor = const Color(0xFFD97706).withValues(alpha: 0.45);
         } else {
-          polyColor = const Color(0xFF0056B3).withValues(alpha: 0.35);
-          borderColor = const Color(0xFF0056B3);
+          polyColor = const Color(0xFF0056B3).withValues(alpha: 0.45);
         }
+
+        final borderColor = isSelected ? const Color(0xFF22C55E) : const Color(0xFFFACC15);
+        final borderStroke = isSelected ? 6.0 : 4.5;
 
         farmBoundaryPolygons.add(
           Polygon(
             points: polyPoints,
             color: polyColor,
             borderColor: borderColor,
-            borderStrokeWidth: isSelected ? 6.0 : 3.5,
+            borderStrokeWidth: borderStroke,
           ),
         );
       }

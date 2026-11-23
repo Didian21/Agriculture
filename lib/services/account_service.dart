@@ -1473,7 +1473,7 @@ class AccountService extends ChangeNotifier {
         String category = 'General Advisory',
         String scheduleTime = 'Immediate',
         String eventDate = '',
-        String targetAssociation = 'All Associations',
+        String targetOrg = 'All',
       }) async {
     final dateStr = DateFormat('MMM dd, yyyy').format(DateTime.now());
     _posts.insert(0, {
@@ -1483,9 +1483,9 @@ class AccountService extends ChangeNotifier {
       'scheduleTime': scheduleTime,
       'eventDate': eventDate,
       'date': dateStr,
-      'targetAssociation': targetAssociation,
+      'targetOrg': targetOrg,
     });
-    logActivity(activeUserName, 'ADD', 'Announcements', 'Posted announcement: $title (Target: $targetAssociation)');
+    logActivity(activeUserName, 'ADD', 'Announcements', 'Posted announcement for [$targetOrg]: $title');
     notifyListeners();
 
     try {
@@ -1496,7 +1496,7 @@ class AccountService extends ChangeNotifier {
         'schedule_time': scheduleTime,
         'event_date': eventDate,
         'date': dateStr,
-        'target_association': targetAssociation,
+        'target_org': targetOrg,
       });
     } catch (e) {
       debugPrint('Supabase insert error (announcement): $e');
