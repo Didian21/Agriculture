@@ -8,6 +8,7 @@ import 'package:provider/provider.dart';
 import 'package:pdf/pdf.dart' as pdf_lib;
 import 'package:pdf/widgets.dart' as pw;
 
+import '../dashboard_data.dart';
 import '../models/farmer.dart';
 import '../services/account_service.dart';
 import '../services/supabase_service.dart';
@@ -99,6 +100,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
 
   // Interactive Map State
   bool _showRegisteredPins = true;
+  bool _showLandmarks = true;
   bool _showMapSidePanel = true;
   LatLng _mapCenter = const LatLng(14.2790, 121.4550);
   double _mapZoom = 13.5;
@@ -1933,7 +1935,13 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
                       trailingIcon: Icons.swap_horiz_rounded,
                       iconColor: primaryAccent,
                       textColor: isDark ? Colors.white70 : const Color(0xFF0F172A),
-                      onTap: () => service.toggleLanguage(),
+                      onTap: () {
+                        service.toggleLanguage();
+                        try {
+                          final p = Provider.of<DashboardProvider>(context, listen: false);
+                          p.setLanguage(service.isTagalog ? AppLanguage.tagalog : AppLanguage.english);
+                        } catch (_) {}
+                      },
                     ),
                     // Dark / light mode toggle
                     _buildSidebarAction(
@@ -8291,8 +8299,84 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
 
       if (_showRegisteredPins) {
         mapMarkers.add(_buildBlueFarmMarker(distinctFarm, () {
-          _showFarmWeatherModal(context, service, distinctFarm, locale, cardBg, textColor);
+          LatLng center = LatLng(distinctFarm.latitude, distinctFarm.longitude);
+          if (originalFarm.boundaryPoints.length >= 3) {
+            center = calculatePolygonCentroid(originalFarm.boundaryPoints);
+          }
+          setState(() {
+            _mapCenter = center;
+            _mapZoom = 17.5;
+            _showMapSidePanel = false;
+          });
+          _showFarmWeatherModal(context, service, originalFarm, locale, cardBg, textColor);
         }));
+      }
+    }
+
+    if (_showLandmarks) {
+      final landmarks = [
+        {'name': 'Pagsanjan Municipal Hall (MAO)', 'lat': 14.2758, 'lng': 121.4542, 'icon': Icons.account_balance_rounded, 'color': const Color(0xFFD97706)},
+        {'name': 'Pagsanjan Public Market', 'lat': 14.2735, 'lng': 121.4558, 'icon': Icons.storefront_rounded, 'color': const Color(0xFFEA580C)},
+        {'name': 'Pagsanjan Church (Our Lady of Guadalupe)', 'lat': 14.2782, 'lng': 121.4538, 'icon': Icons.church_rounded, 'color': const Color(0xFF7C3AED)},
+        {'name': 'Pagsanjan Tourist Port (Falls Boat Station)', 'lat': 14.2835, 'lng': 121.4480, 'icon': Icons.water_rounded, 'color': const Color(0xFF0284C7)},
+        for (final entry in _barangayCenterMap.entries)
+          {'name': 'Brgy. Hall - ${entry.key}', 'lat': entry.value.latitude + 0.0006, 'lng': entry.value.longitude + 0.0006, 'icon': Icons.location_city_rounded, 'color': const Color(0xFFDC2626)}
+      ];
+
+      for (final lm in landmarks) {
+        final lmName = lm['name'] as String;
+        final lmLat = lm['lat'] as double;
+        final lmLng = lm['lng'] as double;
+        final lmIcon = lm['icon'] as IconData;
+        final lmColor = lm['color'] as Color;
+
+        mapMarkers.add(
+          Marker(
+            point: LatLng(lmLat, lmLng),
+            width: 40,
+            height: 44,
+            child: Tooltip(
+              message: '🏛️ Landmark: $lmName',
+              preferBelow: false,
+              decoration: BoxDecoration(
+                color: const Color(0xFF0F172A),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              textStyle: const TextStyle(color: Colors.white, fontSize: 11.5, fontWeight: FontWeight.bold),
+              child: GestureDetector(
+                onTap: () {
+                  setState(() {
+                    _mapCenter = LatLng(lmLat, lmLng);
+                    _mapZoom = 17.5;
+                  });
+                },
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(5),
+                      decoration: BoxDecoration(
+                        color: lmColor,
+                        shape: BoxShape.circle,
+                        border: Border.all(color: Colors.white, width: 2),
+                        boxShadow: const [BoxShadow(color: Colors.black38, blurRadius: 4, offset: Offset(0, 2))],
+                      ),
+                      child: Icon(lmIcon, color: Colors.white, size: 15),
+                    ),
+                    ClipPath(
+                      clipper: _TriangleClipper(),
+                      child: Container(
+                        width: 7,
+                        height: 5,
+                        color: lmColor,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        );
       }
     }
 
@@ -8475,6 +8559,21 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
                                 ),
                               ],
                             ),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Text(
+                                  locale.isTagalog ? 'Ipakita ang Landmarks' : 'Show Landmarks',
+                                  style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: subtextColor),
+                                ),
+                                const SizedBox(width: 4),
+                                Switch(
+                                  value: _showLandmarks,
+                                  activeThumbColor: const Color(0xFFD97706),
+                                  onChanged: (val) => setState(() => _showLandmarks = val),
+                                ),
+                              ],
+                            ),
                             const SizedBox(height: 6),
                             TextField(
                               controller: _searchController,
@@ -8579,12 +8678,20 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
                                       title: Text(farm.farmerName, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: textColor)),
                                       subtitle: Text('${farm.cropType} • Brgy. ${farm.barangay}', style: TextStyle(color: subtextColor, fontSize: 11)),
                                       onTap: () {
-                                        // Auto zoom map to the selected farmer's farm area
+                                        final originalFarm = activeFarms.firstWhere(
+                                          (f) => f.farmerId == farm.farmerId || f.farmerName == farm.farmerName,
+                                          orElse: () => farm,
+                                        );
+                                        LatLng center = LatLng(originalFarm.latitude, originalFarm.longitude);
+                                        if (originalFarm.boundaryPoints.length >= 3) {
+                                          center = calculatePolygonCentroid(originalFarm.boundaryPoints);
+                                        }
                                         setState(() {
-                                          _mapCenter = LatLng(farm.latitude, farm.longitude);
-                                          _mapZoom = 16.0;
+                                          _mapCenter = center;
+                                          _mapZoom = 17.5;
+                                          _showMapSidePanel = false;
                                         });
-                                        _showFarmWeatherModal(context, service, farm, locale, cardBg, textColor);
+                                        _showFarmWeatherModal(context, service, originalFarm, locale, cardBg, textColor);
                                       },
                                     ),
                                   );
@@ -9619,6 +9726,8 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
     final titleCtrl = TextEditingController();
     final contentCtrl = TextEditingController();
     String selectedCategory = 'General Advisory';
+    final orgs = getUniqueOrganizations(service);
+    String selectedTargetAssociation = 'All Associations';
     bool isScheduled = false;
     DateTime scheduleDate = DateTime.now().add(const Duration(days: 1));
     TimeOfDay scheduleTime = const TimeOfDay(hour: 9, minute: 0);
@@ -9696,6 +9805,29 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
                       DropdownMenuItem(value: 'Subsidy & Distribution', child: Text(locale.isTagalog ? 'Distribusyon ng Binhi / Abono (Subsidy)' : 'Subsidy & Fertilizer Distribution')),
                     ],
                     onChanged: (val) => setDialogState(() => selectedCategory = val ?? 'General Advisory'),
+                  ),
+                  const SizedBox(height: 14),
+                  DropdownButtonFormField<String>(
+                    initialValue: selectedTargetAssociation,
+                    isExpanded: true,
+                    decoration: InputDecoration(
+                      labelText: locale.isTagalog ? 'Ipadala sa Asosasyon (Target)' : 'Target Association / Group',
+                      prefixIcon: const Icon(Icons.groups_rounded, color: Color(0xFF0056B3)),
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+                      filled: true,
+                      fillColor: Colors.white,
+                    ),
+                    items: [
+                      DropdownMenuItem(
+                        value: 'All Associations',
+                        child: Text(locale.isTagalog ? 'Lahat ng Asosasyon (All Associations)' : 'All Associations', overflow: TextOverflow.ellipsis, maxLines: 1),
+                      ),
+                      ...orgs.map((org) => DropdownMenuItem(
+                        value: org,
+                        child: Text(org, overflow: TextOverflow.ellipsis, maxLines: 1),
+                      )),
+                    ],
+                    onChanged: (val) => setDialogState(() => selectedTargetAssociation = val ?? 'All Associations'),
                   ),
                   const SizedBox(height: 14),
                   TextField(
@@ -9906,6 +10038,7 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
                     category: selectedCategory,
                     scheduleTime: scheduleStr,
                     eventDate: eventStr,
+                    targetAssociation: selectedTargetAssociation,
                   );
                   Navigator.pop(context);
                   ScaffoldMessenger.of(context).showSnackBar(
@@ -9967,6 +10100,7 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
                         final title = p['title'] ?? 'No Title';
                         final content = p['content'] ?? '';
                         final category = p['category'] ?? 'General Advisory';
+                        final targetAssoc = p['targetAssociation'] ?? p['target_association'] ?? 'All Associations';
                         final date = p['date'] ?? '';
                         final eventDate = p['eventDate'] ?? '';
 
@@ -9991,6 +10125,18 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
                                     child: Text(
                                       category,
                                       style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Color(0xFF0056B3)),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFF0284C7).withValues(alpha: 0.15),
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: Text(
+                                      'Target: $targetAssoc',
+                                      style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Color(0xFF0284C7)),
                                     ),
                                   ),
                                   const Spacer(),

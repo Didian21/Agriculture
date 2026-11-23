@@ -47,6 +47,7 @@ class FarmRecord {
   String? landownerId;
   String? landownerName;
   List<LatLng> boundaryPoints;
+  String soilType;
 
   FarmRecord({
     required this.id,
@@ -62,6 +63,7 @@ class FarmRecord {
     this.landownerId,
     this.landownerName,
     this.boundaryPoints = const [],
+    this.soilType = 'Clay Loam',
   });
 }
 

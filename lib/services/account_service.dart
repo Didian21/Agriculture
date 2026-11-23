@@ -72,6 +72,7 @@ class AccountService extends ChangeNotifier {
             cropType: row['crop_type'] ?? 'Rice',
             barangay: row['barangay'] ?? 'Biñan',
             boundaryPoints: boundaryPts,
+            soilType: row['soil_type'] ?? 'Clay Loam',
           ));
         }
       }
@@ -100,7 +101,11 @@ class AccountService extends ChangeNotifier {
           _posts.add({
             'title': row['title'] ?? '',
             'content': row['content'] ?? '',
+            'category': row['category'] ?? 'General Advisory',
+            'scheduleTime': row['schedule_time'] ?? 'Immediate',
+            'eventDate': row['event_date'] ?? '',
             'date': row['date'] ?? '',
+            'targetAssociation': row['target_association'] ?? 'All Associations',
           });
         }
       }
@@ -929,6 +934,7 @@ class AccountService extends ChangeNotifier {
     required double latitude,
     required double longitude,
     List<LatLng> boundaryPoints = const [],
+    String soilType = 'Clay Loam',
   }) async {
     final normBrgy = normalizeBarangay(barangay);
     final index = _farms.indexWhere((f) => f.id == id);
@@ -940,6 +946,7 @@ class AccountService extends ChangeNotifier {
       _farms[index].barangay = normBrgy;
       _farms[index].latitude = latitude;
       _farms[index].longitude = longitude;
+      _farms[index].soilType = soilType;
       if (boundaryPoints.isNotEmpty) {
         _farms[index].boundaryPoints = boundaryPoints;
       }
@@ -958,6 +965,7 @@ class AccountService extends ChangeNotifier {
         'latitude': latitude,
         'longitude': longitude,
         'boundary_points': boundaryJson,
+        'soil_type': soilType,
       }).eq('id', id);
       debugPrint('Successfully updated farm record in Supabase: $id');
     } catch (e) {
@@ -1149,6 +1157,7 @@ class AccountService extends ChangeNotifier {
         String category = 'General Advisory',
         String scheduleTime = 'Immediate',
         String eventDate = '',
+        String targetAssociation = 'All Associations',
       }) async {
     final dateStr = DateFormat('MMM dd, yyyy').format(DateTime.now());
     _posts.insert(0, {
@@ -1158,8 +1167,9 @@ class AccountService extends ChangeNotifier {
       'scheduleTime': scheduleTime,
       'eventDate': eventDate,
       'date': dateStr,
+      'targetAssociation': targetAssociation,
     });
-    logActivity(activeUserName, 'ADD', 'Announcements', 'Posted announcement: $title');
+    logActivity(activeUserName, 'ADD', 'Announcements', 'Posted announcement: $title (Target: $targetAssociation)');
     notifyListeners();
 
     try {
@@ -1170,6 +1180,7 @@ class AccountService extends ChangeNotifier {
         'schedule_time': scheduleTime,
         'event_date': eventDate,
         'date': dateStr,
+        'target_association': targetAssociation,
       });
     } catch (e) {
       debugPrint('Supabase insert error (announcement): $e');

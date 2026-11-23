@@ -57,7 +57,11 @@ class FarmerDashboard extends StatelessWidget {
       ),
       body: Consumer<AccountService>(
         builder: (context, accountService, child) {
-          final posts = accountService.posts;
+          final posts = accountService.posts.where((p) {
+            final target = p['targetAssociation'] ?? p['target_association'] ?? 'All Associations';
+            if (target == 'All Associations' || target == 'All') return true;
+            return target.toLowerCase() == farmer.organization.toLowerCase();
+          }).toList();
           return SingleChildScrollView(
             padding: const EdgeInsets.all(16.0),
             child: Column(
