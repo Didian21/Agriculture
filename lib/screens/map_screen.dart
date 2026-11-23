@@ -338,9 +338,11 @@ class _PagsanjanMapWidgetState extends State<PagsanjanMapWidget> {
               },
             ),
             children: [
-              // Satellite Imagery Tile Layer (Esri World Imagery)
+              // Dynamic Map Tile Layer (Satellite vs OpenStreetMap Street Map)
               TileLayer(
-                urlTemplate: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+                urlTemplate: _isSatelliteMode
+                    ? 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'
+                    : 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
                 userAgentPackageName: 'com.example.agriculture',
               ),
               if (_polygons.isNotEmpty || widget.extraPolygons.isNotEmpty)
