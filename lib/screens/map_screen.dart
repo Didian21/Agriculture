@@ -137,6 +137,7 @@ class PagsanjanMapWidget extends StatefulWidget {
   final List<Polygon> extraPolygons;
   final List<Polyline> extraPolylines;
   final void Function(LatLng)? onTap;
+  final MapController? mapController;
 
   const PagsanjanMapWidget({
     super.key,
@@ -146,6 +147,7 @@ class PagsanjanMapWidget extends StatefulWidget {
     this.extraPolygons = const [],
     this.extraPolylines = const [],
     this.onTap,
+    this.mapController,
   });
 
   @override
@@ -153,17 +155,17 @@ class PagsanjanMapWidget extends StatefulWidget {
 }
 
 class _PagsanjanMapWidgetState extends State<PagsanjanMapWidget> {
-  final MapController _mapController = MapController();
+  late final MapController _mapController;
   static List<Polygon>? _cachedBoundaryPolygons;
   static List<Marker>? _cachedBarangayLabelMarkers;
 
   List<Polygon> _polygons = _cachedBoundaryPolygons ?? [];
   List<Marker> _barangayLabelMarkers = _cachedBarangayLabelMarkers ?? [];
-  bool _isSatelliteMode = false;
 
   @override
   void initState() {
     super.initState();
+    _mapController = widget.mapController ?? MapController();
     if (_cachedBoundaryPolygons != null && _cachedBoundaryPolygons!.isNotEmpty) {
       _polygons = _cachedBoundaryPolygons!;
       _barangayLabelMarkers = _cachedBarangayLabelMarkers ?? [];
@@ -358,28 +360,27 @@ class _PagsanjanMapWidgetState extends State<PagsanjanMapWidget> {
                 MarkerLayer(markers: allMarkers),
             ],
           ),
-          // SATELLITE & ZOOM FLOATING BUTTONS
+          // ZOOM FLOATING BUTTONS
           Positioned(
             right: 16,
             bottom: 16,
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                // SATELLITE / STREET MAP TOGGLE
+                // ZOOM IN BUTTON
                 FloatingActionButton.small(
-                  heroTag: 'map_mode_toggle_${identityHashCode(this)}',
-                  backgroundColor: _isSatelliteMode ? const Color(0xFF0284C7) : const Color(0xFF0056B3),
+                  heroTag: 'map_zoom_shortcut_${identityHashCode(this)}',
+                  backgroundColor: const Color(0xFF0056B3),
                   foregroundColor: Colors.white,
-                  tooltip: _isSatelliteMode ? 'Switch to Street Map' : 'Switch to Satellite View',
+                  tooltip: 'Zoom In',
                   onPressed: () {
-                    setState(() {
-                      _isSatelliteMode = !_isSatelliteMode;
-                    });
+                    final currentZoom = _mapController.camera.zoom;
+                    if (currentZoom < 18.0) {
+                      final newZoom = math.min(18.0, currentZoom + 1.0);
+                      _mapController.move(_mapController.camera.center, newZoom);
+                    }
                   },
-                  child: Icon(
-                    _isSatelliteMode ? Icons.map_rounded : Icons.satellite_alt_rounded,
-                    size: 20,
-                  ),
+                  child: const Icon(Icons.zoom_in_rounded, size: 20),
                 ),
                 const SizedBox(height: 8),
                 FloatingActionButton.small(

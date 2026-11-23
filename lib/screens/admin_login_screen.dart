@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../main.dart';
 import '../services/account_service.dart';
 import 'admin_dashboard.dart';
+import 'technician.dart';
 
 class AdminLoginScreen extends StatefulWidget {
   const AdminLoginScreen({super.key});
@@ -31,13 +32,19 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
     final isValid = await accountService.authenticateAdminAsync(username, password);
     if (!mounted) return;
     if (isValid) {
+      final role = accountService.activeStaff.role.toLowerCase();
+      final isTechnician = role.contains('technician') || role.contains('tekniko');
+
       Navigator.pushAndRemoveUntil(
         context,
-        MaterialPageRoute(builder: (context) => const AdminDashboard()),
-        (route) => false      );
+        MaterialPageRoute(
+          builder: (context) => isTechnician ? const TechnicianScreen() : const AdminDashboard(),
+        ),
+        (route) => false,
+      );
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Invalid Admin Username or Password')),
+        const SnackBar(content: Text('Invalid Username or Password')),
       );
     }
   }
@@ -56,7 +63,7 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
                 const PagriLogo(height: 100),
                 const SizedBox(height: 20),
                 const Text(
-                  'MAO ADMIN PORTAL',
+                  'MAO STAFF PORTAL',
                   style: TextStyle(fontWeight: FontWeight.w900, fontSize: 26, letterSpacing: 1.5, color: Color(0xFF0056B3)),
                 ),
                 const Text(
@@ -73,12 +80,12 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         const Text(
-                          'Administrator Login',
+                          'Staff & Technician Login',
                           style: TextStyle(fontWeight: FontWeight.w900, fontSize: 20, color: Color(0xFF0F172A)),
                         ),
                         const SizedBox(height: 6),
                         const Text(
-                          'Authorized municipal staff access only.',
+                          'Authorized municipal staff & agricultural technician access.',
                           style: TextStyle(fontSize: 13, color: Colors.black54),
                         ),
                         const SizedBox(height: 20),
@@ -86,7 +93,7 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
                           controller: _usernameCtrl,
                           decoration: InputDecoration(
                             prefixIcon: const Icon(Icons.badge_rounded, color: Color(0xFF0056B3)),
-                            labelText: 'Admin Username',
+                            labelText: 'Username (admin / arnel_tech)',
                             border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
                           ),
                         ),
@@ -110,11 +117,29 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
                               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                             ),
                             onPressed: _login,
-                            icon: const Icon(Icons.admin_panel_settings_rounded),
+                            icon: const Icon(Icons.login_rounded),
                             label: const Text(
-                              'Login to Admin Portal',
+                              'Login',
                               style: TextStyle(fontSize: 16, fontWeight: FontWeight.w900),
                             ),
+                          ),
+                        ),
+                        const SizedBox(height: 14),
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFEFF6FF),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: const Color(0xFFBFDBFE)),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text('💡 Demo Login Accounts:', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Color(0xFF1E3A8A))),
+                              const SizedBox(height: 4),
+                              Text('• Admin: admin / admin123', style: TextStyle(fontSize: 11.5, color: Colors.grey[800])),
+                              Text('• Technician: arnel_tech / admin123 (Routes directly to Technician UI)', style: TextStyle(fontSize: 11.5, color: Colors.grey[800])),
+                            ],
                           ),
                         ),
                       ],

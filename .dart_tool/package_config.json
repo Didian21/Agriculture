@@ -146,6 +146,12 @@
       "languageVersion": "3.0"
     },
     {
+      "name": "fixnum",
+      "rootUri": "file:///C:/Users/Adrian/AppData/Local/Pub/Cache/hosted/pub.dev/fixnum-1.1.1",
+      "packageUri": "lib/",
+      "languageVersion": "3.1"
+    },
+    {
       "name": "flutter",
       "rootUri": "file:///C:/src/flutter/packages/flutter",
       "packageUri": "lib/",
@@ -192,6 +198,42 @@
       "rootUri": "file:///C:/Users/Administrator/AppData/Local/Pub/Cache/hosted/pub.dev/functions_client-2.7.1",
       "packageUri": "lib/",
       "languageVersion": "3.9"
+    },
+    {
+      "name": "geolocator",
+      "rootUri": "file:///C:/Users/Adrian/AppData/Local/Pub/Cache/hosted/pub.dev/geolocator-13.0.4",
+      "packageUri": "lib/",
+      "languageVersion": "3.5"
+    },
+    {
+      "name": "geolocator_android",
+      "rootUri": "file:///C:/Users/Adrian/AppData/Local/Pub/Cache/hosted/pub.dev/geolocator_android-4.6.2",
+      "packageUri": "lib/",
+      "languageVersion": "3.5"
+    },
+    {
+      "name": "geolocator_apple",
+      "rootUri": "file:///C:/Users/Adrian/AppData/Local/Pub/Cache/hosted/pub.dev/geolocator_apple-2.4.3",
+      "packageUri": "lib/",
+      "languageVersion": "3.5"
+    },
+    {
+      "name": "geolocator_platform_interface",
+      "rootUri": "file:///C:/Users/Adrian/AppData/Local/Pub/Cache/hosted/pub.dev/geolocator_platform_interface-4.4.1",
+      "packageUri": "lib/",
+      "languageVersion": "3.5"
+    },
+    {
+      "name": "geolocator_web",
+      "rootUri": "file:///C:/Users/Adrian/AppData/Local/Pub/Cache/hosted/pub.dev/geolocator_web-4.1.4",
+      "packageUri": "lib/",
+      "languageVersion": "3.5"
+    },
+    {
+      "name": "geolocator_windows",
+      "rootUri": "file:///C:/Users/Adrian/AppData/Local/Pub/Cache/hosted/pub.dev/geolocator_windows-0.2.5",
+      "packageUri": "lib/",
+      "languageVersion": "3.5"
     },
     {
       "name": "google_fonts",
@@ -660,6 +702,12 @@
       "rootUri": "file:///C:/Users/Administrator/AppData/Local/Pub/Cache/hosted/pub.dev/url_launcher_windows-3.1.6",
       "packageUri": "lib/",
       "languageVersion": "3.10"
+    },
+    {
+      "name": "uuid",
+      "rootUri": "file:///C:/Users/Adrian/AppData/Local/Pub/Cache/hosted/pub.dev/uuid-4.6.0",
+      "packageUri": "lib/",
+      "languageVersion": "3.0"
     },
     {
       "name": "vector_math",
