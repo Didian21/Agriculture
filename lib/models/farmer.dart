@@ -63,7 +63,7 @@ class FarmRecord {
     this.landownerId,
     this.landownerName,
     this.boundaryPoints = const [],
-    this.soilType = 'Clay Loam',
+    this.soilType = '',
   });
 }
 

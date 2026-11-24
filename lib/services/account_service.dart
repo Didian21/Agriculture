@@ -72,7 +72,7 @@ class AccountService extends ChangeNotifier {
             cropType: row['crop_type'] ?? 'Rice',
             barangay: row['barangay'] ?? 'Biñan',
             boundaryPoints: boundaryPts,
-            soilType: row['soil_type'] ?? 'Clay Loam',
+            soilType: row['soil_type'] ?? '',
           ));
         }
       }
@@ -934,7 +934,7 @@ class AccountService extends ChangeNotifier {
     required double latitude,
     required double longitude,
     List<LatLng> boundaryPoints = const [],
-    String soilType = 'Clay Loam',
+    String soilType = '',
   }) async {
     final normBrgy = normalizeBarangay(barangay);
     final index = _farms.indexWhere((f) => f.id == id);
