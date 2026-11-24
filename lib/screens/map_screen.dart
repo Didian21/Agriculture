@@ -159,6 +159,7 @@ class _PagsanjanMapWidgetState extends State<PagsanjanMapWidget> {
   static List<Polygon>? _cachedBoundaryPolygons;
   static List<Marker>? _cachedBarangayLabelMarkers;
 
+  bool _isSatelliteMode = true;
   List<Polygon> _polygons = _cachedBoundaryPolygons ?? [];
   List<Marker> _barangayLabelMarkers = _cachedBarangayLabelMarkers ?? [];
 

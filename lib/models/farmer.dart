@@ -3,6 +3,60 @@ import 'package:latlong2/latlong.dart';
 import 'farm_record.dart';
 export 'farm_record.dart';
 
+class TechnicianFieldLogRecord {
+  final String id;
+  final String date;
+  final String barangay;
+  final String farmerName;
+  final String cropType;
+  final String category;
+  final String valueOrVolume;
+  final String unitOrPrice;
+  String statusOrFindings;
+  String status;
+  final String technicianName;
+  final DateTime createdAt;
+
+  TechnicianFieldLogRecord({
+    required this.id,
+    required this.date,
+    required this.barangay,
+    required this.farmerName,
+    required this.cropType,
+    required this.category,
+    required this.valueOrVolume,
+    required this.unitOrPrice,
+    required this.statusOrFindings,
+    required this.status,
+    required this.technicianName,
+    required this.createdAt,
+  });
+}
+
+class TechnicianVisit {
+  final String id;
+  final String farmerId;
+  final String farmerName;
+  final String barangay;
+  final String cropType;
+  final DateTime scheduledDate;
+  final String purpose;
+  String findings;
+  String status; // 'Scheduled', 'Completed', 'Cancelled'
+
+  TechnicianVisit({
+    required this.id,
+    required this.farmerId,
+    required this.farmerName,
+    required this.barangay,
+    required this.cropType,
+    required this.scheduledDate,
+    required this.purpose,
+    this.findings = '',
+    this.status = 'Scheduled',
+  });
+}
+
 class Farmer {
   final String id;
   final String username;

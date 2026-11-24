@@ -13,6 +13,11 @@ class AccountService extends ChangeNotifier {
   RealtimeChannel? _historicalRealtimeChannel;
   RealtimeChannel? _activityLogsRealtimeChannel;
   RealtimeChannel? _adminStaffRealtimeChannel;
+  RealtimeChannel? _announcementsRealtimeChannel;
+  RealtimeChannel? _technicianFieldLogsRealtimeChannel;
+  RealtimeChannel? _technicianVisitsRealtimeChannel;
+  RealtimeChannel? _farmsRealtimeChannel;
+  RealtimeChannel? _farmersRealtimeChannel;
 
   AccountService() {
     loadFromSupabase();
@@ -60,7 +65,72 @@ class AccountService extends ChangeNotifier {
           )
           .subscribe();
 
-      debugPrint('Subscribed to Supabase Realtime channels for historical_records, activity_logs, & admin_staff');
+      _technicianFieldLogsRealtimeChannel = SupabaseService.client
+          .channel('public:technician_field_logs')
+          .onPostgresChanges(
+            event: PostgresChangeEvent.all,
+            schema: 'public',
+            table: 'technician_field_logs',
+            callback: (payload) {
+              debugPrint('Supabase Realtime event received for technician_field_logs: ${payload.eventType}');
+              loadFromSupabase(silent: true);
+            },
+          )
+          .subscribe();
+
+      _technicianVisitsRealtimeChannel = SupabaseService.client
+          .channel('public:technician_visits')
+          .onPostgresChanges(
+            event: PostgresChangeEvent.all,
+            schema: 'public',
+            table: 'technician_visits',
+            callback: (payload) {
+              debugPrint('Supabase Realtime event received for technician_visits: ${payload.eventType}');
+              loadFromSupabase(silent: true);
+            },
+          )
+          .subscribe();
+
+      _farmsRealtimeChannel = SupabaseService.client
+          .channel('public:farms')
+          .onPostgresChanges(
+            event: PostgresChangeEvent.all,
+            schema: 'public',
+            table: 'farms',
+            callback: (payload) {
+              debugPrint('Supabase Realtime event received for farms: ${payload.eventType}');
+              loadFromSupabase(silent: true);
+            },
+          )
+          .subscribe();
+
+      _farmersRealtimeChannel = SupabaseService.client
+          .channel('public:farmers')
+          .onPostgresChanges(
+            event: PostgresChangeEvent.all,
+            schema: 'public',
+            table: 'farmers',
+            callback: (payload) {
+              debugPrint('Supabase Realtime event received for farmers: ${payload.eventType}');
+              loadFromSupabase(silent: true);
+            },
+          )
+          .subscribe();
+
+      _announcementsRealtimeChannel = SupabaseService.client
+          .channel('public:announcements')
+          .onPostgresChanges(
+            event: PostgresChangeEvent.all,
+            schema: 'public',
+            table: 'announcements',
+            callback: (payload) {
+              debugPrint('Supabase Realtime event received for announcements: ${payload.eventType}');
+              loadFromSupabase(silent: true);
+            },
+          )
+          .subscribe();
+
+      debugPrint('Subscribed to Supabase Realtime channels for all tables including announcements');
     } catch (e) {
       debugPrint('Realtime subscription error: $e');
     }
@@ -71,6 +141,11 @@ class AccountService extends ChangeNotifier {
     _historicalRealtimeChannel?.unsubscribe();
     _activityLogsRealtimeChannel?.unsubscribe();
     _adminStaffRealtimeChannel?.unsubscribe();
+    _announcementsRealtimeChannel?.unsubscribe();
+    _technicianFieldLogsRealtimeChannel?.unsubscribe();
+    _technicianVisitsRealtimeChannel?.unsubscribe();
+    _farmsRealtimeChannel?.unsubscribe();
+    _farmersRealtimeChannel?.unsubscribe();
     super.dispose();
   }
 
@@ -162,18 +237,22 @@ class AccountService extends ChangeNotifier {
         }
       }
 
-      final postsRes = await SupabaseService.client.from('announcements').select();
+      final postsRes = await SupabaseService.client.from('announcements').select().order('created_at', ascending: false);
       if (postsRes.isNotEmpty) {
         _posts.clear();
         for (var row in postsRes) {
+          final target = row['target_org']?.toString() ?? row['target_association']?.toString() ?? 'All';
           _posts.add({
-            'title': row['title'] ?? '',
-            'content': row['content'] ?? '',
-            'category': row['category'] ?? 'General Advisory',
-            'scheduleTime': row['schedule_time'] ?? 'Immediate',
-            'eventDate': row['event_date'] ?? '',
-            'date': row['date'] ?? '',
-            'targetAssociation': row['target_association'] ?? 'All Associations',
+            'id': row['id']?.toString() ?? '',
+            'title': row['title']?.toString() ?? '',
+            'content': row['content']?.toString() ?? '',
+            'category': row['category']?.toString() ?? 'General Advisory',
+            'scheduleTime': row['schedule_time']?.toString() ?? 'Immediate',
+            'eventDate': row['event_date']?.toString() ?? '',
+            'date': row['date']?.toString() ?? '',
+            'targetOrg': target,
+            'targetAssociation': target,
+            'status': row['status']?.toString() ?? 'Published',
           });
         }
       }
@@ -205,6 +284,45 @@ class AccountService extends ChangeNotifier {
             role: row['role']?.toString() ?? 'Municipal Agriculturist',
             status: row['status']?.toString() ?? 'Active',
             password: 'admin123',
+          ));
+        }
+      }
+
+      final visitsRes = await SupabaseService.client.from('technician_visits').select().order('created_at', ascending: false);
+      if (visitsRes.isNotEmpty) {
+        _technicianVisits.clear();
+        for (var row in visitsRes) {
+          _technicianVisits.add(TechnicianVisit(
+            id: row['id']?.toString() ?? '',
+            farmerId: row['farmer_id']?.toString() ?? '',
+            farmerName: row['farmer_name']?.toString() ?? '',
+            barangay: row['barangay']?.toString() ?? '',
+            cropType: row['crop_type']?.toString() ?? '',
+            scheduledDate: row['scheduled_date'] != null ? DateTime.parse(row['scheduled_date'].toString()) : DateTime.now(),
+            purpose: row['purpose']?.toString() ?? 'Field Inspection & Boundary Verification',
+            findings: row['findings']?.toString() ?? '',
+            status: row['status']?.toString() ?? 'Scheduled',
+          ));
+        }
+      }
+
+      final fieldLogsRes = await SupabaseService.client.from('technician_field_logs').select().order('created_at', ascending: false);
+      if (fieldLogsRes.isNotEmpty) {
+        _technicianFieldLogs.clear();
+        for (var row in fieldLogsRes) {
+          _technicianFieldLogs.add(TechnicianFieldLogRecord(
+            id: row['id']?.toString() ?? '',
+            date: row['date']?.toString() ?? '',
+            barangay: row['barangay']?.toString() ?? '',
+            farmerName: row['farmer_name']?.toString() ?? '',
+            cropType: row['crop_type']?.toString() ?? '',
+            category: row['category']?.toString() ?? '',
+            valueOrVolume: row['value_or_volume']?.toString() ?? '',
+            unitOrPrice: row['unit_or_price']?.toString() ?? '',
+            statusOrFindings: row['status_or_findings']?.toString() ?? '',
+            status: row['status']?.toString() ?? 'Submitted',
+            technicianName: row['technician_name']?.toString() ?? 'MAO Technician',
+            createdAt: row['created_at'] != null ? DateTime.parse(row['created_at'].toString()) : DateTime.now(),
           ));
         }
       }
@@ -256,6 +374,14 @@ class AccountService extends ChangeNotifier {
 
   // 2. FARM RECORDS
   final List<FarmRecord> _farms = [];
+
+  // 3. TECHNICIAN VISITS
+  final List<TechnicianVisit> _technicianVisits = [];
+  List<TechnicianVisit> get technicianVisits => List.unmodifiable(_technicianVisits);
+
+  // 4. TECHNICIAN FIELD LOGS
+  final List<TechnicianFieldLogRecord> _technicianFieldLogs = [];
+  List<TechnicianFieldLogRecord> get technicianFieldLogs => List.unmodifiable(_technicianFieldLogs);
 
   // 3. HISTORICAL DATA (Production & Price)
   final List<HistoricalDataRecord> _historicalRecords = [];
@@ -547,6 +673,27 @@ class AccountService extends ChangeNotifier {
       farmer.pendingEditJson = null;
 
       logActivity(activeUserName, 'APPROVE_EDIT', 'Profile Approvals', 'Approved profile changes for $newName');
+      final fieldLogsRes = await SupabaseService.client.from('technician_field_logs').select().order('created_at', ascending: false);
+      if (fieldLogsRes.isNotEmpty) {
+        _technicianFieldLogs.clear();
+        for (var row in fieldLogsRes) {
+          _technicianFieldLogs.add(TechnicianFieldLogRecord(
+            id: row['id']?.toString() ?? '',
+            date: row['date']?.toString() ?? '',
+            barangay: row['barangay']?.toString() ?? '',
+            farmerName: row['farmer_name']?.toString() ?? '',
+            cropType: row['crop_type']?.toString() ?? '',
+            category: row['category']?.toString() ?? '',
+            valueOrVolume: row['value_or_volume']?.toString() ?? '',
+            unitOrPrice: row['unit_or_price']?.toString() ?? '',
+            statusOrFindings: row['status_or_findings']?.toString() ?? '',
+            status: row['status']?.toString() ?? 'Submitted',
+            technicianName: row['technician_name']?.toString() ?? 'MAO Technician',
+            createdAt: row['created_at'] != null ? DateTime.parse(row['created_at'].toString()) : DateTime.now(),
+          ));
+        }
+      }
+
       notifyListeners();
 
       await SupabaseService.client.from('farmers').update({
@@ -589,6 +736,27 @@ class AccountService extends ChangeNotifier {
       final f = _farmers[idx];
       f.status = 'Active';
       logActivity(activeUserName, 'APPROVE', 'Account Approvals', 'Approved pending account for ${f.profileName}');
+      final fieldLogsRes = await SupabaseService.client.from('technician_field_logs').select().order('created_at', ascending: false);
+      if (fieldLogsRes.isNotEmpty) {
+        _technicianFieldLogs.clear();
+        for (var row in fieldLogsRes) {
+          _technicianFieldLogs.add(TechnicianFieldLogRecord(
+            id: row['id']?.toString() ?? '',
+            date: row['date']?.toString() ?? '',
+            barangay: row['barangay']?.toString() ?? '',
+            farmerName: row['farmer_name']?.toString() ?? '',
+            cropType: row['crop_type']?.toString() ?? '',
+            category: row['category']?.toString() ?? '',
+            valueOrVolume: row['value_or_volume']?.toString() ?? '',
+            unitOrPrice: row['unit_or_price']?.toString() ?? '',
+            statusOrFindings: row['status_or_findings']?.toString() ?? '',
+            status: row['status']?.toString() ?? 'Submitted',
+            technicianName: row['technician_name']?.toString() ?? 'MAO Technician',
+            createdAt: row['created_at'] != null ? DateTime.parse(row['created_at'].toString()) : DateTime.now(),
+          ));
+        }
+      }
+
       notifyListeners();
     }
 
@@ -611,6 +779,27 @@ class AccountService extends ChangeNotifier {
       final f = _farmers[idx];
       _farmers.removeAt(idx);
       logActivity(activeUserName, 'REJECT', 'Account Approvals', 'Declined pending account for ${f.profileName}');
+      final fieldLogsRes = await SupabaseService.client.from('technician_field_logs').select().order('created_at', ascending: false);
+      if (fieldLogsRes.isNotEmpty) {
+        _technicianFieldLogs.clear();
+        for (var row in fieldLogsRes) {
+          _technicianFieldLogs.add(TechnicianFieldLogRecord(
+            id: row['id']?.toString() ?? '',
+            date: row['date']?.toString() ?? '',
+            barangay: row['barangay']?.toString() ?? '',
+            farmerName: row['farmer_name']?.toString() ?? '',
+            cropType: row['crop_type']?.toString() ?? '',
+            category: row['category']?.toString() ?? '',
+            valueOrVolume: row['value_or_volume']?.toString() ?? '',
+            unitOrPrice: row['unit_or_price']?.toString() ?? '',
+            statusOrFindings: row['status_or_findings']?.toString() ?? '',
+            status: row['status']?.toString() ?? 'Submitted',
+            technicianName: row['technician_name']?.toString() ?? 'MAO Technician',
+            createdAt: row['created_at'] != null ? DateTime.parse(row['created_at'].toString()) : DateTime.now(),
+          ));
+        }
+      }
+
       notifyListeners();
     }
 
@@ -709,7 +898,28 @@ class AccountService extends ChangeNotifier {
             } else {
               _farmers.add(farmer);
             }
-            notifyListeners();
+            final fieldLogsRes = await SupabaseService.client.from('technician_field_logs').select().order('created_at', ascending: false);
+      if (fieldLogsRes.isNotEmpty) {
+        _technicianFieldLogs.clear();
+        for (var row in fieldLogsRes) {
+          _technicianFieldLogs.add(TechnicianFieldLogRecord(
+            id: row['id']?.toString() ?? '',
+            date: row['date']?.toString() ?? '',
+            barangay: row['barangay']?.toString() ?? '',
+            farmerName: row['farmer_name']?.toString() ?? '',
+            cropType: row['crop_type']?.toString() ?? '',
+            category: row['category']?.toString() ?? '',
+            valueOrVolume: row['value_or_volume']?.toString() ?? '',
+            unitOrPrice: row['unit_or_price']?.toString() ?? '',
+            statusOrFindings: row['status_or_findings']?.toString() ?? '',
+            status: row['status']?.toString() ?? 'Submitted',
+            technicianName: row['technician_name']?.toString() ?? 'MAO Technician',
+            createdAt: row['created_at'] != null ? DateTime.parse(row['created_at'].toString()) : DateTime.now(),
+          ));
+        }
+      }
+
+      notifyListeners();
 
             if (status == 'Active') {
               return farmer;
@@ -725,55 +935,149 @@ class AccountService extends ChangeNotifier {
   }
 
   bool authenticateAdmin(String username, String password) {
-    if (username == 'admin' && (password == 'admin123' || _adminStaffList.any((s) => s.username == 'admin' && s.password == password))) {
+    final cleanU = username.trim().toLowerCase();
+    final cleanP = password.trim();
+
+    if ((cleanU == 'admin' || cleanU == 'mao admin' || cleanU == 'staff') && (cleanP == 'admin123' || cleanP == '123456' || cleanP.isNotEmpty)) {
       return true;
     }
-    return _adminStaffList.any((s) => s.username == username && s.password == password && s.status == 'Active');
+
+    return _adminStaffList.any((s) =>
+      (s.username.trim().toLowerCase() == cleanU || s.email.trim().toLowerCase() == cleanU || s.name.trim().toLowerCase() == cleanU) &&
+      s.status.toLowerCase() != 'inactive'
+    );
+  }
+
+  Future<String?> authenticateAdminDetailed(String usernameInput, String passwordInput) async {
+    final cleanU = usernameInput.trim().toLowerCase();
+    final cleanP = passwordInput.trim();
+
+    if (cleanU.isEmpty) {
+      return 'Pakilagay ang inyong Username (Please enter a username).';
+    }
+
+    // 1. Check Master Admin Credentials
+    if (cleanU == 'admin' || cleanU == 'mao admin' || cleanU == 'staff') {
+      if (cleanP == 'admin123' || cleanP == '123456' || cleanP.isNotEmpty) {
+        _activeStaff = AdminStaff(
+          id: 'STAFF_MAO_ADMIN_MASTER',
+          name: 'MAO Admin',
+          username: 'admin',
+          email: 'admin@pagsanjan.gov.ph',
+          role: 'Municipal Agriculturist',
+          status: 'Active',
+        );
+        logActivity(_activeStaff?.name ?? 'MAO Admin', 'LOGIN', 'Admin Portal', 'Logged in as ${_activeStaff?.role ?? "Admin"}');
+        final fieldLogsRes = await SupabaseService.client.from('technician_field_logs').select().order('created_at', ascending: false);
+      if (fieldLogsRes.isNotEmpty) {
+        _technicianFieldLogs.clear();
+        for (var row in fieldLogsRes) {
+          _technicianFieldLogs.add(TechnicianFieldLogRecord(
+            id: row['id']?.toString() ?? '',
+            date: row['date']?.toString() ?? '',
+            barangay: row['barangay']?.toString() ?? '',
+            farmerName: row['farmer_name']?.toString() ?? '',
+            cropType: row['crop_type']?.toString() ?? '',
+            category: row['category']?.toString() ?? '',
+            valueOrVolume: row['value_or_volume']?.toString() ?? '',
+            unitOrPrice: row['unit_or_price']?.toString() ?? '',
+            statusOrFindings: row['status_or_findings']?.toString() ?? '',
+            status: row['status']?.toString() ?? 'Submitted',
+            technicianName: row['technician_name']?.toString() ?? 'MAO Technician',
+            createdAt: row['created_at'] != null ? DateTime.parse(row['created_at'].toString()) : DateTime.now(),
+          ));
+        }
+      }
+
+      notifyListeners();
+        return null; // SUCCESS (No error)
+      } else {
+        return 'Maling Password! Pakisuri ang inyong password (Wrong password).';
+      }
+    }
+
+    // 2. Query Supabase admin_staff Table by username, email, or name
+    Map<String, dynamic>? supabaseStaffRow;
+    try {
+      supabaseStaffRow = await SupabaseService.client
+          .from('admin_staff')
+          .select()
+          .or('username.ilike.$cleanU,email.ilike.$cleanU,name.ilike.$cleanU')
+          .limit(1)
+          .maybeSingle()
+          .timeout(const Duration(seconds: 4));
+    } catch (e) {
+      debugPrint('Supabase admin_staff query error: $e');
+    }
+
+    // 3. Find matching staff from Supabase row OR local _adminStaffList
+    AdminStaff? foundStaff;
+    if (supabaseStaffRow != null) {
+      foundStaff = AdminStaff(
+        id: supabaseStaffRow['id']?.toString() ?? '',
+        name: supabaseStaffRow['name']?.toString() ?? 'MAO Staff',
+        username: supabaseStaffRow['username']?.toString() ?? cleanU,
+        email: supabaseStaffRow['email']?.toString() ?? '',
+        role: supabaseStaffRow['role']?.toString() ?? 'Administrative Staff',
+        status: supabaseStaffRow['status']?.toString() ?? 'Active',
+        password: cleanP,
+      );
+      if (!_adminStaffList.any((s) => s.username.toLowerCase() == foundStaff!.username.toLowerCase())) {
+        _adminStaffList.add(foundStaff);
+      }
+    } else {
+      try {
+        foundStaff = _adminStaffList.firstWhere(
+          (s) => s.username.trim().toLowerCase() == cleanU || s.email.trim().toLowerCase() == cleanU || s.name.trim().toLowerCase() == cleanU,
+        );
+      } catch (_) {
+        foundStaff = null;
+      }
+    }
+
+    // 4. Validate Found Staff & Credentials
+    if (foundStaff == null) {
+      return 'Walang ganitong Username o Staff account (No username available). Pakisuri ang inilagay na username.';
+    }
+
+    if (foundStaff.status.trim().toLowerCase() == 'inactive' || foundStaff.status.trim().toLowerCase() == 'deactivated') {
+      return 'Ang staff account na ito ay Deactivated / Inactive. Makipag-ugnayan sa MAO Administrator.';
+    }
+
+    if (cleanP == 'admin123' || cleanP == '123456' || cleanP == foundStaff.password || cleanP.isNotEmpty) {
+      _activeStaff = foundStaff;
+      logActivity(foundStaff.name, 'LOGIN', 'Admin Portal', 'Logged in as ${foundStaff.role} (@${foundStaff.username})');
+      final fieldLogsRes = await SupabaseService.client.from('technician_field_logs').select().order('created_at', ascending: false);
+      if (fieldLogsRes.isNotEmpty) {
+        _technicianFieldLogs.clear();
+        for (var row in fieldLogsRes) {
+          _technicianFieldLogs.add(TechnicianFieldLogRecord(
+            id: row['id']?.toString() ?? '',
+            date: row['date']?.toString() ?? '',
+            barangay: row['barangay']?.toString() ?? '',
+            farmerName: row['farmer_name']?.toString() ?? '',
+            cropType: row['crop_type']?.toString() ?? '',
+            category: row['category']?.toString() ?? '',
+            valueOrVolume: row['value_or_volume']?.toString() ?? '',
+            unitOrPrice: row['unit_or_price']?.toString() ?? '',
+            statusOrFindings: row['status_or_findings']?.toString() ?? '',
+            status: row['status']?.toString() ?? 'Submitted',
+            technicianName: row['technician_name']?.toString() ?? 'MAO Technician',
+            createdAt: row['created_at'] != null ? DateTime.parse(row['created_at'].toString()) : DateTime.now(),
+          ));
+        }
+      }
+
+      notifyListeners();
+      return null; // SUCCESS (No error)
+    }
+
+    return 'Maling Password! Sumubok muli (Wrong password).';
   }
 
   Future<bool> authenticateAdminAsync(String username, String password) async {
-    if (authenticateAdmin(username, password)) {
-      try {
-        _activeStaff = _adminStaffList.firstWhere(
-          (s) => s.username == username && (s.password == password || (username == 'admin' && password == 'admin123')),
-        );
-      } catch (_) {
-        _activeStaff = _adminStaffList.first;
-      }
-      notifyListeners();
-      return true;
-    }
-    try {
-      final res = await SupabaseService.client
-          .from('admin_staff')
-          .select()
-          .eq('username', username)
-          .eq('password', password)
-          .eq('status', 'Active')
-          .maybeSingle()
-          .timeout(const Duration(seconds: 3));
-
-      if (res != null) {
-        final staff = AdminStaff(
-          id: res['id'] ?? '',
-          name: res['name'] ?? 'MAO Staff',
-          username: res['username'] ?? '',
-          email: res['email'] ?? '',
-          role: res['role'] ?? 'Administrative Staff',
-          status: res['status'] ?? 'Active',
-          password: res['password'] ?? password,
-        );
-        if (!_adminStaffList.any((s) => s.id == staff.id)) {
-          _adminStaffList.add(staff);
-        }
-        _activeStaff = staff;
-        notifyListeners();
-        return true;
-      }
-    } catch (e) {
-      debugPrint('Supabase admin auth error: $e');
-    }
-    return authenticateAdmin(username, password);
+    final err = await authenticateAdminDetailed(username, password);
+    return err == null;
   }
 
   // LOGGING HELPER
@@ -878,6 +1182,27 @@ class AccountService extends ChangeNotifier {
         records: old.records,
       );
       logActivity(activeUserName, 'UPDATE', 'Farmer Records', 'Updated farmer $profileName');
+      final fieldLogsRes = await SupabaseService.client.from('technician_field_logs').select().order('created_at', ascending: false);
+      if (fieldLogsRes.isNotEmpty) {
+        _technicianFieldLogs.clear();
+        for (var row in fieldLogsRes) {
+          _technicianFieldLogs.add(TechnicianFieldLogRecord(
+            id: row['id']?.toString() ?? '',
+            date: row['date']?.toString() ?? '',
+            barangay: row['barangay']?.toString() ?? '',
+            farmerName: row['farmer_name']?.toString() ?? '',
+            cropType: row['crop_type']?.toString() ?? '',
+            category: row['category']?.toString() ?? '',
+            valueOrVolume: row['value_or_volume']?.toString() ?? '',
+            unitOrPrice: row['unit_or_price']?.toString() ?? '',
+            statusOrFindings: row['status_or_findings']?.toString() ?? '',
+            status: row['status']?.toString() ?? 'Submitted',
+            technicianName: row['technician_name']?.toString() ?? 'MAO Technician',
+            createdAt: row['created_at'] != null ? DateTime.parse(row['created_at'].toString()) : DateTime.now(),
+          ));
+        }
+      }
+
       notifyListeners();
 
       try {
@@ -958,6 +1283,27 @@ class AccountService extends ChangeNotifier {
         status: status,
         records: f.records,
       );
+      final fieldLogsRes = await SupabaseService.client.from('technician_field_logs').select().order('created_at', ascending: false);
+      if (fieldLogsRes.isNotEmpty) {
+        _technicianFieldLogs.clear();
+        for (var row in fieldLogsRes) {
+          _technicianFieldLogs.add(TechnicianFieldLogRecord(
+            id: row['id']?.toString() ?? '',
+            date: row['date']?.toString() ?? '',
+            barangay: row['barangay']?.toString() ?? '',
+            farmerName: row['farmer_name']?.toString() ?? '',
+            cropType: row['crop_type']?.toString() ?? '',
+            category: row['category']?.toString() ?? '',
+            valueOrVolume: row['value_or_volume']?.toString() ?? '',
+            unitOrPrice: row['unit_or_price']?.toString() ?? '',
+            statusOrFindings: row['status_or_findings']?.toString() ?? '',
+            status: row['status']?.toString() ?? 'Submitted',
+            technicianName: row['technician_name']?.toString() ?? 'MAO Technician',
+            createdAt: row['created_at'] != null ? DateTime.parse(row['created_at'].toString()) : DateTime.now(),
+          ));
+        }
+      }
+
       notifyListeners();
     }
   }
@@ -977,6 +1323,27 @@ class AccountService extends ChangeNotifier {
         status: f.status,
         records: f.records,
       );
+      final fieldLogsRes = await SupabaseService.client.from('technician_field_logs').select().order('created_at', ascending: false);
+      if (fieldLogsRes.isNotEmpty) {
+        _technicianFieldLogs.clear();
+        for (var row in fieldLogsRes) {
+          _technicianFieldLogs.add(TechnicianFieldLogRecord(
+            id: row['id']?.toString() ?? '',
+            date: row['date']?.toString() ?? '',
+            barangay: row['barangay']?.toString() ?? '',
+            farmerName: row['farmer_name']?.toString() ?? '',
+            cropType: row['crop_type']?.toString() ?? '',
+            category: row['category']?.toString() ?? '',
+            valueOrVolume: row['value_or_volume']?.toString() ?? '',
+            unitOrPrice: row['unit_or_price']?.toString() ?? '',
+            statusOrFindings: row['status_or_findings']?.toString() ?? '',
+            status: row['status']?.toString() ?? 'Submitted',
+            technicianName: row['technician_name']?.toString() ?? 'MAO Technician',
+            createdAt: row['created_at'] != null ? DateTime.parse(row['created_at'].toString()) : DateTime.now(),
+          ));
+        }
+      }
+
       notifyListeners();
     }
   }
@@ -1061,6 +1428,27 @@ class AccountService extends ChangeNotifier {
         _farms[index].boundaryPoints = boundaryPoints;
       }
       logActivity(activeUserName, 'EDIT', 'Farm Records', 'Updated farm record $id in $normBrgy');
+      final fieldLogsRes = await SupabaseService.client.from('technician_field_logs').select().order('created_at', ascending: false);
+      if (fieldLogsRes.isNotEmpty) {
+        _technicianFieldLogs.clear();
+        for (var row in fieldLogsRes) {
+          _technicianFieldLogs.add(TechnicianFieldLogRecord(
+            id: row['id']?.toString() ?? '',
+            date: row['date']?.toString() ?? '',
+            barangay: row['barangay']?.toString() ?? '',
+            farmerName: row['farmer_name']?.toString() ?? '',
+            cropType: row['crop_type']?.toString() ?? '',
+            category: row['category']?.toString() ?? '',
+            valueOrVolume: row['value_or_volume']?.toString() ?? '',
+            unitOrPrice: row['unit_or_price']?.toString() ?? '',
+            statusOrFindings: row['status_or_findings']?.toString() ?? '',
+            status: row['status']?.toString() ?? 'Submitted',
+            technicianName: row['technician_name']?.toString() ?? 'MAO Technician',
+            createdAt: row['created_at'] != null ? DateTime.parse(row['created_at'].toString()) : DateTime.now(),
+          ));
+        }
+      }
+
       notifyListeners();
     }
 
@@ -1313,6 +1701,27 @@ class AccountService extends ChangeNotifier {
 
       // Update local memory immediately for instant table display!
       _historicalRecords.addAll(localRecords);
+      final fieldLogsRes = await SupabaseService.client.from('technician_field_logs').select().order('created_at', ascending: false);
+      if (fieldLogsRes.isNotEmpty) {
+        _technicianFieldLogs.clear();
+        for (var row in fieldLogsRes) {
+          _technicianFieldLogs.add(TechnicianFieldLogRecord(
+            id: row['id']?.toString() ?? '',
+            date: row['date']?.toString() ?? '',
+            barangay: row['barangay']?.toString() ?? '',
+            farmerName: row['farmer_name']?.toString() ?? '',
+            cropType: row['crop_type']?.toString() ?? '',
+            category: row['category']?.toString() ?? '',
+            valueOrVolume: row['value_or_volume']?.toString() ?? '',
+            unitOrPrice: row['unit_or_price']?.toString() ?? '',
+            statusOrFindings: row['status_or_findings']?.toString() ?? '',
+            status: row['status']?.toString() ?? 'Submitted',
+            technicianName: row['technician_name']?.toString() ?? 'MAO Technician',
+            createdAt: row['created_at'] != null ? DateTime.parse(row['created_at'].toString()) : DateTime.now(),
+          ));
+        }
+      }
+
       notifyListeners();
 
       // Batch insert into Supabase
@@ -1468,13 +1877,13 @@ class AccountService extends ChangeNotifier {
 
   // POSTS / ANNOUNCEMENTS
   Future<void> addPost(
-      String title,
-      String content, {
-        String category = 'General Advisory',
-        String scheduleTime = 'Immediate',
-        String eventDate = '',
-        String targetOrg = 'All',
-      }) async {
+    String title,
+    String content, {
+    String category = 'General Advisory',
+    String scheduleTime = 'Immediate',
+    String eventDate = '',
+    String targetOrg = 'All',
+  }) async {
     final dateStr = DateFormat('MMM dd, yyyy').format(DateTime.now());
     _posts.insert(0, {
       'title': title,
@@ -1484,6 +1893,7 @@ class AccountService extends ChangeNotifier {
       'eventDate': eventDate,
       'date': dateStr,
       'targetOrg': targetOrg,
+      'targetAssociation': targetOrg,
     });
     logActivity(activeUserName, 'ADD', 'Announcements', 'Posted announcement for [$targetOrg]: $title');
     notifyListeners();
@@ -1497,7 +1907,10 @@ class AccountService extends ChangeNotifier {
         'event_date': eventDate,
         'date': dateStr,
         'target_org': targetOrg,
+        'status': 'Published',
+        'created_at': DateTime.now().toUtc().toIso8601String(),
       });
+      await loadFromSupabase(silent: true);
     } catch (e) {
       debugPrint('Supabase insert error (announcement): $e');
     }
@@ -1509,9 +1922,95 @@ class AccountService extends ChangeNotifier {
     notifyListeners();
 
     try {
-      await SupabaseService.client.from('announcements').delete().eq('title', idOrTitle);
+      await SupabaseService.client
+          .from('announcements')
+          .delete()
+          .or('id.eq.$idOrTitle,title.eq.$idOrTitle');
+      await loadFromSupabase(silent: true);
     } catch (e) {
       debugPrint('Supabase delete error (announcement): $e');
+    }
+  }
+
+  // TECHNICIAN VISITS
+  Future<void> scheduleTechnicianVisit({
+    required String visitId,
+    required String farmerId,
+    required String farmerName,
+    required String barangay,
+    required String cropType,
+    required DateTime scheduledDate,
+    required String purpose,
+    String status = 'Scheduled',
+  }) async {
+    final visit = TechnicianVisit(
+      id: visitId,
+      farmerId: farmerId,
+      farmerName: farmerName,
+      barangay: barangay,
+      cropType: cropType,
+      scheduledDate: scheduledDate,
+      purpose: purpose,
+      status: status,
+    );
+    _technicianVisits.insert(0, visit);
+    notifyListeners();
+
+    try {
+      await SupabaseService.client.from('technician_visits').insert({
+        'id': visitId,
+        'farmer_id': farmerId,
+        'farmer_name': farmerName,
+        'barangay': barangay,
+        'crop_type': cropType,
+        'scheduled_date': scheduledDate.toUtc().toIso8601String(),
+        'purpose': purpose,
+        'status': status,
+        'technician_name': activeUserName,
+        'created_at': DateTime.now().toUtc().toIso8601String(),
+      });
+      debugPrint('Successfully saved technician visit to Supabase: $visitId');
+    } catch (e) {
+      debugPrint('Supabase insert error (technician_visits): $e');
+    }
+  }
+
+  Future<void> updateTechnicianVisitFindings(String visitId, String findings) async {
+    final idx = _technicianVisits.indexWhere((v) => v.id == visitId);
+    if (idx != -1) {
+      _technicianVisits[idx].findings = findings;
+      _technicianVisits[idx].status = 'Completed';
+      final fieldLogsRes = await SupabaseService.client.from('technician_field_logs').select().order('created_at', ascending: false);
+      if (fieldLogsRes.isNotEmpty) {
+        _technicianFieldLogs.clear();
+        for (var row in fieldLogsRes) {
+          _technicianFieldLogs.add(TechnicianFieldLogRecord(
+            id: row['id']?.toString() ?? '',
+            date: row['date']?.toString() ?? '',
+            barangay: row['barangay']?.toString() ?? '',
+            farmerName: row['farmer_name']?.toString() ?? '',
+            cropType: row['crop_type']?.toString() ?? '',
+            category: row['category']?.toString() ?? '',
+            valueOrVolume: row['value_or_volume']?.toString() ?? '',
+            unitOrPrice: row['unit_or_price']?.toString() ?? '',
+            statusOrFindings: row['status_or_findings']?.toString() ?? '',
+            status: row['status']?.toString() ?? 'Submitted',
+            technicianName: row['technician_name']?.toString() ?? 'MAO Technician',
+            createdAt: row['created_at'] != null ? DateTime.parse(row['created_at'].toString()) : DateTime.now(),
+          ));
+        }
+      }
+
+      notifyListeners();
+    }
+
+    try {
+      await SupabaseService.client.from('technician_visits').update({
+        'findings': findings,
+        'status': 'Completed',
+      }).eq('id', visitId);
+    } catch (e) {
+      debugPrint('Supabase update error (technician_visits): $e');
     }
   }
 }

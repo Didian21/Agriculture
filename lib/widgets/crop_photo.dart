@@ -42,14 +42,56 @@ class CropPhotos {
     return out;
   }
 
+  static String getDirectAssetPath(String cropId) {
+    final cleanId = cropId.trim().toLowerCase();
+    if (cleanId.contains('rice') || cleanId.contains('palay')) return 'assets/images/crops/rice.jpg';
+    if (cleanId.contains('coconut') || cleanId.contains('niyog')) return 'assets/images/crops/coconut.jpg';
+    if (cleanId.contains('eggplant') || cleanId.contains('talong')) return 'assets/images/crops/eggplant.jpg';
+    if (cleanId.contains('squash') || cleanId.contains('kalabasa')) return 'assets/images/crops/squash.jpg';
+    if (cleanId.contains('string') || cleanId.contains('sitaw') || cleanId.contains('bean')) return 'assets/images/crops/string_beans.jpg';
+    if (cleanId.contains('okra')) return 'assets/images/crops/okra.jpg';
+    if (cleanId.contains('pechay') || cleanId.contains('petsay')) return 'assets/images/crops/pechay_tagalog.jpg';
+    if (cleanId.contains('chili') || cleanId.contains('sili')) {
+      if (cleanId.contains('long') || cleanId.contains('haba') || cleanId.contains('panigang')) return 'assets/images/crops/chili_long.jpg';
+      return 'assets/images/crops/chili_hot.jpg';
+    }
+    if (cleanId.contains('cacao') || cleanId.contains('kakaw')) return 'assets/images/crops/coconut.jpg';
+    if (cleanId.contains('cassava') || cleanId.contains('kamoteng kahoy') || cleanId.contains('balinghoy')) return 'assets/images/crops/sweet_potato.jpg';
+
+    return 'assets/images/crops/rice.jpg';
+  }
+
   static String? find(Map<String, String> m, String cropId) {
+    final cleanId = cropId.trim().toLowerCase();
+
+    if (cleanId.contains('rice') || cleanId.contains('palay')) return m[norm('rice')] ?? 'assets/images/crops/rice.jpg';
+    if (cleanId.contains('coconut') || cleanId.contains('niyog')) return m[norm('coconut')] ?? 'assets/images/crops/coconut.jpg';
+    if (cleanId.contains('eggplant') || cleanId.contains('talong')) return m[norm('eggplant')] ?? 'assets/images/crops/eggplant.jpg';
+    if (cleanId.contains('squash') || cleanId.contains('kalabasa')) return m[norm('squash')] ?? 'assets/images/crops/squash.jpg';
+    if (cleanId.contains('string') || cleanId.contains('sitaw') || cleanId.contains('bean')) return m[norm('string_beans')] ?? 'assets/images/crops/string_beans.jpg';
+    if (cleanId.contains('okra')) return m[norm('okra')] ?? 'assets/images/crops/okra.jpg';
+    if (cleanId.contains('pechay') || cleanId.contains('petsay')) return m[norm('pechay_tagalog')] ?? m[norm('pechay_baguio')] ?? 'assets/images/crops/pechay_tagalog.jpg';
+    if (cleanId.contains('chili') || cleanId.contains('sili')) {
+      if (cleanId.contains('long') || cleanId.contains('haba') || cleanId.contains('panigang')) return m[norm('chili_long')] ?? 'assets/images/crops/chili_long.jpg';
+      return m[norm('chili_hot')] ?? 'assets/images/crops/chili_hot.jpg';
+    }
+    if (cleanId.contains('cacao') || cleanId.contains('kakaw')) return m[norm('cacao')] ?? m[norm('coconut')] ?? 'assets/images/crops/coconut.jpg';
+    if (cleanId.contains('cassava') || cleanId.contains('kamoteng kahoy') || cleanId.contains('balinghoy')) return m[norm('cassava')] ?? m[norm('sweet_potato')] ?? 'assets/images/crops/sweet_potato.jpg';
+
     final info = cropInfoFor(cropId);
     final keys = info == null ? [cropId] : [info.slug, info.id, info.nameEn, info.nameTl];
     for (final k in keys) {
       final p = m[norm(k)];
       if (p != null) return p;
     }
-    return null;
+
+    for (final entry in m.entries) {
+      if (cleanId.contains(entry.key) || entry.key.contains(cleanId)) {
+        return entry.value;
+      }
+    }
+
+    return getDirectAssetPath(cropId);
   }
 }
 
@@ -80,11 +122,12 @@ class CropPhoto extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final fb = fallback ?? _emoji();
+    final directPath = CropPhotos.getDirectAssetPath(cropId);
+
     return FutureBuilder<Map<String, String>>(
       future: CropPhotos.load(),
       builder: (context, snap) {
-        final path = snap.hasData ? CropPhotos.find(snap.data!, cropId) : null;
-        if (path == null) return fb;
+        final path = snap.hasData ? (CropPhotos.find(snap.data!, cropId) ?? directPath) : directPath;
         return Image.asset(
           path,
           fit: BoxFit.cover,

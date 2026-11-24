@@ -58,10 +58,18 @@ class FarmerDashboard extends StatelessWidget {
       body: Consumer<AccountService>(
         builder: (context, accountService, child) {
           final posts = accountService.posts.where((p) {
-            final target = p['targetAssociation'] ?? p['target_association'] ?? 'All Associations';
-            if (target == 'All Associations' || target == 'All') return true;
-            return target.toLowerCase() == farmer.organization.toLowerCase();
+            final target = (p['targetOrg'] ?? p['targetAssociation'] ?? p['target_org'] ?? 'All').trim();
+            final farmerOrg = farmer.organization.trim();
+
+            if (target == 'All' || target == 'All Associations' || target == 'Choose Association' || target.isEmpty) {
+              return true;
+            }
+            if (farmerOrg.isEmpty || farmerOrg == 'Not Associated' || farmerOrg == 'Walang Samahan') {
+              return target == 'Not Associated' || target == 'Walang Samahan' || target == 'Independent';
+            }
+            return target.toLowerCase() == farmerOrg.toLowerCase() || farmerOrg.toLowerCase().contains(target.toLowerCase());
           }).toList();
+
           return SingleChildScrollView(
             padding: const EdgeInsets.all(16.0),
             child: Column(
@@ -72,14 +80,14 @@ class FarmerDashboard extends StatelessWidget {
                   child: ListTile(
                     leading: const Icon(Icons.account_circle, size: 50, color: Colors.green),
                     title: Text(farmer.profileName, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-                    subtitle: const Text('Verified Farmer'),
+                    subtitle: Text('Verified Farmer • Brgy. ${farmer.barangay} (${farmer.organization.isNotEmpty ? farmer.organization : "Independent"})'),
                   ),
                 ),
                 const SizedBox(height: 20),
                 const Text('Office Announcements & Advisories', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFF0056B3))),
                 const SizedBox(height: 10),
                 if (posts.isEmpty)
-                  const Text('No announcements yet.', style: TextStyle(color: Colors.grey))
+                  const Text('No announcements for your association yet.', style: TextStyle(color: Colors.grey))
                 else
                   ...posts.map((post) => Card(
                     elevation: 2,
@@ -110,16 +118,29 @@ class FarmerDashboard extends StatelessWidget {
                                   style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.white),
                                 ),
                               ),
-                              Text(
-                                post['date'] ?? '',
-                                style: const TextStyle(fontSize: 11, color: Colors.white70),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFF0284C7).withValues(alpha: 0.3),
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(color: const Color(0xFF38BDF8), width: 1),
+                                ),
+                                child: Text(
+                                  'Target: ${post['targetOrg'] ?? post['targetAssociation'] ?? "All"}',
+                                  style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF38BDF8)),
+                                ),
                               ),
                             ],
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            post['date'] ?? '',
+                            style: const TextStyle(fontSize: 11, color: Colors.white70),
                           ),
                           const SizedBox(height: 8),
                           Text(
                             post['content'] ?? '',
-                            style: const TextStyle(fontSize: 13, color: Colors.white70),
+                            style: const TextStyle(fontSize: 13, color: Colors.white70, height: 1.4),
                           ),
                         ],
                       ),

@@ -29,9 +29,11 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
     final password = _passwordCtrl.text.trim();
 
     final accountService = Provider.of<AccountService>(context, listen: false);
-    final isValid = await accountService.authenticateAdminAsync(username, password);
+    final errorMessage = await accountService.authenticateAdminDetailed(username, password);
+
     if (!mounted) return;
-    if (isValid) {
+
+    if (errorMessage == null) {
       final role = accountService.activeStaff.role.toLowerCase();
       final isTechnician = role.contains('technician') || role.contains('tekniko');
 
@@ -43,8 +45,26 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
         (route) => false,
       );
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Invalid Username or Password')),
+      showDialog(
+        context: context,
+        builder: (alertCtx) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: const Row(
+            children: [
+              Icon(Icons.error_outline_rounded, color: Colors.redAccent, size: 28),
+              SizedBox(width: 8),
+              Text('Login Failed', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+            ],
+          ),
+          content: Text(errorMessage, style: const TextStyle(fontSize: 13.5, height: 1.4)),
+          actions: [
+            FilledButton(
+              style: FilledButton.styleFrom(backgroundColor: const Color(0xFF0056B3)),
+              onPressed: () => Navigator.pop(alertCtx),
+              child: const Text('OK'),
+            ),
+          ],
+        ),
       );
     }
   }

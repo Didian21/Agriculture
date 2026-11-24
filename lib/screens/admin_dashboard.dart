@@ -1934,6 +1934,7 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
                     _buildNavItem(icon: Icons.supervisor_account_rounded, label: locale.navAdminStaff, index: 5, isDark: isDark),
                     _buildNavItem(icon: Icons.receipt_long_rounded, label: locale.navActivityLog, index: 6, isDark: isDark),
                     _buildNavItem(icon: Icons.trending_up_rounded, label: isTagalog ? 'Pagtataya ng Presyo sa Sakahan' : 'Farmgate Price Prediction', index: 7, isDark: isDark),
+                    _buildNavItem(icon: Icons.table_chart_rounded, label: isTagalog ? 'Ulat ng Technician (Excel Logs)' : 'Technician Field Logs', index: 8, isDark: isDark),
                   ],
                 ),
               ),
@@ -2032,6 +2033,9 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
         break;
       case 7:
         mainContentArea = _buildMachineLearningView(service, locale, isDark, cardBg, textColor, subtextColor, cardBorder, primaryAccent);
+        break;
+      case 8:
+        mainContentArea = _buildTechnicianFieldLogsView(service, locale, isDark, cardBg, textColor, subtextColor, cardBorder, primaryAccent);
         break;
       default:
         mainContentArea = _buildDashboardSummaryView(service, locale, isDark, cardBg, textColor, subtextColor, cardBorder, primaryAccent, secondaryBlue);
@@ -8172,19 +8176,21 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
 
           displayedFarms.add(realFarmPlot);
 
-      if (_showRegisteredPins) {
-        mapMarkers.add(_buildBlueFarmMarker(distinctFarm, () {
-          LatLng center = LatLng(distinctFarm.latitude, distinctFarm.longitude);
-          if (originalFarm.boundaryPoints.length >= 3) {
-            center = calculatePolygonCentroid(originalFarm.boundaryPoints);
+          if (_showRegisteredPins) {
+            mapMarkers.add(_buildBlueFarmMarker(realFarmPlot, () {
+              LatLng center = LatLng(realFarmPlot.latitude, realFarmPlot.longitude);
+              if (realFarmPlot.boundaryPoints.length >= 3) {
+                center = calculatePolygonCentroid(realFarmPlot.boundaryPoints);
+              }
+              setState(() {
+                _mapCenter = center;
+                _mapZoom = 17.5;
+                _showMapSidePanel = false;
+              });
+              _showFarmWeatherModal(context, service, realFarmPlot, locale, cardBg, textColor);
+            }));
           }
-          setState(() {
-            _mapCenter = center;
-            _mapZoom = 17.5;
-            _showMapSidePanel = false;
-          });
-          _showFarmWeatherModal(context, service, originalFarm, locale, cardBg, textColor);
-        }));
+        }
       }
     }
 
@@ -9461,6 +9467,238 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
   }
 
   // ==========================================
+  // MODULE 9: TECHNICIAN FIELD LOGS & SUBMISSIONS VIEW (EXCEL RESULTS REALTIME)
+  // ==========================================
+  Widget _buildTechnicianFieldLogsView(
+    AccountService service,
+    AdminLocale locale,
+    bool isDark,
+    Color cardBg,
+    Color textColor,
+    Color subtextColor,
+    Color cardBorder,
+    Color primaryAccent,
+  ) {
+    final directFieldLogs = service.technicianFieldLogs;
+    final activitySubmittedLogs = service.activityLogs.where((log) =>
+      log.module == 'Technician Portal' || log.action.contains('SPREADSHEET') || log.action.contains('TECHNICIAN') || log.action.contains('SUBMITTED')
+    ).toList();
+
+    return Padding(
+      padding: const EdgeInsets.all(22),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text('TECHNICIAN FIELD DATA SUBMISSIONS', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: primaryAccent)),
+                  const SizedBox(height: 2),
+                  Text(
+                    locale.isTagalog ? 'Mga Ulat ng Agricultural Technician (Excel Logs)' : 'Technician Field Inspection & Excel Log Results',
+                    style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: textColor),
+                  ),
+                ],
+              ),
+              _buildExportImportButtons(context, 'Technician Field Logs', locale, service, showImport: false),
+            ],
+          ),
+          const SizedBox(height: 16),
+
+          // SUMMARY METRIC CARDS FOR TECHNICIAN LOGS
+          Row(
+            children: [
+              Expanded(
+                child: Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: cardBg,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: cardBorder),
+                  ),
+                  child: Row(
+                    children: [
+                      const CircleAvatar(
+                        radius: 20,
+                        backgroundColor: Color(0xFFDCFCE7),
+                        child: Icon(Icons.assignment_turned_in_rounded, color: Color(0xFF16A34A), size: 22),
+                      ),
+                      const SizedBox(width: 12),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('${directFieldLogs.isNotEmpty ? directFieldLogs.length : activitySubmittedLogs.length}', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: textColor)),
+                          Text(locale.isTagalog ? 'Kabuuang Na-submit na Ulat' : 'Total Field Submissions', style: TextStyle(fontSize: 11, color: subtextColor)),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: cardBg,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: cardBorder),
+                  ),
+                  child: Row(
+                    children: [
+                      const CircleAvatar(
+                        radius: 20,
+                        backgroundColor: Color(0xFFE0F2FE),
+                        child: Icon(Icons.person_pin_rounded, color: Color(0xFF0284C7), size: 22),
+                      ),
+                      const SizedBox(width: 12),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('nhiel (Technician)', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: textColor)),
+                          Text(locale.isTagalog ? 'Aktibong Field Technician' : 'Active Field Technician', style: TextStyle(fontSize: 11, color: subtextColor)),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+
+          // DATA TABLE OF SUBMITTED LOGS FROM SUPABASE
+          Expanded(
+            child: Card(
+              color: cardBg,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: BorderSide(color: cardBorder)),
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Row(
+                          children: [
+                            const Icon(Icons.table_rows_rounded, color: Color(0xFF0056B3), size: 20),
+                            const SizedBox(width: 8),
+                            Text(
+                              locale.isTagalog ? 'Talahanayan ng Mismong Ulat mula sa Field (Realtime Supabase)' : 'Live Field Log Submissions Table (Realtime Supabase)',
+                              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: textColor),
+                            ),
+                          ],
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                          decoration: BoxDecoration(color: const Color(0xFFDCFCE7), borderRadius: BorderRadius.circular(12)),
+                          child: const Row(
+                            children: [
+                              Icon(Icons.bolt_rounded, size: 14, color: Color(0xFF15803D)),
+                              SizedBox(width: 4),
+                              Text('Realtime Auto-Update Active', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF15803D))),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+
+                    Expanded(
+                      child: SingleChildScrollView(
+                        scrollDirection: Axis.vertical,
+                        child: SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
+                          child: directFieldLogs.isNotEmpty
+                              ? DataTable(
+                                  headingRowColor: WidgetStateProperty.all(isDark ? const Color(0xFF1E293B) : const Color(0xFFEFF6FF)),
+                                  columns: const [
+                                    DataColumn(label: Text('Date', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
+                                    DataColumn(label: Text('Technician', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
+                                    DataColumn(label: Text('Barangay', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
+                                    DataColumn(label: Text('Farmer Name', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
+                                    DataColumn(label: Text('Crop / Item', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
+                                    DataColumn(label: Text('Category', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
+                                    DataColumn(label: Text('Value / Quantity', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
+                                    DataColumn(label: Text('Status & Findings', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
+                                    DataColumn(label: Text('Status Badge', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
+                                  ],
+                                  rows: directFieldLogs.map((row) {
+                                    final isSubmitted = row.status.toLowerCase() == 'submitted';
+                                    return DataRow(
+                                      cells: [
+                                        DataCell(Text(row.date, style: TextStyle(fontSize: 12, color: textColor))),
+                                        DataCell(Text(row.technicianName, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF0056B3)))),
+                                        DataCell(Text(row.barangay, style: TextStyle(fontSize: 12, color: textColor))),
+                                        DataCell(Text(row.farmerName, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF0056B3)))),
+                                        DataCell(Text(row.cropType, style: TextStyle(fontSize: 12, color: textColor))),
+                                        DataCell(Text(row.category, style: TextStyle(fontSize: 12, color: textColor))),
+                                        DataCell(Text(row.valueOrVolume, style: TextStyle(fontSize: 12, color: textColor))),
+                                        DataCell(Text(row.statusOrFindings, style: TextStyle(fontSize: 12, color: textColor))),
+                                        DataCell(
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                            decoration: BoxDecoration(
+                                              color: (isSubmitted ? const Color(0xFF16A34A) : const Color(0xFF0284C7)).withValues(alpha: 0.15),
+                                              borderRadius: BorderRadius.circular(8),
+                                            ),
+                                            child: Text(
+                                              row.status,
+                                              style: TextStyle(
+                                                fontSize: 11,
+                                                fontWeight: FontWeight.bold,
+                                                color: isSubmitted ? const Color(0xFF16A34A) : const Color(0xFF0284C7),
+                                              ),
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    );
+                                  }).toList(),
+                                )
+                              : DataTable(
+                                  headingRowColor: WidgetStateProperty.all(isDark ? const Color(0xFF1E293B) : const Color(0xFFEFF6FF)),
+                                  columns: const [
+                                    DataColumn(label: Text('Date & Time', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
+                                    DataColumn(label: Text('Technician User', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
+                                    DataColumn(label: Text('Action / Module', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
+                                    DataColumn(label: Text('Submitted Field Log Details', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12))),
+                                  ],
+                                  rows: activitySubmittedLogs.map((log) {
+                                    return DataRow(
+                                      cells: [
+                                        DataCell(Text(DateFormat('yyyy-MM-dd hh:mm a').format(log.timestamp), style: TextStyle(fontSize: 12, color: textColor))),
+                                        DataCell(Text(log.user, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF0056B3)))),
+                                        DataCell(
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                            decoration: BoxDecoration(color: const Color(0xFF16A34A).withValues(alpha: 0.12), borderRadius: BorderRadius.circular(8)),
+                                            child: Text(log.action, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF16A34A))),
+                                          ),
+                                        ),
+                                        DataCell(Text(log.details, style: TextStyle(fontSize: 12, color: textColor))),
+                                      ],
+                                    );
+                                  }).toList(),
+                                ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ==========================================
   // MODULE 7: ACTIVITY LOG
   // ==========================================
   Widget _buildActivityLogView(
@@ -9936,7 +10174,7 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
                     category: selectedCategory,
                     scheduleTime: scheduleStr,
                     eventDate: eventStr,
-                    targetAssociation: selectedTargetAssociation,
+                    targetOrg: selectedTargetAssociation,
                   );
                   Navigator.pop(context);
                   ScaffoldMessenger.of(context).showSnackBar(

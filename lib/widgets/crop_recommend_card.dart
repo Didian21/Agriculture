@@ -35,6 +35,7 @@ class CropRecommendCard extends StatefulWidget {
 class _CropRecommendCardState extends State<CropRecommendCard> {
   String? _open;
   bool _all = false;
+  bool _showOff = false;
 
   static const _labelTl = {'soil': 'Lupa', 'drain': 'Agos ng tubig', 'water': 'Suplay ng tubig', 'season': 'Panahon', 'area': 'Lawak', 'market': 'Pamilihan at tubo'};
   static const _labelEn = {'soil': 'Soil', 'drain': 'Drainage', 'water': 'Water supply', 'season': 'Season', 'area': 'Land size', 'market': 'Market and profit'};
@@ -54,13 +55,17 @@ class _CropRecommendCardState extends State<CropRecommendCard> {
       areaHa: widget.areaHa,
       plantedOn: widget.plantedOn,
     );
-    var top = (_all ? recs : recs.take(5)).toList();
+    // Agroclimatic na pagsusuri: ang mga pananim na hindi panahon sa buwan ng pagtatanim ay hindi inirerekomenda.
+    final inSeason = recs.where((r) => r.factor('season').level != RecLevel.poor).toList();
+    final offSeason = recs.where((r) => r.factor('season').level == RecLevel.poor).toList();
+    var top = (_all ? inSeason : inSeason.take(5)).toList();
     final sel = widget.selected;
     if (sel != null && !top.any((r) => r.crop.id == sel)) {
-      final extra = recs.where((r) => r.crop.id == sel);
+      final extra = inSeason.where((r) => r.crop.id == sel);
       if (extra.isNotEmpty) top = [...top, extra.first];
     }
     final area = widget.areaHa;
+    final monthName = DateFormat.yMMMM(locale).format(widget.plantedOn);
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
@@ -81,17 +86,65 @@ class _CropRecommendCardState extends State<CropRecommendCard> {
                 'Based on soil, water, Pagsanjan weather, land size, demand and estimated profit. Pick your crop here.'),
             style: const TextStyle(fontSize: 11.5, color: AppColors.muted, height: 1.3),
           ),
-          const SizedBox(height: 12),
-          for (var i = 0; i < top.length; i++) _item(context, top[i], recs.indexOf(top[i]), tl, peso, area),
-          Center(
-            child: TextButton.icon(
-              onPressed: () => setState(() => _all = !_all),
-              icon: Icon(_all ? Icons.expand_less_rounded : Icons.expand_more_rounded),
-              label: Text(_all
-                  ? tr(context, 'Ipakita ang top 5 lang', 'Show top 5 only')
-                  : tr(context, 'Ipakita ang lahat ng ${recs.length} pananim', 'Show all ${recs.length} crops')),
-            ),
+          const SizedBox(height: 10),
+          // Agroclimatic na pagsusuri (una)
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(color: AppColors.leaf.withValues(alpha: 0.08), borderRadius: BorderRadius.circular(14)),
+            child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              const Icon(Icons.wb_cloudy_rounded, size: 18, color: AppColors.leaf),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  tr(context,
+                      'Agroclimatic na pagsusuri para sa $monthName: ${inSeason.length} pananim ang angkop na itanim sa buwang ito at ${offSeason.length} ang hindi pa panahon. Ang mga angkop lang ang inirerekomenda sa ibaba.',
+                      'Agroclimatic check for $monthName: ${inSeason.length} crops suit this planting month and ${offSeason.length} are out of season. Only the suitable crops are recommended below.'),
+                  style: const TextStyle(fontSize: 12, height: 1.35, color: AppColors.ink),
+                ),
+              ),
+            ]),
           ),
+          const SizedBox(height: 12),
+          if (inSeason.isEmpty)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Text(
+                tr(context, 'Walang pananim na angkop sa petsang ito. Subukan ang ibang petsa ng pagtatanim.', 'No crop suits this date. Try a different planting date.'),
+                style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: Color(0xFFC0792E)),
+              ),
+            ),
+          for (var i = 0; i < top.length; i++) _item(context, top[i], inSeason.indexOf(top[i]), tl, peso, area),
+          if (inSeason.length > 5)
+            Center(
+              child: TextButton.icon(
+                onPressed: () => setState(() => _all = !_all),
+                icon: Icon(_all ? Icons.expand_less_rounded : Icons.expand_more_rounded),
+                label: Text(_all
+                    ? tr(context, 'Ipakita ang top 5 lang', 'Show top 5 only')
+                    : tr(context, 'Ipakita ang lahat ng ${inSeason.length} angkop na pananim', 'Show all ${inSeason.length} suitable crops')),
+              ),
+            ),
+          if (offSeason.isNotEmpty) ...[
+            Center(
+              child: TextButton.icon(
+                onPressed: () => setState(() => _showOff = !_showOff),
+                icon: Icon(_showOff ? Icons.expand_less_rounded : Icons.expand_more_rounded),
+                label: Text(tr(context, 'Hindi pa panahon sa petsang ito (${offSeason.length})', 'Out of season for this date (${offSeason.length})')),
+              ),
+            ),
+            if (_showOff)
+              for (final r in offSeason)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 6),
+                  child: Row(children: [
+                    const Icon(Icons.block_rounded, size: 16, color: AppColors.muted),
+                    const SizedBox(width: 8),
+                    Expanded(child: Text(tl ? r.crop.nameTl : r.crop.nameEn, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.muted))),
+                    Text(r.factor('season').note(tl), style: const TextStyle(fontSize: 11, color: AppColors.muted)),
+                  ]),
+                ),
+          ],
           const SizedBox(height: 4),
           Text(
             tr(context,
