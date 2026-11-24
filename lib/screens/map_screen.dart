@@ -161,6 +161,7 @@ class _PagsanjanMapWidgetState extends State<PagsanjanMapWidget> {
   static List<Polygon>? _cachedBoundaryPolygons;
   static List<Marker>? _cachedBarangayLabelMarkers;
 
+  bool _isSatelliteMode = true;
   List<Polygon> _polygons = _cachedBoundaryPolygons ?? [];
   List<Marker> _barangayLabelMarkers = _cachedBarangayLabelMarkers ?? [];
 
@@ -345,9 +346,11 @@ class _PagsanjanMapWidgetState extends State<PagsanjanMapWidget> {
               },
             ),
             children: [
-              // Satellite Imagery Tile Layer (Esri World Imagery)
+              // Dynamic Map Tile Layer (Satellite vs OpenStreetMap Street Map)
               TileLayer(
-                urlTemplate: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+                urlTemplate: _isSatelliteMode
+                    ? 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}'
+                    : 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
                 userAgentPackageName: 'com.example.agriculture',
               ),
               if (_polygons.isNotEmpty || widget.extraPolygons.isNotEmpty)
@@ -455,6 +458,7 @@ class PagsanjanMapScreen extends StatelessWidget {
 class PagsanjanMapBoundaryPickerScreen extends StatefulWidget {
   final LatLng initialCenter;
   final List<LatLng> initialBoundary;
+  final List<List<LatLng>> initialPlots;
   final List<FarmRecord> existingFarms;
   final Color primaryColor;
   final String? farmerId;
@@ -464,6 +468,7 @@ class PagsanjanMapBoundaryPickerScreen extends StatefulWidget {
     super.key,
     required this.initialCenter,
     this.initialBoundary = const [],
+    this.initialPlots = const [],
     this.existingFarms = const [],
     this.primaryColor = const Color(0xFF166534),
     this.farmerId,
@@ -475,9 +480,26 @@ class PagsanjanMapBoundaryPickerScreen extends StatefulWidget {
 }
 
 class _PagsanjanMapBoundaryPickerScreenState extends State<PagsanjanMapBoundaryPickerScreen> {
+<<<<<<< HEAD
   late final List<LatLng> _boundaryPoints = List.from(widget.initialBoundary);
   final MapController _mapController = MapController();
   bool _isDraggingMarker = false;
+=======
+  late final List<List<LatLng>> _plots = () {
+    if (widget.initialPlots.isNotEmpty) {
+      return widget.initialPlots.map((p) => List<LatLng>.from(p)).toList();
+    }
+    if (widget.initialBoundary.isNotEmpty) {
+      return [List<LatLng>.from(widget.initialBoundary)];
+    }
+    return [<LatLng>[]];
+  }();
+  int _activePlotIndex = 0;
+  final TextEditingController _targetAreaCtrl = TextEditingController();
+  bool _isHectaresUnit = true;
+
+  List<LatLng> get _currentBoundaryPoints => _plots[_activePlotIndex];
+>>>>>>> origin/nhiel4
 
   double _calcAreaSqM(List<LatLng> points) {
     if (points.length < 3) return 0.0;
@@ -535,30 +557,134 @@ class _PagsanjanMapBoundaryPickerScreenState extends State<PagsanjanMapBoundaryP
     return null;
   }
 
+  LatLng _calculateCentroid(List<LatLng> points) {
+    if (points.isEmpty) return widget.initialCenter;
+    double sumLat = 0;
+    double sumLng = 0;
+    for (final p in points) {
+      sumLat += p.latitude;
+      sumLng += p.longitude;
+    }
+    return LatLng(sumLat / points.length, sumLng / points.length);
+  }
+
+  void _generatePlotForTargetArea(double targetValue, bool isHa) {
+    final targetSqM = isHa ? (targetValue * 10000.0) : targetValue;
+    if (targetSqM <= 0) return;
+
+    final center = _currentBoundaryPoints.isNotEmpty
+        ? _calculateCentroid(_currentBoundaryPoints)
+        : widget.initialCenter;
+
+    final sideM = math.sqrt(targetSqM);
+    final latOffset = (sideM / 2.0) / 111320.0;
+    final lonOffset = (sideM / 2.0) / (111320.0 * math.cos(center.latitude * math.pi / 180.0));
+
+    setState(() {
+      _currentBoundaryPoints.clear();
+      _currentBoundaryPoints.addAll([
+        LatLng(center.latitude - latOffset, center.longitude - lonOffset),
+        LatLng(center.latitude - latOffset, center.longitude + lonOffset),
+        LatLng(center.latitude + latOffset, center.longitude + lonOffset),
+        LatLng(center.latitude + latOffset, center.longitude - lonOffset),
+      ]);
+    });
+  }
+
+  void _showPresetAreaModal() {
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setModalState) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: const Row(
+            children: [
+              Icon(Icons.square_foot_rounded, color: Color(0xFF166534)),
+              SizedBox(width: 8),
+              Text('I-set ang Sukat (ha / m²)', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              SegmentedButton<bool>(
+                segments: const [
+                  ButtonSegment(value: true, label: Text('Hektarya (ha)')),
+                  ButtonSegment(value: false, label: Text('Sq. Meters (m²)')),
+                ],
+                selected: {_isHectaresUnit},
+                onSelectionChanged: (s) => setModalState(() => _isHectaresUnit = s.first),
+              ),
+              const SizedBox(height: 14),
+              TextField(
+                controller: _targetAreaCtrl,
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                autofocus: true,
+                decoration: InputDecoration(
+                  labelText: _isHectaresUnit ? 'Target Area sa Hektarya (ha)' : 'Target Area sa Square Meters (m²)',
+                  hintText: _isHectaresUnit ? 'halimbawa: 1.5' : 'halimbawa: 15000',
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                  suffixText: _isHectaresUnit ? 'ha' : 'm²',
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Kanselahin', style: TextStyle(color: Colors.grey, fontWeight: FontWeight.bold)),
+            ),
+            ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF166534),
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+              ),
+              icon: const Icon(Icons.auto_awesome_rounded, size: 18),
+              label: const Text('I-apply sa Mapa', style: TextStyle(fontWeight: FontWeight.bold)),
+              onPressed: () {
+                final val = double.tryParse(_targetAreaCtrl.text.trim()) ?? 0.0;
+                if (val > 0) {
+                  _generatePlotForTargetArea(val, _isHectaresUnit);
+                }
+                Navigator.pop(ctx);
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    final sqM = _calcAreaSqM(_boundaryPoints);
+    final sqM = _calcAreaSqM(_currentBoundaryPoints);
     final ha = sqM / 10000.0;
     final nf = NumberFormat('#,###');
-    final overlappingFarm = _findOverlappingFarm(_boundaryPoints);
+    final overlappingFarm = _findOverlappingFarm(_currentBoundaryPoints);
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('I-set ang Boundary ng Sakahan'),
+        title: Text(_plots.length > 1 ? 'I-set ang Boundary (Lote ${_activePlotIndex + 1}/${_plots.length})' : 'I-set ang Boundary ng Sakahan'),
         backgroundColor: widget.primaryColor,
         foregroundColor: Colors.white,
         actions: [
-          if (_boundaryPoints.isNotEmpty)
+          IconButton(
+            tooltip: 'I-set ang Sukat (ha / m²)',
+            icon: const Icon(Icons.aspect_ratio_rounded),
+            onPressed: _showPresetAreaModal,
+          ),
+          if (_currentBoundaryPoints.isNotEmpty)
             IconButton(
               tooltip: 'I-undo',
               icon: const Icon(Icons.undo_rounded),
-              onPressed: () => setState(() => _boundaryPoints.removeLast()),
+              onPressed: () => setState(() => _currentBoundaryPoints.removeLast()),
             ),
-          if (_boundaryPoints.isNotEmpty)
+          if (_currentBoundaryPoints.isNotEmpty)
             IconButton(
               tooltip: 'Linisin',
               icon: const Icon(Icons.clear_all_rounded),
-              onPressed: () => setState(() => _boundaryPoints.clear()),
+              onPressed: () => setState(() => _currentBoundaryPoints.clear()),
             ),
         ],
       ),
@@ -569,6 +695,7 @@ class _PagsanjanMapBoundaryPickerScreenState extends State<PagsanjanMapBoundaryP
             initialZoom: 15.5,
             isDraggingMarker: _isDraggingMarker,
             extraPolygons: [
+<<<<<<< HEAD
               ...widget.existingFarms.where((f) => f.boundaryPoints.length >= 3).map((f) {
                 final isSameOwner = widget.farmerId != null && (f.farmerId == widget.farmerId || f.farmerName.toLowerCase() == (widget.farmerName ?? '').toLowerCase());
                 return Polygon(
@@ -650,6 +777,69 @@ class _PagsanjanMapBoundaryPickerScreenState extends State<PagsanjanMapBoundaryP
                               '${i + 1}',
                               style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
                             ),
+=======
+              ...widget.existingFarms.where((f) => f.boundaryPoints.length >= 3).map((f) => Polygon(
+                points: f.boundaryPoints,
+                color: Colors.red.withValues(alpha: 0.15),
+                borderColor: Colors.redAccent,
+                borderStrokeWidth: 2.0,
+              )),
+              for (int pIdx = 0; pIdx < _plots.length; pIdx++)
+                if (_plots[pIdx].length >= 3)
+                  Polygon(
+                    points: _plots[pIdx],
+                    color: (pIdx == _activePlotIndex && overlappingFarm != null)
+                        ? Colors.red.withValues(alpha: 0.4)
+                        : (pIdx == _activePlotIndex ? const Color(0xFF0284C7).withValues(alpha: 0.3) : Colors.green.withValues(alpha: 0.2)),
+                    borderColor: (pIdx == _activePlotIndex && overlappingFarm != null) ? Colors.red : (pIdx == _activePlotIndex ? widget.primaryColor : Colors.green),
+                    borderStrokeWidth: pIdx == _activePlotIndex ? 3.5 : 2.0,
+                  ),
+            ],
+            extraPolylines: [
+              for (int pIdx = 0; pIdx < _plots.length; pIdx++)
+                if (_plots[pIdx].length >= 2)
+                  Polyline(
+                    points: _plots[pIdx].length >= 3 ? [..._plots[pIdx], _plots[pIdx].first] : _plots[pIdx],
+                    color: (pIdx == _activePlotIndex && overlappingFarm != null) ? Colors.red : (pIdx == _activePlotIndex ? widget.primaryColor : Colors.green),
+                    strokeWidth: pIdx == _activePlotIndex ? 3.5 : 2.0,
+                  ),
+            ],
+            markers: [
+              ..._currentBoundaryPoints.asMap().entries.map((e) {
+                final index = e.key;
+                final currentPt = e.value;
+                return Marker(
+                  point: currentPt,
+                  width: 44,
+                  height: 44,
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onPanUpdate: (details) {
+                      final latShift = -details.delta.dy * (360.0 / (256.0 * math.pow(2, 15.5)));
+                      final lngShift = details.delta.dx * (360.0 / (256.0 * math.pow(2, 15.5) * math.cos(currentPt.latitude * math.pi / 180.0)));
+                      setState(() {
+                        _currentBoundaryPoints[index] = LatLng(
+                          currentPt.latitude + latShift,
+                          currentPt.longitude + lngShift,
+                        );
+                      });
+                    },
+                    child: Center(
+                      child: Container(
+                        width: 26,
+                        height: 26,
+                        decoration: BoxDecoration(
+                          color: widget.primaryColor,
+                          shape: BoxShape.circle,
+                          border: Border.all(color: Colors.white, width: 3),
+                          boxShadow: const [BoxShadow(color: Colors.black45, blurRadius: 6, offset: Offset(0, 2))],
+                        ),
+                        child: Center(
+                          child: Container(
+                            width: 8,
+                            height: 8,
+                            decoration: const BoxDecoration(color: Colors.white, shape: BoxShape.circle),
+>>>>>>> origin/nhiel4
                           ),
                         ),
                       ),
@@ -658,6 +848,7 @@ class _PagsanjanMapBoundaryPickerScreenState extends State<PagsanjanMapBoundaryP
                 );
               }),
             ],
+<<<<<<< HEAD
             onTap: (point) {
               if (_isDraggingMarker) return;
               try {
@@ -675,40 +866,81 @@ class _PagsanjanMapBoundaryPickerScreenState extends State<PagsanjanMapBoundaryP
 
               setState(() => _boundaryPoints.add(point));
             },
+=======
+            onTap: (point) => setState(() => _currentBoundaryPoints.add(point)),
+>>>>>>> origin/nhiel4
           ),
 
-          // Banner Status
+          // MULTI-PLOT TABS BAR (When farmer has multiple separate land parcels)
           Positioned(
             left: 16,
             right: 16,
             top: 16,
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: [
+                  for (int pIdx = 0; pIdx < _plots.length; pIdx++) ...[
+                    ChoiceChip(
+                      selected: _activePlotIndex == pIdx,
+                      avatar: Icon(Icons.landscape_rounded, size: 16, color: _activePlotIndex == pIdx ? Colors.white : widget.primaryColor),
+                      label: Text('Lote ${pIdx + 1}${_plots[pIdx].length >= 3 ? ' (${(_calcAreaSqM(_plots[pIdx]) / 10000.0).toStringAsFixed(2)} ha)' : ''}'),
+                      selectedColor: widget.primaryColor,
+                      backgroundColor: Colors.white,
+                      labelStyle: TextStyle(fontWeight: FontWeight.bold, color: _activePlotIndex == pIdx ? Colors.white : Colors.black87),
+                      onSelected: (_) => setState(() => _activePlotIndex = pIdx),
+                    ),
+                    const SizedBox(width: 8),
+                  ],
+                  ActionChip(
+                    avatar: const Icon(Icons.add_location_alt_rounded, size: 16, color: Color(0xFF166534)),
+                    label: const Text('➕ Magdagdag pa ng Lote', style: TextStyle(fontWeight: FontWeight.bold, color: Color(0xFF166534))),
+                    backgroundColor: const Color(0xFFDCFCE7),
+                    side: const BorderSide(color: Color(0xFF86EFAC)),
+                    onPressed: () {
+                      setState(() {
+                        _plots.add([]);
+                        _activePlotIndex = _plots.length - 1;
+                      });
+                    },
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+          // Status & Area Banner
+          Positioned(
+            left: 16,
+            right: 16,
+            top: 68,
             child: Card(
               color: overlappingFarm != null ? const Color(0xFFFEF2F2) : Colors.white,
               elevation: 4,
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
               child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                 child: Row(
                   children: [
                     Icon(
                       overlappingFarm != null ? Icons.error_outline_rounded : Icons.touch_app_rounded,
                       color: overlappingFarm != null ? const Color(0xFFDC2626) : widget.primaryColor,
-                      size: 22,
+                      size: 20,
                     ),
-                    const SizedBox(width: 10),
+                    const SizedBox(width: 8),
                     Expanded(
                       child: Text(
                         overlappingFarm != null
                             ? '⚠️ SUMASAGASA SA IBA: Naki-overlap sa sakahan ni ${overlappingFarm.farmerName} (${overlappingFarm.barangay})!'
-                            : _boundaryPoints.length < 3
-                            ? 'Mag-tap ng 3 o higit pang punto sa mapa para iguhit ang boundary.'
-                            : '🌾 Na-mapang Sukat: ${ha.toStringAsFixed(2)} ha (${nf.format(sqM.round())} m²)',
+                            : _currentBoundaryPoints.length < 3
+                            ? 'Mag-tap sa mapa para i-set ang punto, o i-click ang 📐 button sa itaas para i-set ang ha/m².'
+                            : '🌾 Lote ${_activePlotIndex + 1} Sukat: ${ha.toStringAsFixed(2)} ha (${nf.format(sqM.round())} m²)',
                         style: TextStyle(
-                          fontSize: 13,
+                          fontSize: 12,
                           fontWeight: FontWeight.bold,
                           color: overlappingFarm != null
                               ? const Color(0xFF991B1B)
-                              : _boundaryPoints.length >= 3 ? const Color(0xFF16A34A) : const Color(0xFF0369A1),
+                              : _currentBoundaryPoints.length >= 3 ? const Color(0xFF16A34A) : const Color(0xFF0369A1),
                         ),
                       ),
                     ),
@@ -728,23 +960,26 @@ class _PagsanjanMapBoundaryPickerScreenState extends State<PagsanjanMapBoundaryP
               height: 50,
               child: ElevatedButton.icon(
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: (overlappingFarm != null || _boundaryPoints.length < 3) ? Colors.grey : widget.primaryColor,
+                  backgroundColor: (overlappingFarm != null || _currentBoundaryPoints.length < 3) ? Colors.grey : widget.primaryColor,
                   foregroundColor: Colors.white,
                   elevation: 4,
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                 ),
                 icon: const Icon(Icons.check_circle_rounded, size: 22),
                 label: Text(
-                  _boundaryPoints.length < 3
-                      ? 'Kailangan ng 3 puntos'
+                  _currentBoundaryPoints.length < 3
+                      ? 'Kailangan ng 3 puntos sa mapa'
                       : overlappingFarm != null
-                      ? 'Bawal mag-overlap sa iba'
-                      : 'I-confirm ang Boundary',
+                      ? 'Bawal mag-overlap sa ibang sakahan'
+                      : 'I-confirm ang Boundary (Lote ${_activePlotIndex + 1})',
                   style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
                 ),
-                onPressed: (overlappingFarm != null || _boundaryPoints.length < 3)
+                onPressed: (overlappingFarm != null || _currentBoundaryPoints.length < 3)
                     ? null
-                    : () => Navigator.pop(context, _boundaryPoints),
+                    : () {
+                        final validPlots = _plots.where((p) => p.length >= 3).toList();
+                        Navigator.pop(context, validPlots);
+                      },
               ),
             ),
           ),

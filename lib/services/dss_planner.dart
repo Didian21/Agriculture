@@ -20,6 +20,18 @@ class FertApp {
   String note(bool tl) => tl ? noteTl : noteEn;
 }
 
+/// Mga sariling numero ng farmer sa gastos (pamalit sa tantiya ng katalogo).
+/// Ang [seeds], [pesticide], [labor] at [other] ay KABUUANG halaga (₱) para sa buong lawak, hindi kada ektarya.
+/// Ang [bags] ay kabuuang sako bawat uri ng abono, at ang [price] ay presyo kada sako.
+class CostOverride {
+  final double? seeds, pesticide, labor, other;
+  final Map<FertProduct, double> bags;
+  final Map<FertProduct, double> price;
+  const CostOverride({this.seeds, this.pesticide, this.labor, this.other, this.bags = const {}, this.price = const {}});
+
+  bool get isEmpty => seeds == null && pesticide == null && labor == null && other == null && bags.isEmpty && price.isEmpty;
+}
+
 /// Resulta ng DSS: rekomendasyon ng abono at peste, gastos, ani at kita batay sa pananim, lupa, lawak at petsa.
 /// Lahat ay TANTIYA at gabay lamang.
 class DssPlan {
@@ -102,6 +114,7 @@ class DssPlan {
     required DateTime plantedOn,
     DateTime? harvestOn,
     double? userPrice,
+    CostOverride? costOv,
   }) {
     final now = DateTime.now();
     final perennial = crop.perennial;
@@ -147,7 +160,7 @@ class DssPlan {
     } else {
       steps = crop.steps;
     }
-    final fert = <FertApp>[
+    final fert0 = <FertApp>[
       for (final s in steps)
         FertApp(
           s.day < 0 ? null : plantedOn.add(Duration(days: s.day)),
@@ -159,6 +172,20 @@ class DssPlan {
         ),
     ]..sort((a, b) => a.day.compareTo(b.day));
 
+    // Kung binago ng farmer ang kabuuang sako ng isang abono, i-scale ang bawat paglalagay nang proporsyonal.
+    final totals0 = <FertProduct, double>{};
+    for (final a in fert0) {
+      totals0[a.product] = (totals0[a.product] ?? 0) + a.bags;
+    }
+    final factor = <FertProduct, double>{};
+    for (final e in totals0.entries) {
+      final ob = costOv?.bags[e.key];
+      factor[e.key] = (ob != null && e.value > 0) ? ob / e.value : 1.0;
+    }
+    final fert = <FertApp>[
+      for (final a in fert0) FertApp(a.date, a.day, a.product, a.bags * (factor[a.product] ?? 1.0), a.noteTl, a.noteEn),
+    ];
+
     // --- Gastos ---
     final fertByProduct = <FertProduct, double>{};
     for (final a in fert) {
@@ -167,7 +194,7 @@ class DssPlan {
     final lines = <CostLine>[];
     var fertTotal = 0.0;
     for (final e in fertByProduct.entries) {
-      fertTotal += e.value * (kFertPrice[e.key] ?? 0);
+      fertTotal += e.value * (costOv?.price[e.key] ?? kFertPrice[e.key] ?? 0);
     }
     lines.add(CostLine(
       'Abono',
@@ -177,10 +204,10 @@ class DssPlan {
       detailEn: fertByProduct.entries.map((e) => '${fertName(e.key, false)}: ${_bags(e.value)}').join(' · '),
     ));
     final c = crop.cost;
-    lines.add(CostLine('Binhi / pantanim', 'Seeds / planting material', c.seeds * areaHa));
-    lines.add(CostLine('Pestisidyo at pamatay-peste', 'Pesticides', c.pesticide * areaHa));
-    lines.add(CostLine('Lakas-paggawa', 'Labor', c.labor * areaHa));
-    lines.add(CostLine('Iba pa (patubig, hakot, upa, atbp.)', 'Others (irrigation, hauling, rentals, etc.)', c.other * areaHa));
+    lines.add(CostLine('Binhi / pantanim', 'Seeds / planting material', costOv?.seeds ?? c.seeds * areaHa));
+    lines.add(CostLine('Pestisidyo at pamatay-peste', 'Pesticides', costOv?.pesticide ?? c.pesticide * areaHa));
+    lines.add(CostLine('Lakas-paggawa', 'Labor', costOv?.labor ?? c.labor * areaHa));
+    lines.add(CostLine('Iba pa (patubig, hakot, upa, atbp.)', 'Others (irrigation, hauling, rentals, etc.)', costOv?.other ?? c.other * areaHa));
     if (perennial && c.establish > 0 && ageDays < 365) {
       lines.add(CostLine('Pagtatatag (punla)', 'Establishment (seedlings)', c.establish * areaHa));
     }

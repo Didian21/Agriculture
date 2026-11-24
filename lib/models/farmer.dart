@@ -3,6 +3,60 @@ import 'package:latlong2/latlong.dart';
 import 'farm_record.dart';
 export 'farm_record.dart';
 
+class TechnicianFieldLogRecord {
+  final String id;
+  final String date;
+  final String barangay;
+  final String farmerName;
+  final String cropType;
+  final String category;
+  final String valueOrVolume;
+  final String unitOrPrice;
+  String statusOrFindings;
+  String status;
+  final String technicianName;
+  final DateTime createdAt;
+
+  TechnicianFieldLogRecord({
+    required this.id,
+    required this.date,
+    required this.barangay,
+    required this.farmerName,
+    required this.cropType,
+    required this.category,
+    required this.valueOrVolume,
+    required this.unitOrPrice,
+    required this.statusOrFindings,
+    required this.status,
+    required this.technicianName,
+    required this.createdAt,
+  });
+}
+
+class TechnicianVisit {
+  final String id;
+  final String farmerId;
+  final String farmerName;
+  final String barangay;
+  final String cropType;
+  final DateTime scheduledDate;
+  final String purpose;
+  String findings;
+  String status; // 'Scheduled', 'Completed', 'Cancelled'
+
+  TechnicianVisit({
+    required this.id,
+    required this.farmerId,
+    required this.farmerName,
+    required this.barangay,
+    required this.cropType,
+    required this.scheduledDate,
+    required this.purpose,
+    this.findings = '',
+    this.status = 'Scheduled',
+  });
+}
+
 class Farmer {
   final String id;
   final String username;
@@ -69,25 +123,59 @@ class FarmRecord {
 
 class HistoricalDataRecord {
   final String id;
-  String crop;
   int year;
-  String month;
-  String barangay;
-  double productionMT; // Metric Tons
-  double pricePerKg; // PHP
-  String uploadedBy;
-  DateTime dateUploaded;
+  String? associationName;
+  String cropName;
+  String? cropVariety;
+  String? cropType;
+  String? season;
+  String? plantingDate;
+  String? firstHarvestDate;
+  String? lastHarvestDate;
+  String? harvestFrequency;
+  double? harvestDurationMonths;
+  int harvestVolumePieces;
+  double farmgatePricePhp;
+  double estimatedGrossValuePhp;
+
+  // Backward compatibility getters for UI tables & DSS
+  String get crop => cropName;
+  String get association => associationName ?? 'PAGRI / MAO';
+  String get month {
+    if (firstHarvestDate != null && firstHarvestDate!.length >= 7) {
+      final dt = DateTime.tryParse(firstHarvestDate!);
+      if (dt != null) {
+        const monthsList = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+        return monthsList[dt.month - 1];
+      }
+    }
+    return 'May';
+  }
+  double get productionMT => harvestVolumePieces > 0 ? (harvestVolumePieces / 1000.0) : 0.0;
+  double get harvestVolumeKg => harvestVolumePieces.toDouble();
+  double get pricePerKg => farmgatePricePhp;
+  double get grossValuePhp => estimatedGrossValuePhp;
+  String get harvestDate => firstHarvestDate ?? plantingDate ?? '';
+  String get barangay => 'ALL';
+  String get uploadedBy => 'MAO Admin';
+  DateTime get dateUploaded => DateTime.now();
 
   HistoricalDataRecord({
     required this.id,
-    required this.crop,
     required this.year,
-    required this.month,
-    this.barangay = 'ALL',
-    required this.productionMT,
-    required this.pricePerKg,
-    required this.uploadedBy,
-    required this.dateUploaded,
+    this.associationName,
+    required this.cropName,
+    this.cropVariety,
+    this.cropType,
+    this.season,
+    this.plantingDate,
+    this.firstHarvestDate,
+    this.lastHarvestDate,
+    this.harvestFrequency,
+    this.harvestDurationMonths,
+    required this.harvestVolumePieces,
+    required this.farmgatePricePhp,
+    required this.estimatedGrossValuePhp,
   });
 }
 

@@ -1,5 +1,8 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../../core/dss_catalog.dart';
@@ -8,6 +11,8 @@ import '../../../core/tr.dart';
 import '../../../dashboard_data.dart';
 import '../../../main.dart';
 import '../../../models/farm_store.dart';
+import '../../../models/farmer.dart' hide FarmRecord;
+import '../../../services/account_service.dart';
 import '../../../services/crop_calendar.dart';
 import '../../../services/dss_planner.dart';
 import '../../../widgets/common_widgets.dart';
@@ -66,6 +71,15 @@ class _DssTabState extends State<DssTab> {
   final List<GlobalKey> _stepKeys = List.generate(6, (_) => GlobalKey());
   // Nasagot na ba ang kondisyon ng lupa at tubig? (kasama ang "Hindi ko alam")
   bool _drainOk = false, _waterOk = false;
+  // Nasagot na ba ang petsa ng pagtatanim? (tinatanggap kapag pinindot ang petsa o ang Susunod)
+  bool _dateOk = false;
+  // Mga sariling numero ng farmer sa gastos (pamalit sa tantiya ng katalogo).
+  // Mga susi: seeds, pesticide, labor, other, bags_<abono>, price_<abono>
+  final Map<String, double> _costOv = {};
+  bool _costDirty = false;
+  int _costTick = 0;
+  // Totoo kung ang uri ng lupa ay itinakda ng admin sa rehistrasyon ng farmer.
+  bool _soilFromAdmin = false;
 
   /// Hanapin ang susunod na hakbang na kulang sa datos (hindi pa naisasagawa).
   int _nextMissing([int startFrom = 0]) {
@@ -74,24 +88,26 @@ class _DssTabState extends State<DssTab> {
         case 0:
           return _areaHa == null;
         case 1:
-          return _soil == null;
+          return _soil == null; // hinihintay ang uri ng lupa mula sa admin
         case 2:
           return !_drainOk;
         case 3:
           return !_waterOk;
         case 4:
+          return !_dateOk;
+        case 5:
           return _crop == null;
       }
       return false;
     }
 
-    for (var s = startFrom; s < 5; s++) {
+    for (var s = startFrom; s < 6; s++) {
       if (missing(s)) return s;
     }
-    for (var s = 0; s < startFrom && s < 5; s++) {
+    for (var s = 0; s < startFrom && s < 6; s++) {
       if (missing(s)) return s;
     }
-    return 5; // petsa
+    return 5; // pananim (huli)
   }
 
   /// Lumipat sa hakbang at i-scroll ito sa view para hindi na mag-scroll ang farmer.
@@ -151,12 +167,83 @@ class _DssTabState extends State<DssTab> {
     } catch (_) {}
   }
 
+  CostOverride? get _ov {
+    if (_costOv.isEmpty) return null;
+    final bags = <FertProduct, double>{};
+    final price = <FertProduct, double>{};
+    for (final f in FertProduct.values) {
+      final b = _costOv['bags_${f.name}'];
+      if (b != null) bags[f] = b;
+      final r = _costOv['price_${f.name}'];
+      if (r != null) price[f] = r;
+    }
+    return CostOverride(
+      seeds: _costOv['seeds'],
+      pesticide: _costOv['pesticide'],
+      labor: _costOv['labor'],
+      other: _costOv['other'],
+      bags: bags,
+      price: price,
+    );
+  }
+
+  void _setCost(String key, double? v) {
+    setState(() {
+      if (v == null) {
+        _costOv.remove(key);
+      } else {
+        _costOv[key] = v;
+      }
+      _costDirty = true;
+    });
+  }
+
+  void _resetCosts() {
+    setState(() {
+      _costOv.clear();
+      _costDirty = true;
+      _costTick++;
+    });
+  }
+
+  Future<void> _loadCostOv(String id) async {
+    try {
+      final sp = await SharedPreferences.getInstance();
+      final raw = sp.getString('dss_costov_$id');
+      if (raw == null || !mounted || _editingId != id) return;
+      final m = jsonDecode(raw) as Map<String, dynamic>;
+      setState(() {
+        _costOv
+          ..clear()
+          ..addAll({for (final e in m.entries) e.key: (e.value as num).toDouble()});
+        _costDirty = false;
+        _costTick++;
+      });
+    } catch (_) {}
+  }
+
+  Future<void> _saveCostOv(String id) async {
+    try {
+      final sp = await SharedPreferences.getInstance();
+      if (_costOv.isEmpty) {
+        await sp.remove('dss_costov_$id');
+      } else {
+        await sp.setString('dss_costov_$id', jsonEncode(_costOv));
+      }
+    } catch (_) {}
+  }
+
   void _loadProfile(FarmProfile p) {
     _editingId = p.id;
+    _costOv.clear();
+    _costDirty = false;
+    _costTick++;
+    _loadCostOv(p.id);
     _soil = p.soil;
     _crop = p.crop;
     _planted = p.plantedOn;
-    _harvestOn = p.harvestOn;
+    _dateOk = true;
+    _harvestOn = null; // awtomatiko at hindi na binabago ang petsa ng ani
     _price = p.price;
     _sqm = false;
     _areaC.text = _fmtNum(p.areaHa);
@@ -168,7 +255,11 @@ class _DssTabState extends State<DssTab> {
     setState(() {
       _editingId = null;
       _crop = null;
+      _costOv.clear();
+      _costDirty = false;
+      _costTick++;
       _harvestOn = null;
+      _dateOk = false;
       _price = null;
       _priceC.clear();
       _areaC.clear();
@@ -229,28 +320,113 @@ class _DssTabState extends State<DssTab> {
     final c = _crop == null ? null : dssCropFor(_crop!);
     final a = _areaHa;
     if (c == null || _soil == null || a == null) return null;
-    return DssPlan.build(crop: c, soil: _soil!, areaHa: a, plantedOn: _planted, harvestOn: _harvestOn, userPrice: _price);
+    return DssPlan.build(crop: c, soil: _soil!, areaHa: a, plantedOn: _planted, harvestOn: _harvestOn, userPrice: _price, costOv: _ov);
   }
 
+  static DateTime _today() {
+    final n = DateTime.now();
+    return DateTime(n.year, n.month, n.day);
+  }
+
+  /// Petsa ng pagtatanim: mula ngayon hanggang isang taon pa lang.
   Future<void> _pickPlanted() async {
-    final now = DateTime.now();
+    final today = _today();
     final d = await showDatePicker(
       context: context,
-      initialDate: _planted,
-      firstDate: DateTime(now.year - 8),
-      lastDate: DateTime(now.year + 2),
+      initialDate: _planted.isBefore(today) ? today : _planted,
+      firstDate: today,
+      lastDate: today.add(const Duration(days: 365)),
+      helpText: tr(context, 'Kailan magtatanim?', 'When will you plant?'),
     );
-    if (d != null) setState(() => _planted = d);
+    if (d != null) {
+      setState(() {
+        _planted = d;
+        _dateOk = true;
+        _crop = null; // kailangang suriin ulit ang pananim para sa bagong petsa
+        _costOv.clear();
+        _costTick++;
+      });
+      _go(_nextMissing(5));
+    }
   }
 
-  Future<void> _pickHarvest(DateTime initial) async {
-    final d = await showDatePicker(
-      context: context,
-      initialDate: initial,
-      firstDate: _planted,
-      lastDate: DateTime(_planted.year + 3),
+  void _setPlantedIn(int days) {
+    setState(() {
+      _planted = _today().add(Duration(days: days));
+      _dateOk = true;
+      _crop = null;
+      _costOv.clear();
+      _costTick++;
+    });
+    _go(_nextMissing(5));
+  }
+
+  /// Uri ng lupa na itinakda ng admin para sa bukid ng farmer (Supabase). Null kung wala pa.
+  SoilType? _registeredSoil(BuildContext context) {
+    final accountService = Provider.of<AccountService>(context);
+    final username = widget.p.currentUsername ?? '';
+    final key = username.trim().toLowerCase();
+    final farmer = accountService.farmers.firstWhere(
+          (f) => f.username.trim().toLowerCase() == key || f.profileName.trim().toLowerCase() == key || f.contactNumber == username,
+      orElse: () => Farmer(id: '', username: username, password: '', profileName: username, barangay: ''),
     );
-    if (d != null) setState(() => _harvestOn = d);
+    final dynamic farm = accountService.farms.cast<dynamic>().firstWhere(
+          (f) =>
+      f != null &&
+          (f.farmerId == farmer.id ||
+              (f.farmerName != null && f.farmerName.trim().isNotEmpty && f.farmerName.trim().toLowerCase() == farmer.profileName.trim().toLowerCase()) ||
+              (f.farmerName != null && f.farmerName.trim().isNotEmpty && f.farmerName.trim().toLowerCase() == farmer.username.trim().toLowerCase())),
+      orElse: () => null,
+    );
+    if (farm == null) return null;
+    dynamic raw;
+    for (final read in <dynamic Function()>[() => farm.soilType, () => farm.soil, () => farm.soilTypeName]) {
+      try {
+        raw = read();
+      } catch (_) {
+        raw = null;
+      }
+      if (raw != null) break;
+    }
+    return _parseSoil(raw);
+  }
+
+  static SoilType? _parseSoil(dynamic raw) {
+    if (raw == null) return null;
+    if (raw is SoilType) return raw == SoilType.unknown ? null : raw;
+    final t = raw.toString().trim().toLowerCase().replaceAll('_', ' ').replaceAll('-', ' ');
+    if (t.isEmpty) return null;
+    if (t.contains('clayloam') || t.contains('clay loam') || t.contains('malagkit na mabuhaghag')) return SoilType.clayLoam;
+    if (t.contains('sandyloam') || t.contains('sandy loam') || t.contains('mabuhangin na mabuhaghag')) return SoilType.sandyLoam;
+    if (t.contains('clay') || t.contains('luwad')) return SoilType.clay;
+    if (t.contains('sandy') || t.contains('mabuhangin')) return SoilType.sandy;
+    if (t.contains('loam') || t.contains('mabuhaghag')) return SoilType.loam;
+    return null;
+  }
+
+  // Totoo kung ang kabuuang lupa ay galing sa rehistrasyon ng account (Supabase).
+  bool _fromRegistration = false;
+
+  /// Sukat ng lupa (ha) na nakarehistro sa account ng farmer. Null kung wala.
+  double? _registeredHectares(BuildContext context) {
+    final accountService = Provider.of<AccountService>(context);
+    final username = widget.p.currentUsername ?? '';
+    final key = username.trim().toLowerCase();
+    final farmer = accountService.farmers.firstWhere(
+          (f) => f.username.trim().toLowerCase() == key || f.profileName.trim().toLowerCase() == key || f.contactNumber == username,
+      orElse: () => Farmer(id: '', username: username, password: '', profileName: username, barangay: ''),
+    );
+    final dynamic farm = accountService.farms.cast<dynamic>().firstWhere(
+          (f) =>
+      f != null &&
+          (f.farmerId == farmer.id ||
+              (f.farmerName != null && f.farmerName.trim().isNotEmpty && f.farmerName.trim().toLowerCase() == farmer.profileName.trim().toLowerCase()) ||
+              (f.farmerName != null && f.farmerName.trim().isNotEmpty && f.farmerName.trim().toLowerCase() == farmer.username.trim().toLowerCase())),
+      orElse: () => null,
+    );
+    if (farm == null || farm.landAreaHectares == null) return null;
+    final v = (farm.landAreaHectares as num).toDouble();
+    return v > 0 ? v : null;
   }
 
   Future<void> _openEditor() async {
@@ -265,6 +441,9 @@ class _DssTabState extends State<DssTab> {
     await _store.saveProfile(FarmProfile(id: id, crop: _crop!, soil: _soil!, areaHa: a, plantedOn: _planted, harvestOn: _harvestOn, price: _price));
     if (!mounted) return;
     setState(() => _editingId = id);
+    await _saveCostOv(id);
+    if (mounted) setState(() => _costDirty = false);
+    if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(
       content: Text(tr(context, 'Na-save ang tanim. Makikita na ito sa Home at Aking Bukid.', 'Crop saved. You can now see it in Home and My Farm.')),
     ));
@@ -275,7 +454,12 @@ class _DssTabState extends State<DssTab> {
     final tl = isTl(context);
     final locale = Localizations.localeOf(context).languageCode;
     final plan = _plan;
-    final total = _store.totalHa;
+    final adminSoil = _registeredSoil(context);
+    _soilFromAdmin = adminSoil != null;
+    if (adminSoil != null) _soil = adminSoil;
+    final registeredHa = _registeredHectares(context);
+    _fromRegistration = registeredHa != null;
+    final total = registeredHa ?? _store.totalHa;
     final others = _store.usedHa(exceptId: _editingId);
     final avail = total == null ? null : total - others;
     final areaNow = _areaHa;
@@ -388,7 +572,9 @@ class _DssTabState extends State<DssTab> {
                 ),
               ActionChip(
                 avatar: const Icon(Icons.edit_location_alt_rounded, size: 16),
-                label: Text(_store.isCustom ? tr(context, 'Baguhin ang hugis ng bukid', 'Edit farm shape') : tr(context, 'Iguhit ang bukid sa mapa', 'Draw farm on the map')),
+                label: Text(_store.isCustom
+                    ? tr(context, 'Baguhin ang pwesto ng taniman', 'Edit planting location plot')
+                    : tr(context, 'Iguhit ang pwesto kung saan magtatanim', 'Draw planting location plot on map')),
                 onPressed: _openEditor,
               ),
             ]),
@@ -402,41 +588,193 @@ class _DssTabState extends State<DssTab> {
                 ),
               ),
             Text(
-              tr(context, 'Ang hugis na iginuhit ay makikita sa Aking Bukid.', 'The shape you draw appears in My Farm.'),
+              tr(context, 'Ang pwesto ng tanim na iginuhit ay makikita sa Aking Bukid.', 'The planting location plot drawn on the map appears in My Farm.'),
               style: const TextStyle(fontSize: 11.5, color: AppColors.muted, height: 1.3),
             ),
           ]),
         ),
-        // 2. Lupa
+        // 2. Uri at Kondisyon ng Lupa (Soil Condition & Technician Assessed Option)
         _WizStep(
           key: _stepKeys[1],
           number: 2,
-          title: tr(context, 'Uri ng lupa', 'Soil type'),
-          summary: _soil == null ? tr(context, 'Pumili ng uri ng lupa', 'Choose a soil type') : soilName(_soil!, tl),
+          title: tr(context, 'Uri at Kondisyon ng Lupa', 'Soil Type & Condition'),
+          summary: _soil == null
+              ? tr(context, 'Pumili ng uri ng lupa', 'Choose soil type')
+              : (_soilFromAdmin ? '🔬 Verified by Technician: ${soilName(_soil!, tl)}' : soilName(_soil!, tl)),
           done: _soil != null,
           active: _step == 1,
           onTap: () => _go(1),
           onBack: () => _go(0),
           onNext: () => _go(_nextMissing(2)),
           nextEnabled: _soil != null,
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Wrap(spacing: 8, runSpacing: 6, children: [
-              for (final s in kSoilOrder)
-                ChoiceChip(
-                  label: Text(soilName(s, tl)),
-                  selected: _soil == s,
-                  selectedColor: AppColors.leaf.withValues(alpha: 0.2),
-                  onSelected: (_) {
-                    setState(() => _soil = s);
-                    _go(_nextMissing(2));
-                  },
-                ),
-            ]),
-            if (_soil != null) ...[
-              const SizedBox(height: 8),
-              Text(soilHint(_soil!, tl), style: const TextStyle(fontSize: 12, color: AppColors.muted, height: 1.35)),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                tr(context,
+                    'Pumili ng uri o kondisyon ng lupa ng inyong bukid, o gamitin ang nasuri ng Agricultural Technician:',
+                    'Choose the soil type or condition of your farm, or use the assessment from the Agricultural Technician:'),
+                style: const TextStyle(fontSize: 12.5, color: AppColors.muted, height: 1.4),
+              ),
+              const SizedBox(height: 12),
+
+              // OPTION A: TECHNICIAN FIELD INSPECTION VERIFIED SOIL TYPE (IF AVAILABLE)
+              Builder(builder: (ctx) {
+                final adminSoil = _registeredSoil(ctx);
+                if (adminSoil == null) return const SizedBox.shrink();
+
+                final isSel = _soil == adminSoil && _soilFromAdmin;
+                return Container(
+                  margin: const EdgeInsets.only(bottom: 12),
+                  child: Material(
+                    color: isSel ? const Color(0xFFDCFCE7) : const Color(0xFFEFF6FF),
+                    borderRadius: BorderRadius.circular(12),
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(12),
+                      onTap: () {
+                        setState(() {
+                          _soil = adminSoil;
+                          _soilFromAdmin = true;
+                        });
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: isSel ? const Color(0xFF16A34A) : const Color(0xFFBFDBFE), width: isSel ? 2 : 1),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.verified_rounded, color: Color(0xFF16A34A), size: 22),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    tl ? '🔬 Galing sa Technician (Field Visit): ${soilName(adminSoil, tl)}' : '🔬 Verified by Technician: ${soilName(adminSoil, tl)}',
+                                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13.5, color: Color(0xFF15803D)),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    tr(ctx, 'Uri ng lupa na nasuri at ibinigay ng MAO Agricultural Technician sa kaniyang Field Inspection Visit.', 'Soil type assessed and set by the MAO Agricultural Technician during field inspection visit.'),
+                                    style: const TextStyle(fontSize: 11.5, color: Color(0xFF166534)),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            if (isSel) const Icon(Icons.check_circle_rounded, color: Color(0xFF16A34A), size: 20),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                );
+              }),
+
+              // OPTION B: MANUAL CHOICES (CLAY LOAM, SANDY LOAM, CLAY SOIL, LOAM SOIL, SILTY CLAY, SANDY SOIL)
+              ...[
+                {
+                  'type': SoilType.clayLoam,
+                  'icon': '🧱',
+                  'titleTl': 'Clay Loam Soil (Lupang Malagkit na Mabuhaghag)',
+                  'titleEn': 'Clay Loam Soil',
+                  'descTl': 'Matagal mag-imbak ng tubig at sustansya, napakamainam para sa Palay at Gulay.',
+                  'descEn': 'Retains water and nutrients well, highly suitable for Rice and Vegetables.',
+                },
+                {
+                  'type': SoilType.sandyLoam,
+                  'icon': '🌧️',
+                  'titleTl': 'Sandy Loam Soil (Lupang Buhangin na Mabuhaghag)',
+                  'titleEn': 'Sandy Loam Soil',
+                  'descTl': 'Mabilis patuyuin at maganda ang bentilasyon, angkop sa Mais at Gulay.',
+                  'descEn': 'Well-drained with good aeration, ideal for Corn and Vegetables.',
+                },
+                {
+                  'type': SoilType.clay,
+                  'icon': '⚪',
+                  'titleTl': 'Clay Soil (Lupang Luwad / Malagkit)',
+                  'titleEn': 'Clay Soil',
+                  'descTl': 'Napakalagkit kapag basa, matagal humawi ang tubig; napakamainam sa Palay.',
+                  'descEn': 'Very sticky when wet, holds water well; best suited for Paddy Rice.',
+                },
+                {
+                  'type': SoilType.loam,
+                  'icon': '🪴',
+                  'titleTl': 'Loam Soil (Lupang Mabuhaghag)',
+                  'titleEn': 'Loam Soil',
+                  'descTl': 'Pinakamainam at balanseng uri ng lupa para sa halos lahat ng pananim.',
+                  'descEn': 'Best balanced soil type with optimal organic matter for most crops.',
+                },
+                {
+                  'type': SoilType.sandyLoam,
+                  'icon': '🍂',
+                  'titleTl': 'Silty Clay Soil (Lupang Pula na Luwad / Silt)',
+                  'titleEn': 'Silty Clay Soil',
+                  'descTl': 'Mataas ang sustansya at maayos na nagpapanatili ng moist sa halaman.',
+                  'descEn': 'Rich in fine silt particles with high moisture retention capacity.',
+                },
+                {
+                  'type': SoilType.sandy,
+                  'icon': '🌾',
+                  'titleTl': 'Sandy Soil (Lupang Buhangin)',
+                  'titleEn': 'Sandy Soil',
+                  'descTl': 'Mabilis patuyuin ang tubig, mainam para sa mga ugat na gulay at pakwan.',
+                  'descEn': 'Drains water quickly, ideal for root crops and melons.',
+                },
+              ].map((opt) {
+                final st = opt['type'] as SoilType;
+                final isSel = _soil == st && !_soilFromAdmin;
+
+                return Container(
+                  margin: const EdgeInsets.only(bottom: 8),
+                  child: Material(
+                    color: isSel ? const Color(0xFFE0F2FE) : Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(12),
+                      onTap: () {
+                        setState(() {
+                          _soil = st;
+                          _soilFromAdmin = false;
+                        });
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: isSel ? const Color(0xFF0284C7) : Colors.grey.shade300, width: isSel ? 2 : 1),
+                        ),
+                        child: Row(
+                          children: [
+                            Text(opt['icon'] as String, style: const TextStyle(fontSize: 20)),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    tl ? (opt['titleTl'] as String) : (opt['titleEn'] as String),
+                                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: isSel ? const Color(0xFF0369A1) : Colors.black87),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    tl ? (opt['descTl'] as String) : (opt['descEn'] as String),
+                                    style: const TextStyle(fontSize: 11.5, color: Colors.black54),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            if (isSel) const Icon(Icons.check_circle_rounded, color: Color(0xFF0284C7), size: 18),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                );
+              }),
             ],
-          ]),
+          ),
         ),
         // 3. Kondisyon ng lupa (agos ng tubig)
         _WizStep(
@@ -510,21 +848,81 @@ class _DssTabState extends State<DssTab> {
             ]),
           ]),
         ),
-        // 5. Pananim (Mungkahi): huli na, para makabatay sa lupa at tubig
+        // 5. Petsa ng pagtatanim (mula ngayon pataas)
         _WizStep(
           key: _stepKeys[4],
           number: 5,
-          title: tr(context, 'Pumili ng pananim', 'Choose a crop'),
-          summary: _crop == null ? tr(context, 'Tingnan ang mungkahi', 'See recommendations') : dssCropName(_crop!, tl),
-          done: _crop != null,
+          title: tr(context, 'Petsa ng pagtatanim', 'Planting date'),
+          summary: _dateOk ? DateFormat.yMMMd(locale).format(_planted) : tr(context, 'Pumili ng petsa', 'Choose a date'),
+          done: _dateOk,
           active: _step == 4,
           onTap: () => _go(4),
           onBack: () => _go(3),
-          onNext: () => _go(_nextMissing(5)),
+          onNext: () {
+            setState(() => _dateOk = true);
+            _go(_nextMissing(5));
+          },
+          nextEnabled: true,
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(tr(context, 'Kailan ninyo balak magtanim?', 'When do you plan to plant?'),
+                style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w800, color: AppColors.ink)),
+            const SizedBox(height: 6),
+            Wrap(spacing: 8, runSpacing: 6, children: [
+              ActionChip(label: Text(tr(context, 'Ngayon', 'Today')), onPressed: () => _setPlantedIn(0)),
+              ActionChip(label: Text(tr(context, 'Sa 1 linggo', 'In 1 week')), onPressed: () => _setPlantedIn(7)),
+              ActionChip(label: Text(tr(context, 'Sa 2 linggo', 'In 2 weeks')), onPressed: () => _setPlantedIn(14)),
+              ActionChip(label: Text(tr(context, 'Sa 1 buwan', 'In 1 month')), onPressed: () => _setPlantedIn(30)),
+              ActionChip(label: Text(tr(context, 'Sa 2 buwan', 'In 2 months')), onPressed: () => _setPlantedIn(60)),
+              ActionChip(label: Text(tr(context, 'Sa 3 buwan', 'In 3 months')), onPressed: () => _setPlantedIn(90)),
+            ]),
+            const SizedBox(height: 10),
+            _DateRow(
+              label: tr(context, 'Petsa ng pagtatanim', 'Planting date'),
+              value: DateFormat.yMMMd(locale).format(_planted),
+              hint: tr(context, 'Pindutin para pumili ng ibang petsa (mula ngayon hanggang isang taon).', 'Tap to pick another date (from today up to one year).'),
+              onTap: _pickPlanted,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              tr(context, 'Pagkatapos nito, susuriin ng system ang angkop na pananim para sa buwang ito (agroclimatic) bago magmungkahi. Ang petsa ng ani ay awtomatiko at hindi na mababago.',
+                  'After this, the system checks which crops suit this month (agroclimatic) before recommending. The harvest date is automatic and cannot be changed.'),
+              style: const TextStyle(fontSize: 11.5, color: AppColors.muted, height: 1.35),
+            ),
+          ]),
+        ),
+        // 6. Pananim (Mungkahi): huli, pagkatapos ng lupa, tubig, at petsa (agroclimatic)
+        _WizStep(
+          key: _stepKeys[5],
+          number: 6,
+          title: tr(context, 'Pumili ng pananim', 'Choose a crop'),
+          summary: _crop == null ? tr(context, 'Tingnan ang mungkahi', 'See recommendations') : dssCropName(_crop!, tl),
+          done: _crop != null,
+          active: _step == 5,
+          onTap: () {
+            final miss = _nextMissing(0);
+            if (miss != 5) {
+              _go(miss);
+              ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                content: Text(tr(context, 'Sagutan muna ang mga naunang hakbang.', 'Please answer the earlier steps first.')),
+              ));
+              return;
+            }
+            _go(5);
+          },
+          onBack: () => _go(4),
+          onNext: () {
+            if (plan == null) {
+              _go(_nextMissing(0));
+              return;
+            }
+            setState(() => _view = 1);
+            _top();
+          },
+          nextLabel: tr(context, 'Tingnan ang resulta', 'See results'),
           nextEnabled: _crop != null,
-          bare: _soil != null,
-          child: _soil == null
-              ? Text(tr(context, 'Sagutan muna ang lupa at tubig (Hakbang 2 hanggang 4) para lumabas ang Mungkahi ng Pananim.', 'Answer the soil and water steps (Steps 2 to 4) first to see Crop Recommendations.'),
+          bare: _soil != null && _nextMissing(0) == 5,
+          child: (_soil == null || _nextMissing(0) != 5)
+              ? Text(tr(context, 'Sagutan muna ang lawak, lupa (mula sa admin), kondisyon, tubig, at petsa para lumabas ang Mungkahi ng Pananim.', 'Answer the size, soil (from the admin), conditions, water and date first to see Crop Recommendations.'),
               style: const TextStyle(fontSize: 12, color: AppColors.muted))
               : CropRecommendCard(
             soil: _soil!,
@@ -537,65 +935,15 @@ class _DssTabState extends State<DssTab> {
               setState(() {
                 _crop = id;
                 _harvestOn = null;
+                _costOv.clear();
+                _costTick++;
               });
-              _go(_nextMissing(5));
+              if (_plan != null) {
+                setState(() => _view = 1);
+              }
+              _top();
             },
           ),
-        ),
-        // 6. Petsa
-        _WizStep(
-          key: _stepKeys[5],
-          number: 6,
-          title: tr(context, 'Petsa', 'Dates'),
-          summary: DateFormat.yMMMd(locale).format(_planted),
-          done: true,
-          active: _step == 5,
-          onTap: () => _go(5),
-          onBack: () => _go(4),
-          onNext: () {
-            if (plan == null) {
-              final missing = _nextMissing(0);
-              _go(missing);
-              ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                content: Text(tr(context, 'Kulang pa ang lawak, lupa o pananim.', 'The size, soil or crop is still missing.')),
-              ));
-              return;
-            }
-            setState(() => _view = 1);
-            _top();
-          },
-          nextLabel: tr(context, 'Tingnan ang resulta', 'See results'),
-          nextEnabled: true,
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            _DateRow(
-              label: tr(context, 'Petsa ng pagtatanim', 'Planting date'),
-              value: DateFormat.yMMMd(locale).format(_planted),
-              onTap: _pickPlanted,
-            ),
-            const SizedBox(height: 8),
-            if (plan == null)
-              Text(tr(context, 'Pumili ng pananim, lupa at lawak para makita ang inaasahang pag-aani.', 'Choose a crop, soil and size to see the expected harvest.'),
-                  style: const TextStyle(fontSize: 12, color: AppColors.muted))
-            else if (plan.perennial)
-              _DateRow(
-                label: tr(context, 'Unang ani', 'First harvest'),
-                value: plan.bearing
-                    ? tr(context, 'Namumunga na', 'Already bearing')
-                    : '~${DateFormat.yMMM(locale).format(plan.firstHarvest!)}',
-              )
-            else if (plan.harvestMid != null)
-                _DateRow(
-                  label: tr(context, 'Inaasahang pag-aani', 'Expected harvest'),
-                  value: DateFormat.yMMMd(locale).format(plan.harvestMid!),
-                  hint: _harvestOn == null
-                      ? tr(context, 'Awtomatiko mula sa pananim. Pindutin para baguhin.', 'Automatic from the crop. Tap to change.')
-                      : tr(context, 'Binago ninyo. Pindutin ulit para baguhin.', 'Changed by you. Tap to change again.'),
-                  onTap: () => _pickHarvest(plan.harvestMid!),
-                  trailing: _harvestOn == null
-                      ? null
-                      : TextButton(onPressed: () => setState(() => _harvestOn = null), child: Text(tr(context, 'Ibalik', 'Reset'))),
-                ),
-          ]),
         ),
       ] else if (plan == null)
         const _EmptyResult()
@@ -664,7 +1012,7 @@ class _DssTabState extends State<DssTab> {
             ),
           ),
         if (_allocOpen) ...[
-          _AllocationCard(store: _store),
+          _AllocationCard(store: _store, total: total, fromRegistration: _fromRegistration),
           const SizedBox(height: 12),
           if (_store.hasProfile)
             _MyCropsCard(
@@ -709,8 +1057,18 @@ class _DssTabState extends State<DssTab> {
                 style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700, color: AppColors.muted),
               ),
               Text(
-                tr(context, 'Itanim: ${DateFormat.yMMMd(locale).format(_planted)}', 'Planted: ${DateFormat.yMMMd(locale).format(_planted)}'),
+                tr(context, 'Itanim: ${DateFormat.yMMMd(locale).format(_planted)}', 'Planting: ${DateFormat.yMMMd(locale).format(_planted)}'),
                 style: const TextStyle(fontSize: 12, color: AppColors.muted),
+              ),
+              Text(
+                plan.perennial
+                    ? (plan.bearing
+                    ? tr(context, 'Namumunga na', 'Already bearing')
+                    : tr(context, 'Unang ani: ~${DateFormat.yMMM(locale).format(plan.firstHarvest!)}', 'First harvest: ~${DateFormat.yMMM(locale).format(plan.firstHarvest!)}'))
+                    : (plan.harvestMid == null
+                    ? ''
+                    : tr(context, 'Inaasahang ani: ${DateFormat.yMMMd(locale).format(plan.harvestMid!)}', 'Expected harvest: ${DateFormat.yMMMd(locale).format(plan.harvestMid!)}')),
+                style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w800, color: AppColors.leaf),
               ),
             ]),
           ),
@@ -816,6 +1174,7 @@ class _DssTabState extends State<DssTab> {
       if (x.id == _editingId) saved = x;
     }
     if (saved == null) return true;
+    if (_costDirty) return true;
     bool sameDay(DateTime? a, DateTime? b) => (a == null || b == null) ? a == b : dayOnly(a) == dayOnly(b);
     return saved.crop != plan.crop.id ||
         saved.soil != plan.soil ||
@@ -878,14 +1237,23 @@ class _DssTabState extends State<DssTab> {
             ),
           ),
           const SizedBox(height: 12),
-          _Disclaimer(plan: plan),
         ];
       case 2:
-        return [FertilizerAdviceCard(plan: plan, drain: _drain, water: _water), const SizedBox(height: 12), _Disclaimer(plan: plan)];
+        return [FertilizerAdviceCard(plan: plan, drain: _drain, water: _water), const SizedBox(height: 12)];
       case 3:
-        return [PestAdviceCard(plan: plan), const SizedBox(height: 12), const SafetyCard(), const SizedBox(height: 12), _Disclaimer(plan: plan)];
+        return [PestAdviceCard(plan: plan), const SizedBox(height: 12), const SafetyCard(), const SizedBox(height: 12)];
       case 4:
-        return [_CostCard(plan: plan), const SizedBox(height: 12), _Disclaimer(plan: plan)];
+        return [
+          _CostInputs(
+            plan: plan,
+            base: DssPlan.build(crop: plan.crop, soil: plan.soil, areaHa: plan.areaHa, plantedOn: plan.plantedOn, harvestOn: _harvestOn, userPrice: _price),
+            ov: _costOv,
+            tick: _costTick,
+            onChange: _setCost,
+            onReset: _resetCosts,
+          ),
+          const SizedBox(height: 12),
+        ];
       case 5:
         return [
           PriceAdviceCard(
@@ -900,7 +1268,6 @@ class _DssTabState extends State<DssTab> {
             }),
           ),
           const SizedBox(height: 12),
-          _Disclaimer(plan: plan),
         ];
       default:
         return _results(context, plan, tl, locale);
@@ -1008,10 +1375,6 @@ class _DssTabState extends State<DssTab> {
 
       // Angkop ba?
       _FitCard(plan: plan),
-      const SizedBox(height: 12),
-
-      // Paalala
-      _Disclaimer(plan: plan),
     ];
   }
 }
@@ -1030,31 +1393,16 @@ const _kAllocColors = [
 ];
 
 /// Paghahati ng lupa: ilang ektarya ang para sa bawat tanim, at kung ilan ang natitira.
-class _AllocationCard extends StatefulWidget {
+class _AllocationCard extends StatelessWidget {
   final FarmStore store;
-  const _AllocationCard({required this.store});
-
-  @override
-  State<_AllocationCard> createState() => _AllocationCardState();
-}
-
-class _AllocationCardState extends State<_AllocationCard> {
-  late final TextEditingController _c = TextEditingController(
-    text: widget.store.manualTotalHa == null ? '' : widget.store.manualTotalHa!.toStringAsFixed(2),
-  );
-
-  @override
-  void dispose() {
-    _c.dispose();
-    super.dispose();
-  }
+  final double? total; // kabuuang lupa (ha): mula sa rehistrasyon ng account
+  final bool fromRegistration;
+  const _AllocationCard({required this.store, required this.total, required this.fromRegistration});
 
   @override
   Widget build(BuildContext context) {
     final tl = isTl(context);
-    final store = widget.store;
-    final fromMap = store.isCustom && (store.totalHa ?? 0) > 0;
-    final total = store.totalHa;
+    final total = this.total; // lokal na kopya para ma-promote bilang hindi null
     final profiles = store.profiles;
     final used = store.usedHa();
     final base = total == null ? used : (used > total ? used : total);
@@ -1077,42 +1425,27 @@ class _AllocationCardState extends State<_AllocationCard> {
           style: const TextStyle(fontSize: 11.5, color: AppColors.muted, height: 1.3),
         ),
         const SizedBox(height: 10),
-        if (fromMap)
-          Row(children: [
-            const Icon(Icons.map_rounded, size: 18, color: AppColors.leaf),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                tr(context, 'Kabuuang lupa: ${(total ?? 0).toStringAsFixed(2)} ha (mula sa iginuhit na mapa)', 'Total land: ${(total ?? 0).toStringAsFixed(2)} ha (from the drawn map)'),
-                style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w800),
-              ),
-            ),
-          ])
-        else
-          Row(children: [
-            Expanded(
-              child: TextField(
-                controller: _c,
-                keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                onChanged: (v) => store.setManualTotalHa(double.tryParse(v.trim().replaceAll(',', '.'))),
-                decoration: InputDecoration(
-                  labelText: tr(context, 'Kabuuang lupa', 'Total land'),
-                  hintText: tr(context, 'hal. 1.5', 'e.g. 1.5'),
-                  suffixText: 'ha',
-                  isDense: true,
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
-                ),
-              ),
-            ),
-          ]),
-        if (!fromMap)
-          Padding(
-            padding: const EdgeInsets.only(top: 4),
+        Row(children: [
+          Icon(fromRegistration ? Icons.verified_user_rounded : Icons.map_rounded, size: 18, color: AppColors.leaf),
+          const SizedBox(width: 8),
+          Expanded(
             child: Text(
-              tr(context, 'O iguhit ang bukid sa mapa (Hakbang 1) para awtomatikong makuha ang sukat.', 'Or draw the farm on the map (Step 1) to get the size automatically.'),
-              style: const TextStyle(fontSize: 11, color: AppColors.muted),
+              total == null
+                  ? tr(context, 'Wala pang nakarehistrong sukat ng lupa sa inyong account.', 'No land size is registered on your account yet.')
+                  : fromRegistration
+                  ? tr(context, 'Kabuuang lupa: ${total.toStringAsFixed(2)} ha (ayon sa rehistrasyon ng account)', 'Total land: ${total.toStringAsFixed(2)} ha (from your account registration)')
+                  : tr(context, 'Kabuuang lupa: ${total.toStringAsFixed(2)} ha (mula sa iginuhit na pwesto)', 'Total land: ${total.toStringAsFixed(2)} ha (from the drawn plot)'),
+              style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w800),
             ),
           ),
+        ]),
+        Padding(
+          padding: const EdgeInsets.only(top: 4),
+          child: Text(
+            tr(context, 'Ang sukat ng lupa ay binabago sa account o sa MAO, hindi sa app na ito.', 'The land size is changed on the account or with the MAO, not in this app.'),
+            style: const TextStyle(fontSize: 11, color: AppColors.muted),
+          ),
+        ),
         const SizedBox(height: 12),
         if (profiles.isEmpty)
           Text(tr(context, 'Wala pang naka-save na tanim. I-save ang una sa ibaba.', 'No saved crops yet. Save your first one below.'),
@@ -1418,8 +1751,7 @@ class _DateRow extends StatelessWidget {
   final String label, value;
   final String? hint;
   final VoidCallback? onTap;
-  final Widget? trailing;
-  const _DateRow({required this.label, required this.value, this.hint, this.onTap, this.trailing});
+  const _DateRow({required this.label, required this.value, this.hint, this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -1439,8 +1771,7 @@ class _DateRow extends StatelessWidget {
               if (hint != null) Text(hint!, style: const TextStyle(fontSize: 10.5, color: AppColors.muted)),
             ]),
           ),
-          if (trailing != null) trailing!,
-          if (onTap != null && trailing == null) const Icon(Icons.chevron_right_rounded, color: AppColors.muted),
+          if (onTap != null) const Icon(Icons.chevron_right_rounded, color: AppColors.muted),
         ]),
       ),
     );
@@ -1570,16 +1901,200 @@ class _FitCard extends StatelessWidget {
   }
 }
 
-class _CostCard extends StatelessWidget {
-  final DssPlan plan;
-  const _CostCard({required this.plan});
+/// Gastos bilang INPUT: panimulang tantiya mula sa katalogo na puwedeng palitan ng farmer ng aktwal niyang gastos.
+/// Ang kabuuang gastos, kita, at tubo ay awtomatikong nagbabago.
+class _CostInputs extends StatefulWidget {
+  final DssPlan plan; // kasama ang mga pagbabago ng farmer
+  final DssPlan base; // tantiya lang (walang pagbabago)
+  final Map<String, double> ov;
+  final int tick; // tumataas kapag kailangang i-reset ang mga laman ng input
+  final void Function(String key, double? value) onChange;
+  final VoidCallback onReset;
+  const _CostInputs({required this.plan, required this.base, required this.ov, required this.tick, required this.onChange, required this.onReset});
+
+  @override
+  State<_CostInputs> createState() => _CostInputsState();
+}
+
+class _CostInputsState extends State<_CostInputs> {
+  final Map<String, TextEditingController> _c = {};
+  String _sig = '';
+
+  String get _signature => '${widget.base.crop.id}|${widget.base.areaHa.toStringAsFixed(4)}|${widget.tick}';
+
+  static String _fmt(double v) => v == v.roundToDouble() ? v.round().toString() : v.toStringAsFixed(2);
+
+  Map<String, double> get _defaults {
+    final area = widget.base.areaHa;
+    final c = widget.base.crop.cost;
+    final d = <String, double>{
+      'seeds': c.seeds * area,
+      'pesticide': c.pesticide * area,
+      'labor': c.labor * area,
+      'other': c.other * area,
+    };
+    for (final e in _fertTotals.entries) {
+      d['bags_${e.key.name}'] = e.value;
+      d['price_${e.key.name}'] = kFertPrice[e.key] ?? 0;
+    }
+    return d;
+  }
+
+  Map<FertProduct, double> get _fertTotals {
+    final t = <FertProduct, double>{};
+    for (final a in widget.base.fert) {
+      t[a.product] = (t[a.product] ?? 0) + a.bags;
+    }
+    return t;
+  }
+
+  void _rebuild() {
+    for (final c in _c.values) {
+      c.dispose();
+    }
+    _c.clear();
+    final d = _defaults;
+    for (final e in d.entries) {
+      _c[e.key] = TextEditingController(text: _fmt(widget.ov[e.key] ?? e.value));
+    }
+    _sig = _signature;
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _rebuild();
+  }
+
+  @override
+  void didUpdateWidget(covariant _CostInputs old) {
+    super.didUpdateWidget(old);
+    if (_sig != _signature) _rebuild();
+  }
+
+  @override
+  void dispose() {
+    for (final c in _c.values) {
+      c.dispose();
+    }
+    super.dispose();
+  }
+
+  void _edit(String key, String text) {
+    final v = double.tryParse(text.trim().replaceAll(',', '.'));
+    widget.onChange(key, (text.trim().isEmpty || v == null || v < 0) ? null : v);
+  }
+
+  Widget _field(BuildContext context, String key, String label, {String? prefix, String? suffix}) {
+    final d = _defaults[key] ?? 0;
+    final locale = Localizations.localeOf(context).languageCode;
+    final nf = NumberFormat.decimalPattern(locale);
+    final edited = widget.ov.containsKey(key);
+    return TextField(
+      controller: _c[key],
+      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+      onChanged: (t) => _edit(key, t),
+      decoration: InputDecoration(
+        labelText: label,
+        prefixText: prefix,
+        suffixText: suffix,
+        helperText: edited
+            ? tr(context, 'Binago. Tantiya: ${prefix ?? ''}${nf.format(d.round())}', 'Changed. Estimate: ${prefix ?? ''}${nf.format(d.round())}')
+            : tr(context, 'Tantiya: ${prefix ?? ''}${nf.format(d.round())}', 'Estimate: ${prefix ?? ''}${nf.format(d.round())}'),
+        helperStyle: TextStyle(fontSize: 11, color: edited ? AppColors.leaf : AppColors.muted, fontWeight: edited ? FontWeight.w800 : FontWeight.w500),
+        isDense: true,
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+      ),
+    );
+  }
+
+  Map<String, String> _getPesticideDetailsForCrop(DssCrop crop, bool tl) {
+    final cropId = crop.id.toLowerCase();
+    final cropName = crop.name(tl);
+
+    if (cropId.contains('rice') || cropId.contains('palay')) {
+      return {
+        'name': 'FPA Chlorantraniliprole / Botanical Neem Extract',
+        'target': tl ? 'Laban sa Rice Stem Borer, Leaf Folder, at Brown Planthopper' : 'Target: Rice Stem Borer, Leaf Folder, & Brown Planthopper',
+        'rate': tl ? '₱1,800.00 / ektarya (FPA Laguna Retail Survey 2026)' : '₱1,800.00 / hectare (FPA Laguna Retail Survey 2026)',
+      };
+    } else if (cropId.contains('eggplant') || cropId.contains('talong')) {
+      return {
+        'name': 'FPA Cartap Hydrochloride / Emamectin Benzoate',
+        'target': tl ? 'Laban sa Eggplant Fruit & Shoot Borer (FSB) at Thrips' : 'Target: Eggplant Fruit & Shoot Borer (FSB) & Thrips',
+        'rate': tl ? '₱2,500.00 / ektarya (FPA Laguna Retail Survey 2026)' : '₱2,500.00 / hectare (FPA Laguna Retail Survey 2026)',
+      };
+    } else if (cropId.contains('squash') || cropId.contains('kalabasa')) {
+      return {
+        'name': 'FPA Copper Hydroxide & Botanical Insecticidal Soap',
+        'target': tl ? 'Laban sa Squash Beetle, Aphids, at Powdery Mildew' : 'Target: Squash Beetle, Aphids, & Powdery Mildew',
+        'rate': tl ? '₱1,500.00 / ektarya (FPA Laguna Retail Survey 2026)' : '₱1,500.00 / hectare (FPA Laguna Retail Survey 2026)',
+      };
+    } else if (cropId.contains('string') || cropId.contains('sitaw') || cropId.contains('bean')) {
+      return {
+        'name': 'FPA Deltamethrin / Botanical Insecticidal Spray',
+        'target': tl ? 'Laban sa Pod Borer, Aphids, at Bean Fly' : 'Target: Pod Borer, Aphids, & Bean Fly',
+        'rate': tl ? '₱1,600.00 / ektarya (FPA Laguna Retail Survey 2026)' : '₱1,600.00 / hectare (FPA Laguna Retail Survey 2026)',
+      };
+    } else if (cropId.contains('okra')) {
+      return {
+        'name': 'FPA Malathion & Biological Neem Extract Spray',
+        'target': tl ? 'Laban sa Stink Bug, Cotton Stainer, at Root-Knot Nematodes' : 'Target: Stink Bug, Cotton Stainer, & Root-Knot Nematodes',
+        'rate': tl ? '₱1,400.00 / ektarya (FPA Laguna Retail Survey 2026)' : '₱1,400.00 / hectare (FPA Laguna Retail Survey 2026)',
+      };
+    } else if (cropId.contains('pechay')) {
+      return {
+        'name': 'FPA Bacillus Thuringiensis (BT) & Neem Extract',
+        'target': tl ? 'Laban sa Diamondback Moth, Flea Beetle, at Leafminer' : 'Target: Diamondback Moth, Flea Beetle, & Leafminer',
+        'rate': tl ? '₱1,300.00 / ektarya (FPA Laguna Retail Survey 2026)' : '₱1,300.00 / hectare (FPA Laguna Retail Survey 2026)',
+      };
+    } else if (cropId.contains('chili') || cropId.contains('sili')) {
+      return {
+        'name': 'FPA Imidacloprid / Lambda-Cyhalothrin & Sulfur Spray',
+        'target': tl ? 'Laban sa Chili Thrips, Mites, Fruit Fly, at Anthracnose' : 'Target: Chili Thrips, Mites, Fruit Fly, & Anthracnose',
+        'rate': tl ? '₱2,100.00 / ektarya (FPA Laguna Retail Survey 2026)' : '₱2,100.00 / hectare (FPA Laguna Retail Survey 2026)',
+      };
+    } else if (cropId.contains('coconut') || cropId.contains('niyog')) {
+      return {
+        'name': 'FPA Approved Biological Pest Control & Metarhizium Fungus',
+        'target': tl ? 'Laban sa Coconut Scale Insect (CSI) at Rhinoceros Beetle (Uwang)' : 'Target: Coconut Scale Insect (CSI) & Rhinoceros Beetle (Uwang)',
+        'rate': tl ? '₱1,500.00 / ektarya (FPA Laguna Retail Survey 2026)' : '₱1,500.00 / hectare (FPA Laguna Retail Survey 2026)',
+      };
+    } else if (cropId.contains('cacao') || cropId.contains('kakaw')) {
+      return {
+        'name': 'FPA Copper Oxychloride & Botanical Spray',
+        'target': tl ? 'Laban sa Cacao Pod Borer, Black Pod Rot, at Helopeltis' : 'Target: Cacao Pod Borer, Black Pod Rot, & Helopeltis',
+        'rate': tl ? '₱1,900.00 / ektarya (FPA Laguna Retail Survey 2026)' : '₱1,900.00 / hectare (FPA Laguna Retail Survey 2026)',
+      };
+    } else if (cropId.contains('cassava') || cropId.contains('kamoteng kahoy') || cropId.contains('balinghoy')) {
+      return {
+        'name': 'FPA Approved Mealybug Biocontrol & Potassium Soap Spray',
+        'target': tl ? 'Laban sa Cassava Mealybug, Spider Mites, at Bacterial Blight' : 'Target: Cassava Mealybug, Spider Mites, & Bacterial Blight',
+        'rate': tl ? '₱1,100.00 / ektarya (FPA Laguna Retail Survey 2026)' : '₱1,100.00 / hectare (FPA Laguna Retail Survey 2026)',
+      };
+    } else {
+      return {
+        'name': 'FPA Approved General Crop Protection Spray ($cropName)',
+        'target': tl ? 'Laban sa karaniwang insect pests at fungal diseases ng $cropName' : 'Target: Common insect pests & fungal diseases of $cropName',
+        'rate': tl ? '₱1,500.00 / ektarya (FPA Laguna Retail Survey 2026)' : '₱1,500.00 / hectare (FPA Laguna Retail Survey 2026)',
+      };
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     final tl = isTl(context);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final locale = Localizations.localeOf(context).languageCode;
     final nf = NumberFormat.decimalPattern(locale);
-    String peso(double v) => '₱${nf.format(v.round())}';
+    String peso(double v) => '${v < 0 ? '-' : ''}₱${nf.format(v.abs().round())}';
+    final plan = widget.plan;
+    final area = plan.areaHa.toStringAsFixed(2);
+    final fertTotals = _fertTotals;
+    final extra = plan.costs.length > 5 ? plan.costs.sublist(5) : const <CostLine>[];
+    final fertAmount = plan.costs.isEmpty ? 0.0 : plan.costs.first.amount;
+    final net = plan.netMid;
+
     return GlassCard(
       padding: const EdgeInsets.all(14),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -1587,64 +2102,202 @@ class _CostCard extends StatelessWidget {
           const Icon(Icons.receipt_long_rounded, color: AppColors.leaf, size: 20),
           const SizedBox(width: 8),
           Expanded(
-            child: Text(plan.perennial ? tr(context, 'Tantiyang gastos bawat taon', 'Estimated cost per year') : tr(context, 'Tantiyang gastos sa produksyon', 'Estimated production cost'),
-                style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w900)),
+            child: Text(
+              plan.perennial ? tr(context, 'Gastos bawat taon (ilagay ang aktwal)', 'Cost per year (enter your actual)') : tr(context, 'Gastos sa produksyon (ilagay ang aktwal)', 'Production cost (enter your actual)'),
+              style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w900),
+            ),
           ),
         ]),
-        const SizedBox(height: 10),
-        for (final l in plan.costs)
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 5),
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Row(children: [
-                Expanded(child: Text(l.label(tl), style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700))),
-                Text(peso(l.amount), style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w900)),
-              ]),
-              if (l.detail(tl) != null && l.detail(tl)!.isNotEmpty)
-                Text(l.detail(tl)!, style: const TextStyle(fontSize: 10.5, color: AppColors.muted, height: 1.3)),
-            ]),
-          ),
-        const Divider(height: 18),
-        Row(children: [
-          Expanded(child: Text(tr(context, 'Kabuuan', 'Total'), style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w900))),
-          Text(peso(plan.totalCost), style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w900, color: AppColors.leaf)),
-        ]),
-        const SizedBox(height: 6),
+        const SizedBox(height: 4),
         Text(
-          tr(context, 'Presyo ng abono: FPA, Laguna, Hulyo 2026. Ang iba pang gastos ay galing sa PSA o tantiya; maaaring mag-iba sa aktwal ninyong gastos.',
-              'Fertilizer prices: FPA, Laguna, July 2026. Other costs come from PSA or are estimates; your actual costs may differ.'),
+          tr(context, 'Panimulang tantiya ang nasa mga kahon para sa $area ha. Palitan ito ng aktwal ninyong gastos at awtomatikong magbabago ang kabuuan, kita, at tubo.',
+              'The boxes start with an estimate for $area ha. Replace it with your actual costs and the total, income and profit update automatically.'),
+          style: const TextStyle(fontSize: 11.5, color: AppColors.muted, height: 1.3),
+        ),
+        const SizedBox(height: 14),
+
+        // FPA LAGUNA OFFICIAL BENCHMARK SECTION (FERTILIZER & PESTICIDES - MAGKASUNOD AT NON-EDITABLE)
+        Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: isDark ? const Color(0xFF1E293B) : const Color(0xFFF0FDF4),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: const Color(0xFFBBF7D0)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Row(
+                    children: [
+                      const Icon(Icons.account_balance_rounded, color: Color(0xFF16A34A), size: 18),
+                      const SizedBox(width: 6),
+                      Text(
+                        tr(context, 'FPA Laguna Official Benchmark Rates', 'FPA Laguna Official Benchmark Rates'),
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12.5, color: Color(0xFF15803D)),
+                      ),
+                    ],
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF16A34A).withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Text('FPA Laguna Verified', style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold, color: Color(0xFF16A34A))),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+
+              // 1. FERTILIZER (ABONO)
+              Text(tr(context, '🧪 Abono / Fertilizer (FPA Laguna Rates)', '🧪 Fertilizer (FPA Laguna Rates)'), style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w900)),
+              const SizedBox(height: 6),
+              for (final e in fertTotals.entries)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 6),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text('• ${fertName(e.key, tl)} (${_fmt(e.value)} sako @ ${peso(kFertPrice[e.key] ?? 0)}/sako)', style: TextStyle(fontSize: 12, color: isDark ? Colors.white70 : Colors.black87)),
+                      Text(peso((e.value) * (kFertPrice[e.key] ?? 0)), style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                    ],
+                  ),
+                ),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(tr(context, 'Kabuuang Abono:', 'Total Fertilizer:'), style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700)),
+                  Text(peso(fertAmount), style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w900, color: Color(0xFF16A34A))),
+                ],
+              ),
+
+              const Divider(height: 18, color: Color(0xFFBBF7D0)),
+
+              // 2. PESTICIDE (PESTISIDYO - MAGKASUNOD SA FERTILIZER WITH CROP DETAILED PRODUCT INFO & ACCURATE TOTAL)
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(tr(context, '🐛 Pestisidyo at Pamatay-peste (FPA Laguna Rate):', '🐛 Pesticides (FPA Laguna Rate):'), style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700)),
+                      Text(peso(widget.base.crop.cost.pesticide * plan.areaHa), style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w900, color: Color(0xFF16A34A))),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  Builder(builder: (ctx) {
+                    final pInfo = _getPesticideDetailsForCrop(plan.crop, tl);
+                    final pestRatePerHa = widget.base.crop.cost.pesticide;
+                    final totalPestCost = pestRatePerHa * plan.areaHa;
+
+                    return Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: isDark ? const Color(0xFF0F172A) : Colors.white,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: const Color(0xFF86EFAC)),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  '• Product: ${pInfo['name']}',
+                                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Color(0xFF15803D)),
+                                ),
+                              ),
+                              Text(
+                                peso(totalPestCost),
+                                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: Color(0xFF16A34A)),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            '  ${pInfo['target']}',
+                            style: TextStyle(fontSize: 11.5, color: isDark ? Colors.white70 : Colors.black87),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            tl
+                                ? '  Kuwenta: ₱${nf.format(pestRatePerHa.round())}/ha × ${plan.areaHa.toStringAsFixed(2)} ha = ${peso(totalPestCost)}'
+                                : '  Calculation: ₱${nf.format(pestRatePerHa.round())}/ha × ${plan.areaHa.toStringAsFixed(2)} ha = ${peso(totalPestCost)}',
+                            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF0056B3)),
+                          ),
+                        ],
+                      ),
+                    );
+                  }),
+                ],
+              ),
+            ],
+          ),
+        ),
+
+        const SizedBox(height: 16),
+
+        // CUSTOMIZABLE / EDITABLE INPUTS SECTION (BINHI, LABOR, OTHERS)
+        Text(
+          tr(context, '⚙️ Baguhin ang Iba pang Gastos (kabuuan para sa $area ha)', '⚙️ Customize Other Costs (total for $area ha)'),
+          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w900),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          tr(context, 'I-type ang inyong aktwal na gastos sa Binhi, Lakas-paggawa, at Iba pa para awtomatikong mag-recalculate ang kabuuang tubo at kita.',
+              'Type your actual costs for Seeds, Labor, and Others to automatically recalculate profit and net income.'),
           style: const TextStyle(fontSize: 11, color: AppColors.muted, height: 1.3),
         ),
+        const SizedBox(height: 12),
+
+        if (_c.containsKey('seeds')) ...[
+          _field(context, 'seeds', tr(context, '🌱 Binhi / Pantanim', '🌱 Seeds / Planting Material'), prefix: '₱'),
+          const SizedBox(height: 10),
+          _field(context, 'labor', tr(context, '👨‍🌾 Lakas-paggawa at Pag-aararo', '👨‍🌾 Labor & Land Preparation'), prefix: '₱'),
+          const SizedBox(height: 10),
+          _field(context, 'other', tr(context, '📦 Iba pa (Patubig, Hakot, Upa, Fuel, atbp.)', '📦 Others (Irrigation, Hauling, Fuel, Rentals, etc.)'), prefix: '₱'),
+        ],
+        for (final l in extra)
+          Padding(
+            padding: const EdgeInsets.only(top: 10),
+            child: Row(children: [
+              Expanded(child: Text(l.label(tl), style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700))),
+              Text(peso(l.amount), style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w900)),
+            ]),
+          ),
+        const Divider(height: 24),
+
+        // Buod na awtomatikong nagbabago
+        _sumRow(context, tr(context, 'Kabuuang gastos', 'Total cost'), peso(plan.totalCost), strong: true),
+        _sumRow(context, tr(context, 'Posibleng kita (katamtaman)', 'Possible income (typical)'), peso(plan.incMid)),
+        _sumRow(context, tr(context, 'Tubo (katamtaman)', 'Profit (typical)'), peso(net), strong: true, color: net >= 0 ? AppColors.leaf : const Color(0xFFC0503E)),
+        if (widget.ov.isNotEmpty) ...[
+          const SizedBox(height: 8),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton.icon(
+              onPressed: widget.onReset,
+              icon: const Icon(Icons.restart_alt_rounded, size: 18),
+              label: Text(tr(context, 'Ibalik sa tantiya', 'Reset to estimate')),
+            ),
+          ),
+        ],
       ]),
     );
   }
-}
 
-class _Disclaimer extends StatelessWidget {
-  final DssPlan plan;
-  const _Disclaimer({required this.plan});
-
-  @override
-  Widget build(BuildContext context) {
-    final tl = isTl(context);
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.55), borderRadius: BorderRadius.circular(18), border: Border.all(color: AppColors.border)),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text(tr(context, 'Paano nabuo ang mga numerong ito', 'How these numbers are made'), style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w900, color: AppColors.muted)),
-        const SizedBox(height: 6),
-        if ((tl ? plan.crop.assumptionTl : plan.crop.assumptionEn).isNotEmpty)
-          Text(tl ? plan.crop.assumptionTl : plan.crop.assumptionEn, style: const TextStyle(fontSize: 12, height: 1.4)),
-        const SizedBox(height: 6),
-        Text(
-          tr(context, 'Gabay at tantiya lamang ito, hindi garantiya ng ani o kita. Ang ani ay nakabatay sa karaniwang ani sa lugar at hindi pa kasama ang panahon o satellite. Kumonsulta sa Tanggapan ng Pambayang Agrikultura bago magpasya.',
-              'These are guides and estimates only, not a guarantee of yield or income. Yield is based on typical local yields and does not yet include weather or satellite data. Consult the Municipal Agriculture Office before deciding.'),
-          style: const TextStyle(fontSize: 12, height: 1.4, color: AppColors.muted),
-        ),
-        const SizedBox(height: 8),
-        Text(tr(context, 'Mga pinagkunan:', 'Sources:'), style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w800, color: AppColors.muted)),
-        for (final s in plan.crop.sources) Text('• $s', style: const TextStyle(fontSize: 11, color: AppColors.muted, height: 1.35)),
+  Widget _sumRow(BuildContext context, String label, String value, {bool strong = false, Color? color}) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 3),
+      child: Row(children: [
+        Expanded(child: Text(label, style: TextStyle(fontSize: strong ? 14 : 13, fontWeight: strong ? FontWeight.w900 : FontWeight.w700))),
+        Text(value, style: TextStyle(fontSize: strong ? 16 : 13.5, fontWeight: FontWeight.w900, color: color ?? AppColors.ink)),
       ]),
     );
   }

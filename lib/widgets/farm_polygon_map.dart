@@ -3,11 +3,13 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:provider/provider.dart';
 
 import '../core/tr.dart';
 import '../main.dart';
 import '../models/farm_record.dart';
 import '../models/pagsanjan_boundary.dart';
+import '../services/account_service.dart';
 
 /// Mapa ng sariling bukid (satellite) na pwedeng i-zoom at i-edit.
 /// Edit mode: pindutin ang mapa para magdagdag ng sulok, hilahin ang puting bilog para ilipat,
@@ -224,7 +226,17 @@ class _FarmPolygonMapState extends State<FarmPolygonMap> {
           FlutterMap(
             mapController: _map,
             options: MapOptions(
-              initialCenter: widget.farm.center,
+              initialCenter: (widget.outerLandBoundary.length >= 3)
+                  ? (() {
+                      double sumLat = 0.0;
+                      double sumLng = 0.0;
+                      for (final p in widget.outerLandBoundary) {
+                        sumLat += p.latitude;
+                        sumLng += p.longitude;
+                      }
+                      return LatLng(sumLat / widget.outerLandBoundary.length, sumLng / widget.outerLandBoundary.length);
+                    })()
+                  : widget.farm.center,
               initialZoom: 17,
               minZoom: 12,
               maxZoom: 22,
@@ -271,29 +283,32 @@ class _FarmPolygonMapState extends State<FarmPolygonMap> {
                       borderStrokeWidth: 3.5,
                     ),
                 ]),
-              // Outer Saved Land Boundary
+              // OFFICIAL REGISTERED LAND BOUNDARY FROM SUPABASE (PERMANENT FARM LAND)
               if (widget.outerLandBoundary.length >= 3)
                 PolygonLayer(polygons: [
                   Polygon(
                     points: widget.outerLandBoundary,
-                    color: const Color(0xFF0056B3).withValues(alpha: 0.15),
-                    borderColor: const Color(0xFF0056B3),
+                    color: _editing
+                        ? const Color(0xFF0056B3).withValues(alpha: 0.12)
+                        : const Color(0xFF166534).withValues(alpha: 0.22),
+                    borderColor: _editing ? const Color(0xFF0056B3) : const Color(0xFF166534),
                     borderStrokeWidth: 3.5,
                   ),
                 ]),
+              // PLANTING SUB-PLOT POLYGON (DRAWN IN DSS FOR THIS SPECIFIC CROP)
               if (poly.length >= 3)
                 PolygonLayer(polygons: [
                   Polygon(
                     points: poly,
                     color: _isOutsideOuterBoundary
                         ? Colors.red.withValues(alpha: 0.4)
-                        : AppColors.leaf.withValues(alpha: _editing ? 0.34 : 0.28),
-                    borderColor: _isOutsideOuterBoundary ? Colors.redAccent : Colors.white,
-                    borderStrokeWidth: 3,
+                        : const Color(0xFF38BDF8).withValues(alpha: _editing ? 0.35 : 0.45),
+                    borderColor: _isOutsideOuterBoundary ? Colors.redAccent : const Color(0xFF0284C7),
+                    borderStrokeWidth: 2.5,
                   ),
                 ])
               else if (poly.length == 2)
-                PolylineLayer(polylines: [Polyline(points: poly, color: _isOutsideOuterBoundary ? Colors.red : Colors.white, strokeWidth: 3)]),
+                PolylineLayer(polylines: [Polyline(points: poly, color: _isOutsideOuterBoundary ? Colors.red : const Color(0xFF0284C7), strokeWidth: 2.5)]),
               if (_editing) MarkerLayer(markers: [for (var i = 0; i < _draft.length; i++) _handle(i)]),
             ],
           ),
