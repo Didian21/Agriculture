@@ -138,6 +138,7 @@ class PagsanjanMapWidget extends StatefulWidget {
   final List<Polyline> extraPolylines;
   final void Function(LatLng)? onTap;
   final MapController? mapController;
+  final bool isDraggingMarker;
 
   const PagsanjanMapWidget({
     super.key,
@@ -148,6 +149,7 @@ class PagsanjanMapWidget extends StatefulWidget {
     this.extraPolylines = const [],
     this.onTap,
     this.mapController,
+    this.isDraggingMarker = false,
   });
 
   @override
@@ -329,6 +331,9 @@ class _PagsanjanMapWidgetState extends State<PagsanjanMapWidget> {
               initialZoom: widget.initialZoom,
               minZoom: 12.5,
               maxZoom: 18.0,
+              interactionOptions: InteractionOptions(
+                flags: widget.isDraggingMarker ? InteractiveFlag.none : InteractiveFlag.all,
+              ),
               cameraConstraint: CameraConstraint.contain(
                 bounds: LatLngBounds(
                   const LatLng(14.1000, 121.2500),
@@ -452,6 +457,8 @@ class PagsanjanMapBoundaryPickerScreen extends StatefulWidget {
   final List<LatLng> initialBoundary;
   final List<FarmRecord> existingFarms;
   final Color primaryColor;
+  final String? farmerId;
+  final String? farmerName;
 
   const PagsanjanMapBoundaryPickerScreen({
     super.key,
@@ -459,6 +466,8 @@ class PagsanjanMapBoundaryPickerScreen extends StatefulWidget {
     this.initialBoundary = const [],
     this.existingFarms = const [],
     this.primaryColor = const Color(0xFF166534),
+    this.farmerId,
+    this.farmerName,
   });
 
   @override
@@ -467,6 +476,8 @@ class PagsanjanMapBoundaryPickerScreen extends StatefulWidget {
 
 class _PagsanjanMapBoundaryPickerScreenState extends State<PagsanjanMapBoundaryPickerScreen> {
   late final List<LatLng> _boundaryPoints = List.from(widget.initialBoundary);
+  final MapController _mapController = MapController();
+  bool _isDraggingMarker = false;
 
   double _calcAreaSqM(List<LatLng> points) {
     if (points.length < 3) return 0.0;
@@ -512,6 +523,9 @@ class _PagsanjanMapBoundaryPickerScreenState extends State<PagsanjanMapBoundaryP
   FarmRecord? _findOverlappingFarm(List<LatLng> pts) {
     if (pts.length < 3) return null;
     for (final farm in widget.existingFarms) {
+      if (widget.farmerId != null && (farm.farmerId == widget.farmerId || farm.farmerName.toLowerCase() == (widget.farmerName ?? '').toLowerCase())) {
+        continue; // Allow same owner's other parcels without flagging overlap error
+      }
       if (farm.boundaryPoints.length >= 3) {
         if (_doPolygonsOverlap(pts, farm.boundaryPoints)) {
           return farm;
@@ -553,13 +567,19 @@ class _PagsanjanMapBoundaryPickerScreenState extends State<PagsanjanMapBoundaryP
           PagsanjanMapWidget(
             initialCenter: widget.initialCenter,
             initialZoom: 15.5,
+            isDraggingMarker: _isDraggingMarker,
             extraPolygons: [
-              ...widget.existingFarms.where((f) => f.boundaryPoints.length >= 3).map((f) => Polygon(
-                points: f.boundaryPoints,
-                color: Colors.red.withValues(alpha: 0.15),
-                borderColor: Colors.redAccent,
-                borderStrokeWidth: 2.0,
-              )),
+              ...widget.existingFarms.where((f) => f.boundaryPoints.length >= 3).map((f) {
+                final isSameOwner = widget.farmerId != null && (f.farmerId == widget.farmerId || f.farmerName.toLowerCase() == (widget.farmerName ?? '').toLowerCase());
+                return Polygon(
+                  points: f.boundaryPoints,
+                  color: isSameOwner
+                      ? const Color(0xFF16A34A).withValues(alpha: 0.25)
+                      : Colors.red.withValues(alpha: 0.15),
+                  borderColor: isSameOwner ? const Color(0xFF16A34A) : Colors.redAccent,
+                  borderStrokeWidth: 2.5,
+                );
+              }),
               if (_boundaryPoints.length >= 3)
                 Polygon(
                   points: _boundaryPoints,
@@ -581,28 +601,80 @@ class _PagsanjanMapBoundaryPickerScreenState extends State<PagsanjanMapBoundaryP
                     ),
                   ]
                 : [],
+            mapController: _mapController,
             markers: [
-              ..._boundaryPoints.asMap().entries.map((e) => Marker(
-                    point: e.value,
-                    width: 28,
-                    height: 28,
+              ..._boundaryPoints.asMap().entries.map((e) {
+                final i = e.key;
+                final point = e.value;
+                return Marker(
+                  key: ValueKey('drag_handle_picker_$i'),
+                  point: point,
+                  width: 52,
+                  height: 52,
+                  child: Listener(
+                    behavior: HitTestBehavior.opaque,
+                    onPointerDown: (_) => _isDraggingMarker = true,
+                    onPointerUp: (_) => Future.delayed(const Duration(milliseconds: 150), () => _isDraggingMarker = false),
+                    onPointerCancel: (_) => _isDraggingMarker = false,
+                    onPointerMove: (event) {
+                      try {
+                        _isDraggingMarker = true;
+                        final camera = _mapController.camera;
+                        final currentScreenPoint = camera.latLngToScreenPoint(_boundaryPoints[i]);
+                        final newScreenPoint = math.Point(
+                          currentScreenPoint.x + event.delta.dx,
+                          currentScreenPoint.y + event.delta.dy,
+                        );
+                        final newLatLng = camera.pointToLatLng(newScreenPoint);
+                        setState(() {
+                          _boundaryPoints[i] = newLatLng;
+                        });
+                      } catch (_) {}
+                    },
                     child: Container(
-                      decoration: BoxDecoration(
-                        color: widget.primaryColor,
-                        shape: BoxShape.circle,
-                        border: Border.all(color: Colors.white, width: 2),
-                        boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 4)],
-                      ),
+                      width: 52,
+                      height: 52,
+                      color: Colors.transparent,
                       child: Center(
-                        child: Text(
-                          '${e.key + 1}',
-                          style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+                        child: Container(
+                          width: 28,
+                          height: 28,
+                          decoration: BoxDecoration(
+                            color: widget.primaryColor,
+                            shape: BoxShape.circle,
+                            border: Border.all(color: Colors.white, width: 2.5),
+                            boxShadow: const [BoxShadow(color: Colors.black38, blurRadius: 6)],
+                          ),
+                          child: Center(
+                            child: Text(
+                              '${i + 1}',
+                              style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+                            ),
+                          ),
                         ),
                       ),
                     ),
-                  )),
+                  ),
+                );
+              }),
             ],
-            onTap: (point) => setState(() => _boundaryPoints.add(point)),
+            onTap: (point) {
+              if (_isDraggingMarker) return;
+              try {
+                final camera = _mapController.camera;
+                final tapScreen = camera.latLngToScreenPoint(point);
+                for (final p in _boundaryPoints) {
+                  final pScreen = camera.latLngToScreenPoint(p);
+                  final dx = tapScreen.x - pScreen.x;
+                  final dy = tapScreen.y - pScreen.y;
+                  if (dx * dx + dy * dy < 30 * 30) {
+                    return; // Tapped near an existing handle - do not add point!
+                  }
+                }
+              } catch (_) {}
+
+              setState(() => _boundaryPoints.add(point));
+            },
           ),
 
           // Banner Status

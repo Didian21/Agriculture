@@ -56,7 +56,6 @@ class _TechnicianScreenState extends State<TechnicianScreen> {
 
   // Interactive Map State
   bool _showRegisteredPins = true;
-  bool _showLandmarks = true;
   bool _showMapSidePanel = true;
   LatLng _mapCenter = const LatLng(14.2790, 121.4550);
   double _mapZoom = 13.5;
@@ -87,42 +86,48 @@ class _TechnicianScreenState extends State<TechnicianScreen> {
 
   // Dynamically get visits combining database farmers & manual visits
   List<TechnicianVisit> _getEffectiveVisits(AccountService service) {
-    final list = <TechnicianVisit>[..._manualVisits];
-    for (int i = 0; i < service.farmers.length; i++) {
-      final farmer = service.farmers[i];
-      final existing = list.any((v) => v.farmerId == farmer.id || v.farmerName.toLowerCase() == farmer.profileName.toLowerCase());
-      if (!existing) {
-        final farm = service.farms.firstWhere(
-          (f) => f.farmerId == farmer.id || f.farmerName == farmer.profileName,
-          orElse: () => FarmRecord(
-            id: 'AUTO_${farmer.id}',
-            farmerId: farmer.id,
-            farmerName: farmer.profileName,
-            locationName: 'Sitio ${farmer.barangay}',
-            latitude: 14.2790,
-            longitude: 121.4550,
-            landAreaHectares: 2.0,
-            tenureStatus: 'Owner',
-            cropType: 'Rice',
-            barangay: farmer.barangay,
-            soilType: 'Clay Loam',
-          ),
-        );
-        list.add(
-          TechnicianVisit(
-            id: 'V_${farmer.id}',
-            farmerId: farmer.id,
-            farmerName: farmer.profileName,
-            barangay: farmer.barangay,
-            cropType: farm.cropType,
-            scheduledDate: DateTime.now().add(Duration(days: i % 5)),
-            purpose: farm.boundaryPoints.isEmpty ? 'Farm Visit & Land Boundary Mapping (Soil Typing)' : 'Routine Field Inspection',
-            status: farm.boundaryPoints.isEmpty ? 'Scheduled' : 'Completed',
-            findings: farm.boundaryPoints.isEmpty ? '' : 'Boundary mapped & soil assessed.',
-          ),
-        );
+    final list = <TechnicianVisit>[];
+
+    // 1. Add manual visits that are still pending
+    for (final v in _manualVisits) {
+      if (v.status != 'Completed') {
+        list.add(v);
       }
     }
+
+    // 2. Add pending visit tasks ONLY for farmers who have unmapped farm lots
+    for (int i = 0; i < service.farmers.length; i++) {
+      final farmer = service.farmers[i];
+      final farmerFarms = service.farms.where((f) => f.farmerId == farmer.id || f.farmerName.toLowerCase() == farmer.profileName.toLowerCase()).toList();
+
+      final unmappedLots = farmerFarms.isEmpty || farmerFarms.any((f) => f.boundaryPoints.isEmpty);
+      final missingSoil = farmerFarms.isNotEmpty && farmerFarms.any((f) => f.boundaryPoints.isNotEmpty && (f.soilType.isEmpty || f.soilType == 'N/A'));
+
+      if (unmappedLots || missingSoil) {
+        final existing = list.any((v) => v.farmerId == farmer.id || v.farmerName.toLowerCase() == farmer.profileName.toLowerCase());
+        if (!existing) {
+          final cropStr = farmerFarms.isNotEmpty ? farmerFarms.map((f) => f.cropType).toSet().join(', ') : 'Rice';
+          final specificMissing = service.isTagalog
+              ? (unmappedLots ? '⚠️ Kulang: Boundary Mapping' : '⚠️ Kulang: Uri ng Lupa (Soil Type)')
+              : (unmappedLots ? '⚠️ Missing: Boundary Mapping' : '⚠️ Missing: Soil Type');
+
+          list.add(
+            TechnicianVisit(
+              id: 'V_${farmer.id}',
+              farmerId: farmer.id,
+              farmerName: farmer.profileName,
+              barangay: farmer.barangay,
+              cropType: cropStr,
+              scheduledDate: DateTime.now().add(Duration(days: i % 5)),
+              purpose: specificMissing,
+              status: 'Scheduled',
+              findings: '',
+            ),
+          );
+        }
+      }
+    }
+
     return list;
   }
 
@@ -235,10 +240,13 @@ class _TechnicianScreenState extends State<TechnicianScreen> {
     return false;
   }
 
-  FarmRecord? findOverlappingFarm(List<LatLng> newPoly, List<FarmRecord> allFarms, {String? excludeFarmId}) {
+  FarmRecord? findOverlappingFarm(List<LatLng> newPoly, List<FarmRecord> allFarms, {String? excludeFarmId, String? excludeFarmerId, String? excludeFarmerName}) {
     if (newPoly.length < 3) return null;
     for (final farm in allFarms) {
       if (excludeFarmId != null && farm.id == excludeFarmId) continue;
+      if (excludeFarmerId != null && (farm.farmerId == excludeFarmerId || farm.farmerName.toLowerCase() == (excludeFarmerName ?? '').toLowerCase())) {
+        continue; // Allow same owner's other parcels without flagging overlap error
+      }
       if (farm.boundaryPoints.length >= 3) {
         if (doPolygonsOverlap(newPoly, farm.boundaryPoints)) return farm;
       }
@@ -285,39 +293,67 @@ class _TechnicianScreenState extends State<TechnicianScreen> {
     boundaryPoints.insert(bestIndex + 1, p);
   }
 
-  Marker _buildDraggableHandle(int i, LatLng point, MapController mapController, StateSetter setMapState, List<LatLng> boundaryPoints) {
+  Marker _buildDraggableHandle(
+    int i,
+    LatLng point,
+    MapController mapController,
+    StateSetter setMapState,
+    List<LatLng> boundaryPoints,
+    Function(bool) setDraggingState,
+  ) {
     return Marker(
       key: ValueKey('drag_handle_$i'),
       point: point,
-      width: 44,
-      height: 44,
-      child: GestureDetector(
+      width: 52,
+      height: 52,
+      child: Listener(
         behavior: HitTestBehavior.opaque,
-        onPanUpdate: (details) {
-          final newPos = _movePoint(mapController, boundaryPoints[i], details.delta);
-          setMapState(() {
-            boundaryPoints[i] = newPos;
-          });
+        onPointerDown: (_) => setDraggingState(true),
+        onPointerUp: (_) => setDraggingState(false),
+        onPointerCancel: (_) => setDraggingState(false),
+        onPointerMove: (event) {
+          try {
+            final camera = mapController.camera;
+            final currentScreenPoint = camera.latLngToScreenPoint(boundaryPoints[i]);
+            final newScreenPoint = math.Point(
+              currentScreenPoint.x + event.delta.dx,
+              currentScreenPoint.y + event.delta.dy,
+            );
+            final newLatLng = camera.pointToLatLng(newScreenPoint);
+            setMapState(() {
+              boundaryPoints[i] = newLatLng;
+            });
+          } catch (_) {}
         },
-        onLongPress: () {
-          if (boundaryPoints.length <= 3) return;
-          setMapState(() {
-            boundaryPoints.removeAt(i);
-          });
-        },
-        child: Container(
-          width: 24,
-          height: 24,
-          decoration: BoxDecoration(
-            color: const Color(0xFF0056B3),
-            shape: BoxShape.circle,
-            border: Border.all(color: Colors.white, width: 2.5),
-            boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 4, offset: const Offset(0, 2))],
-          ),
-          child: Center(
-            child: Text(
-              '${i + 1}',
-              style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onLongPress: () {
+            if (boundaryPoints.length <= 3) return;
+            setMapState(() {
+              boundaryPoints.removeAt(i);
+            });
+          },
+          child: Container(
+            width: 52,
+            height: 52,
+            color: Colors.transparent,
+            child: Center(
+              child: Container(
+                width: 28,
+                height: 28,
+                decoration: BoxDecoration(
+                  color: const Color(0xFF0056B3),
+                  shape: BoxShape.circle,
+                  border: Border.all(color: Colors.white, width: 2.5),
+                  boxShadow: const [BoxShadow(color: Colors.black38, blurRadius: 6)],
+                ),
+                child: Center(
+                  child: Text(
+                    '${i + 1}',
+                    style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ),
             ),
           ),
         ),
@@ -344,11 +380,14 @@ class _TechnicianScreenState extends State<TechnicianScreen> {
   }
 
   void _showEditFarmBoundaryDialog(BuildContext context, AccountService service, FarmRecord farm, bool isTagalog) {
-    final List<LatLng> boundaryPoints = List.from(farm.boundaryPoints);
-    String selectedSoilType = farm.soilType.isNotEmpty ? farm.soilType : 'Clay Loam';
+    FarmRecord currentFarm = farm;
+    final List<LatLng> boundaryPoints = List.from(currentFarm.boundaryPoints);
+    String selectedSoilType = currentFarm.soilType.isNotEmpty ? currentFarm.soilType : 'Clay Loam';
     bool dialogGpsEnabled = _isGpsEnabled;
+    bool isDraggingMarker = false;
 
     final soilTypes = ['Clay Loam', 'Sandy Loam', 'Clay', 'Loam', 'Silty Clay Loam'];
+    final farmerFarms = service.farms.where((f) => f.farmerId == farm.farmerId || f.farmerName.toLowerCase() == farm.farmerName.toLowerCase()).toList();
 
     showDialog(
       context: context,
@@ -358,7 +397,13 @@ class _TechnicianScreenState extends State<TechnicianScreen> {
           final sqM = calculatePolygonAreaSqM(boundaryPoints);
           final ha = calculatePolygonAreaHectares(boundaryPoints);
           final nf = NumberFormat('#,###');
-          final overlappingFarm = findOverlappingFarm(boundaryPoints, service.farms, excludeFarmId: farm.id);
+          final overlappingFarm = findOverlappingFarm(
+            boundaryPoints,
+            service.farms,
+            excludeFarmId: currentFarm.id,
+            excludeFarmerId: currentFarm.farmerId,
+            excludeFarmerName: currentFarm.farmerName,
+          );
 
           return AlertDialog(
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
@@ -376,7 +421,7 @@ class _TechnicianScreenState extends State<TechnicianScreen> {
                   const SizedBox(width: 10),
                   Expanded(
                     child: Text(
-                      isTagalog ? 'I-plot ang Boundary & Uri ng Lupa - ${farm.farmerName}' : 'Plot Farm Boundary & Soil Type - ${farm.farmerName}',
+                      isTagalog ? 'I-plot ang Boundary & Uri ng Lupa - ${currentFarm.farmerName}' : 'Plot Farm Boundary & Soil Type - ${currentFarm.farmerName}',
                       style: const TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.white),
                     ),
                   ),
@@ -389,13 +434,57 @@ class _TechnicianScreenState extends State<TechnicianScreen> {
             ),
             content: SizedBox(
               width: 650,
-              height: 550,
+              height: 570,
               child: Column(
                 children: [
+                  if (farmerFarms.length >= 2)
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                      color: const Color(0xFFEFF6FF),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.holiday_village_rounded, color: Color(0xFF0056B3), size: 18),
+                          const SizedBox(width: 8),
+                          Text(
+                            isTagalog ? 'Pumili ng Lupa ni ${currentFarm.farmerName}:' : 'Select Farm Lot:',
+                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Color(0xFF0056B3)),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: DropdownButtonFormField<String>(
+                              initialValue: currentFarm.id,
+                              isExpanded: true,
+                              decoration: InputDecoration(
+                                isDense: true,
+                                contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                                filled: true,
+                                fillColor: Colors.white,
+                              ),
+                              items: farmerFarms.map((f) => DropdownMenuItem(
+                                value: f.id,
+                                child: Text('${f.cropType} (${f.landAreaHectares} ha) - ${f.locationName}', overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                              )).toList(),
+                              onChanged: (selectedId) {
+                                if (selectedId != null && selectedId != currentFarm.id) {
+                                  final newSelectedFarm = farmerFarms.firstWhere((f) => f.id == selectedId);
+                                  setDialogState(() {
+                                    currentFarm = newSelectedFarm;
+                                    boundaryPoints.clear();
+                                    boundaryPoints.addAll(newSelectedFarm.boundaryPoints);
+                                    selectedSoilType = newSelectedFarm.soilType.isNotEmpty ? newSelectedFarm.soilType : 'Clay Loam';
+                                  });
+                                }
+                              },
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                   Container(
                     width: double.infinity,
                     padding: const EdgeInsets.all(12),
-                    color: const Color(0xFFEFF6FF),
+                    color: const Color(0xFFF1F5F9),
                     child: Row(
                       children: [
                         const Icon(Icons.touch_app_rounded, color: Color(0xFF0284C7), size: 18),
@@ -403,18 +492,30 @@ class _TechnicianScreenState extends State<TechnicianScreen> {
                         Expanded(
                           child: Text(
                             boundaryPoints.length < 3
-                                ? (isTagalog ? 'I-tap ang mapa para iguhit ang boundary ng sakahan (3 o higit pang puntos).' : 'Tap map to draw farm boundary (3+ points).')
-                                : (isTagalog ? '🌾 Sukat: ${ha.toStringAsFixed(2)} ha (${nf.format(sqM.round())} m²)' : '🌾 Area: ${ha.toStringAsFixed(2)} ha (${nf.format(sqM.round())} m²)'),
+                                ? (isTagalog ? 'I-tap ang mapa para iguhit ang boundary (3+ puntos). I-drag ang mga puntos para mag-adjust.' : 'Tap map to draw boundary (3+ points). Drag points to adjust.')
+                                : (isTagalog ? '🌾 Sukat: ${ha.toStringAsFixed(2)} ha (${nf.format(sqM.round())} m²) • ✋ I-drag ang mga puntos (1, 2, 3...) para baguhin ang boundary!' : '🌾 Area: ${ha.toStringAsFixed(2)} ha (${nf.format(sqM.round())} m²) • ✋ Drag handles (1, 2, 3...) to adjust boundary!'),
                             style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: boundaryPoints.length >= 3 ? const Color(0xFF16A34A) : const Color(0xFF0284C7)),
                           ),
                         ),
-                        if (boundaryPoints.isNotEmpty)
+                        if (boundaryPoints.isNotEmpty) ...[
+                          IconButton(
+                            tooltip: isTagalog ? 'I-undo ang Huling Punto' : 'Undo Last Point',
+                            icon: const Icon(Icons.undo_rounded, color: Color(0xFF0056B3)),
+                            onPressed: () {
+                              setDialogState(() {
+                                if (boundaryPoints.isNotEmpty) {
+                                  boundaryPoints.removeLast();
+                                }
+                              });
+                            },
+                          ),
                           TextButton.icon(
                             style: TextButton.styleFrom(foregroundColor: Colors.redAccent),
                             onPressed: () => setDialogState(() => boundaryPoints.clear()),
                             icon: const Icon(Icons.clear_all_rounded, size: 16),
                             label: Text(isTagalog ? 'Linisin' : 'Clear'),
                           ),
+                        ],
                       ],
                     ),
                   ),
@@ -478,13 +579,19 @@ class _TechnicianScreenState extends State<TechnicianScreen> {
                       initialCenter: farm.latitude != 0 ? LatLng(farm.latitude, farm.longitude) : const LatLng(14.2790, 121.4550),
                       initialZoom: 16.5,
                       mapController: mapController,
+                      isDraggingMarker: isDraggingMarker,
                       extraPolygons: [
-                        ...service.farms.where((f) => f.id != farm.id && f.boundaryPoints.length >= 3).map((f) => Polygon(
-                          points: f.boundaryPoints,
-                          color: Colors.red.withValues(alpha: 0.15),
-                          borderColor: Colors.redAccent,
-                          borderStrokeWidth: 2.0,
-                        )),
+                        ...service.farms.where((f) => f.id != farm.id && f.boundaryPoints.length >= 3).map((f) {
+                          final isSameOwner = f.farmerId == farm.farmerId || f.farmerName.toLowerCase() == farm.farmerName.toLowerCase();
+                          return Polygon(
+                            points: f.boundaryPoints,
+                            color: isSameOwner
+                                ? const Color(0xFF16A34A).withValues(alpha: 0.25)
+                                : Colors.red.withValues(alpha: 0.15),
+                            borderColor: isSameOwner ? const Color(0xFF16A34A) : Colors.redAccent,
+                            borderStrokeWidth: 2.5,
+                          );
+                        }),
                         if (boundaryPoints.length >= 3)
                           Polygon(
                             points: boundaryPoints,
@@ -505,9 +612,23 @@ class _TechnicianScreenState extends State<TechnicianScreen> {
                       markers: [
                         if (dialogGpsEnabled) _buildTechnicianGpsMarker(),
                         for (int i = 0; i < boundaryPoints.length; i++)
-                          _buildDraggableHandle(i, boundaryPoints[i], mapController, setDialogState, boundaryPoints),
+                          _buildDraggableHandle(i, boundaryPoints[i], mapController, setDialogState, boundaryPoints, (dragging) => isDraggingMarker = dragging),
                       ],
                       onTap: (point) {
+                        if (isDraggingMarker) return;
+                        try {
+                          final camera = mapController.camera;
+                          final tapScreen = camera.latLngToScreenPoint(point);
+                          for (final p in boundaryPoints) {
+                            final pScreen = camera.latLngToScreenPoint(p);
+                            final dx = tapScreen.x - pScreen.x;
+                            final dy = tapScreen.y - pScreen.y;
+                            if (dx * dx + dy * dy < 30 * 30) {
+                              return; // Tapped near an existing handle - do not add point!
+                            }
+                          }
+                        } catch (_) {}
+
                         setDialogState(() {
                           _addOrInsertPoint(point, boundaryPoints);
                         });
@@ -541,11 +662,11 @@ class _TechnicianScreenState extends State<TechnicianScreen> {
                         final detectedBrgy = AccountService.normalizeBarangay(rawBrgy);
 
                         await service.updateFarmRecord(
-                          farm.id,
-                          locationName: farm.locationName.isEmpty ? 'Farm Lot, Brgy. $detectedBrgy, Pagsanjan' : farm.locationName,
-                          landAreaHectares: computedHa > 0 ? double.parse(computedHa.toStringAsFixed(2)) : farm.landAreaHectares,
-                          tenureStatus: farm.tenureStatus,
-                          cropType: farm.cropType,
+                          currentFarm.id,
+                          locationName: currentFarm.locationName.isEmpty ? 'Farm Lot, Brgy. $detectedBrgy, Pagsanjan' : currentFarm.locationName,
+                          landAreaHectares: computedHa > 0 ? double.parse(computedHa.toStringAsFixed(2)) : currentFarm.landAreaHectares,
+                          tenureStatus: currentFarm.tenureStatus,
+                          cropType: currentFarm.cropType,
                           barangay: detectedBrgy,
                           latitude: centroid.latitude,
                           longitude: centroid.longitude,
@@ -559,8 +680,8 @@ class _TechnicianScreenState extends State<TechnicianScreen> {
                             SnackBar(
                               content: Text(
                                 isTagalog
-                                    ? 'Matagumpay na na-update ang sakahan at uri ng lupa ($selectedSoilType) ni ${farm.farmerName}!'
-                                    : 'Successfully updated farm and soil type ($selectedSoilType) for ${farm.farmerName}!',
+                                    ? 'Matagumpay na na-update ang sakahan at uri ng lupa ($selectedSoilType) ni ${currentFarm.farmerName}!'
+                                    : 'Successfully updated farm and soil type ($selectedSoilType) for ${currentFarm.farmerName}!',
                               ),
                               backgroundColor: const Color(0xFF0056B3),
                             ),
@@ -724,14 +845,15 @@ class _TechnicianScreenState extends State<TechnicianScreen> {
   ) {
     final effectiveVisits = _getEffectiveVisits(service);
     final filteredVisits = effectiveVisits.where((v) {
+      final isPending = v.status != 'Completed';
       final matchesBrgy = _selectedBarangayFilter == 'All' || v.barangay.toLowerCase() == _selectedBarangayFilter.toLowerCase();
       final query = _searchQuery.toLowerCase();
       final matchesQuery = query.isEmpty || v.farmerName.toLowerCase().contains(query) || v.purpose.toLowerCase().contains(query);
-      return matchesBrgy && matchesQuery;
+      return isPending && matchesBrgy && matchesQuery;
     }).toList();
 
-    final scheduledCount = effectiveVisits.where((v) => v.status == 'Scheduled').length;
-    final completedCount = effectiveVisits.where((v) => v.status == 'Completed').length;
+    final pendingVisitsCount = filteredVisits.length;
+    final coveredBarangaysCount = filteredVisits.map((v) => v.barangay).toSet().length;
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(18),
@@ -775,10 +897,10 @@ class _TechnicianScreenState extends State<TechnicianScreen> {
             children: [
               Expanded(
                 child: _buildStatCard(
-                  title: isTagalog ? 'Nakatakdang Bisita' : 'Scheduled Visits',
-                  value: '$scheduledCount',
+                  title: isTagalog ? 'Pending na Pagbisita' : 'Pending Field Visits',
+                  value: '$pendingVisitsCount',
                   icon: Icons.event_note_rounded,
-                  color: const Color(0xFF0284C7),
+                  color: const Color(0xFFD97706),
                   cardBg: cardBg,
                   textColor: textColor,
                   cardBorder: cardBorder,
@@ -787,10 +909,10 @@ class _TechnicianScreenState extends State<TechnicianScreen> {
               const SizedBox(width: 12),
               Expanded(
                 child: _buildStatCard(
-                  title: isTagalog ? 'Natapos na Bisita' : 'Completed Inspections',
-                  value: '$completedCount',
-                  icon: Icons.check_circle_outline_rounded,
-                  color: const Color(0xFF16A34A),
+                  title: isTagalog ? 'Mga Barangay na Bisitahin' : 'Barangays to Visit',
+                  value: '$coveredBarangaysCount',
+                  icon: Icons.map_rounded,
+                  color: const Color(0xFF0056B3),
                   cardBg: cardBg,
                   textColor: textColor,
                   cardBorder: cardBorder,
@@ -841,7 +963,7 @@ class _TechnicianScreenState extends State<TechnicianScreen> {
           ),
           const SizedBox(height: 16),
 
-          // VISITS LIST
+          // FIELD VISITS TABLE FROM SUPABASE & SYSTEM
           if (filteredVisits.isEmpty)
             Center(
               child: Padding(
@@ -853,151 +975,159 @@ class _TechnicianScreenState extends State<TechnicianScreen> {
               ),
             )
           else
-            ListView.builder(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              itemCount: filteredVisits.length,
-              itemBuilder: (context, index) {
-                final visit = filteredVisits[index];
-                final isCompleted = visit.status == 'Completed';
-                final farmerFarm = service.farms.firstWhere(
-                  (f) => f.farmerId == visit.farmerId || f.farmerName.toLowerCase() == visit.farmerName.toLowerCase(),
-                  orElse: () => FarmRecord(
-                    id: 'AUTO_${visit.farmerId}',
-                    farmerId: visit.farmerId,
-                    farmerName: visit.farmerName,
-                    locationName: 'Sitio ${visit.barangay}',
-                    latitude: 14.2790,
-                    longitude: 121.4550,
-                    landAreaHectares: 2.0,
-                    tenureStatus: 'Owner',
-                    cropType: visit.cropType,
-                    barangay: visit.barangay,
-                    soilType: 'Clay Loam',
-                  ),
-                );
+            Container(
+              width: double.infinity,
+              decoration: BoxDecoration(
+                color: cardBg,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: cardBorder),
+                boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 6)],
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(14),
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: DataTable(
+                    headingRowColor: WidgetStateProperty.all(isDark ? const Color(0xFF1E293B) : const Color(0xFFEFF6FF)),
+                    dataRowMaxHeight: 68,
+                    columnSpacing: 16,
+                    columns: [
+                      DataColumn(label: Text(isTagalog ? 'Magsasaka' : 'Farmer Name', style: TextStyle(fontWeight: FontWeight.bold, color: primaryAccent))),
+                      DataColumn(label: Text(isTagalog ? 'Barangay' : 'Barangay', style: TextStyle(fontWeight: FontWeight.bold, color: primaryAccent))),
+                      DataColumn(label: Text(isTagalog ? 'Tanim' : 'Crop Type', style: TextStyle(fontWeight: FontWeight.bold, color: primaryAccent))),
+                      DataColumn(label: Text(isTagalog ? 'Petsa ng Pagbisita' : 'Scheduled Date', style: TextStyle(fontWeight: FontWeight.bold, color: primaryAccent))),
+                      DataColumn(label: Text(isTagalog ? 'Layunin' : 'Purpose', style: TextStyle(fontWeight: FontWeight.bold, color: primaryAccent))),
+                      DataColumn(label: Text(isTagalog ? 'Status' : 'Status', style: TextStyle(fontWeight: FontWeight.bold, color: primaryAccent))),
+                      DataColumn(label: Text(isTagalog ? 'Mga Aksyon' : 'Actions', style: TextStyle(fontWeight: FontWeight.bold, color: primaryAccent))),
+                    ],
+                    rows: filteredVisits.map((visit) {
+                      final isCompleted = visit.status == 'Completed';
+                      final farmerFarm = service.farms.firstWhere(
+                        (f) => f.farmerId == visit.farmerId || f.farmerName.toLowerCase() == visit.farmerName.toLowerCase(),
+                        orElse: () => FarmRecord(
+                          id: 'AUTO_${visit.farmerId}',
+                          farmerId: visit.farmerId,
+                          farmerName: visit.farmerName,
+                          locationName: 'Sitio ${visit.barangay}',
+                          latitude: 14.2790,
+                          longitude: 121.4550,
+                          landAreaHectares: 2.0,
+                          tenureStatus: 'Owner',
+                          cropType: visit.cropType,
+                          barangay: visit.barangay,
+                          soilType: 'Clay Loam',
+                        ),
+                      );
+                      final isUnmapped = farmerFarm.boundaryPoints.isEmpty;
 
-                return Card(
-                  color: cardBg,
-                  margin: const EdgeInsets.only(bottom: 12),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14),
-                    side: BorderSide(color: cardBorder),
-                  ),
-                  child: InkWell(
-                    borderRadius: BorderRadius.circular(14),
-                    onTap: () => _showVisitDetailsDialog(context, visit, service, isTagalog),
-                    child: Padding(
-                      padding: const EdgeInsets.all(14),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              CircleAvatar(
-                                backgroundColor: (isCompleted ? const Color(0xFF16A34A) : const Color(0xFF0284C7)).withValues(alpha: 0.15),
-                                foregroundColor: isCompleted ? const Color(0xFF16A34A) : const Color(0xFF0284C7),
-                                child: Icon(isCompleted ? Icons.check_circle_rounded : Icons.event_available_rounded),
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(visit.farmerName, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: textColor)),
-                                    Text('Brgy. ${visit.barangay} • ${visit.cropType}', style: TextStyle(fontSize: 12, color: subtextColor)),
-                                  ],
-                                ),
-                              ),
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                                decoration: BoxDecoration(
-                                  color: (isCompleted ? const Color(0xFF16A34A) : const Color(0xFF0284C7)).withValues(alpha: 0.15),
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                                child: Text(
-                                  visit.status,
-                                  style: TextStyle(
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.bold,
-                                    color: isCompleted ? const Color(0xFF16A34A) : const Color(0xFF0284C7),
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 10),
-                          Text(
-                            '${isTagalog ? "Layunin ng Pagbisita" : "Purpose"}: ${visit.purpose}',
-                            style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: textColor),
-                          ),
-                          if (visit.findings.isNotEmpty) ...[
-                            const SizedBox(height: 6),
-                            Container(
-                              padding: const EdgeInsets.all(10),
-                              decoration: BoxDecoration(
-                                color: isDark ? const Color(0xFF1E293B) : const Color(0xFFF1F5F9),
-                                borderRadius: BorderRadius.circular(8),
-                              ),
+                      return DataRow(
+                        color: isCompleted
+                            ? null
+                            : WidgetStateProperty.all(isDark ? const Color(0xFF0F172A) : const Color(0xFFF0F9FF)),
+                        cells: [
+                          DataCell(
+                            InkWell(
+                              onTap: () => _showVisitDetailsDialog(context, visit, service, isTagalog),
                               child: Row(
-                                crossAxisAlignment: CrossAxisAlignment.start,
+                                mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  const Icon(Icons.notes_rounded, size: 16, color: Color(0xFF0284C7)),
-                                  const SizedBox(width: 6),
-                                  Expanded(
-                                    child: Text(
-                                      '${isTagalog ? "Mga Natuklasan / Payo" : "Technician Findings"}: ${visit.findings}',
-                                      style: TextStyle(fontSize: 12, color: subtextColor),
-                                    ),
+                                  CircleAvatar(
+                                    radius: 15,
+                                    backgroundColor: (isCompleted ? const Color(0xFF16A34A) : const Color(0xFF0284C7)).withValues(alpha: 0.15),
+                                    foregroundColor: isCompleted ? const Color(0xFF16A34A) : const Color(0xFF0284C7),
+                                    child: Icon(isCompleted ? Icons.check_circle_rounded : Icons.event_available_rounded, size: 16),
                                   ),
+                                  const SizedBox(width: 8),
+                                  Text(visit.farmerName, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: textColor)),
                                 ],
                               ),
                             ),
-                          ],
-                          const SizedBox(height: 10),
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Text(
-                                DateFormat('MMM dd, yyyy · hh:mm a').format(visit.scheduledDate),
-                                style: TextStyle(fontSize: 11, color: subtextColor),
+                          ),
+                          DataCell(Text('Brgy. ${visit.barangay}', style: TextStyle(fontSize: 12, color: textColor))),
+                          DataCell(
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF16A34A).withValues(alpha: 0.12),
+                                borderRadius: BorderRadius.circular(6),
                               ),
-                              Wrap(
-                                spacing: 6,
-                                children: [
-                                  OutlinedButton.icon(
-                                    style: OutlinedButton.styleFrom(
-                                      foregroundColor: const Color(0xFF0056B3),
-                                      side: const BorderSide(color: Color(0xFF0056B3)),
-                                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                              child: Text(visit.cropType, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF16A34A))),
+                            ),
+                          ),
+                          DataCell(
+                            Text(
+                              DateFormat('MMM dd, yyyy · hh:mm a').format(visit.scheduledDate),
+                              style: TextStyle(fontSize: 11.5, color: subtextColor),
+                            ),
+                          ),
+                          DataCell(
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFFEF3C7),
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(color: const Color(0xFFFDE68A)),
+                              ),
+                              child: Text(
+                                visit.purpose,
+                                style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold, color: Color(0xFF92400E)),
+                              ),
+                            ),
+                          ),
+                          DataCell(
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: (isCompleted ? const Color(0xFF16A34A) : const Color(0xFF0284C7)).withValues(alpha: 0.15),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Text(
+                                visit.status,
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.bold,
+                                  color: isCompleted ? const Color(0xFF16A34A) : const Color(0xFF0284C7),
+                                ),
+                              ),
+                            ),
+                          ),
+                          DataCell(
+                            isUnmapped
+                                ? ElevatedButton.icon(
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: const Color(0xFFD97706),
+                                      foregroundColor: Colors.white,
+                                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                                     ),
                                     icon: const Icon(Icons.polyline_rounded, size: 16),
                                     label: Text(
-                                      isTagalog ? 'Iguhit/Edit Boundary' : 'Draw/Edit Boundary',
-                                      style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold),
+                                      isTagalog ? '✏️ I-plot ang Mapa' : '✏️ Plot Map',
+                                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
                                     ),
                                     onPressed: () => _showEditFarmBoundaryDialog(context, service, farmerFarm, isTagalog),
-                                  ),
-                                  if (!isCompleted)
-                                    FilledButton.icon(
-                                      style: FilledButton.styleFrom(
-                                        backgroundColor: const Color(0xFF16A34A),
-                                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                                      ),
-                                      icon: const Icon(Icons.check_rounded, size: 16),
-                                      label: Text(isTagalog ? 'I-mark bilang Completed' : 'Mark Completed'),
-                                      onPressed: () => _showAddFindingsDialog(context, visit, isTagalog),
+                                  )
+                                : ElevatedButton.icon(
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: const Color(0xFF0056B3),
+                                      foregroundColor: Colors.white,
+                                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                                     ),
-                                ],
-                              ),
-                            ],
+                                    icon: const Icon(Icons.map_rounded, size: 16),
+                                    label: Text(
+                                      isTagalog ? '📍 Tingnan sa Mapa' : '📍 View Map',
+                                      style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                                    ),
+                                    onPressed: () => _showVisitMapDetailModal(context, service, visit, isTagalog),
+                                  ),
                           ),
                         ],
-                      ),
-                    ),
+                      );
+                    }).toList(),
                   ),
-                );
-              },
+                ),
+              ),
             ),
         ],
       ),
@@ -1283,6 +1413,556 @@ class _TechnicianScreenState extends State<TechnicianScreen> {
     );
   }
 
+  void _showAddFarmLotDialog(BuildContext context, AccountService service, Farmer farmer, bool isTagalog) {
+    final locationCtrl = TextEditingController(text: 'Farm Lot 2, Brgy. ${farmer.barangay}');
+    final areaCtrl = TextEditingController(text: '1.5');
+    String selectedCrop = 'Rice';
+    String selectedTenure = 'Owner';
+    String selectedBrgy = farmer.barangay;
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: Row(
+            children: [
+              const Icon(Icons.add_location_alt_rounded, color: Color(0xFF0056B3)),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  isTagalog ? 'Magdagdag ng Bagong Lupa kay ${farmer.profileName}' : 'Add New Farm Lot for ${farmer.profileName}',
+                  style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                ),
+              ),
+            ],
+          ),
+          content: SizedBox(
+            width: 440,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                TextField(
+                  controller: locationCtrl,
+                  decoration: InputDecoration(
+                    labelText: isTagalog ? 'Lokasyon ng Lupa' : 'Farm Lot Location/Address',
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: areaCtrl,
+                        keyboardType: TextInputType.number,
+                        decoration: InputDecoration(
+                          labelText: isTagalog ? 'Laki (Hectares)' : 'Land Area (Hectares)',
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: DropdownButtonFormField<String>(
+                        initialValue: AccountService.pagsanjanBarangays.contains(selectedBrgy) ? selectedBrgy : AccountService.pagsanjanBarangays.first,
+                        decoration: InputDecoration(
+                          labelText: 'Barangay',
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                        ),
+                        items: AccountService.pagsanjanBarangays.map((b) => DropdownMenuItem(value: b, child: Text(b))).toList(),
+                        onChanged: (val) => setDialogState(() => selectedBrgy = val ?? farmer.barangay),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: DropdownButtonFormField<String>(
+                        initialValue: selectedCrop,
+                        decoration: InputDecoration(
+                          labelText: isTagalog ? 'Pananim' : 'Crop Type',
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                        ),
+                        items: ['Rice', 'Talong (Eggplant)', 'Kamatis (Tomato)', 'Corn', 'Banana', 'Vegetables']
+                            .map((c) => DropdownMenuItem(value: c, child: Text(c)))
+                            .toList(),
+                        onChanged: (val) => setDialogState(() => selectedCrop = val ?? 'Rice'),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: DropdownButtonFormField<String>(
+                        initialValue: selectedTenure,
+                        decoration: InputDecoration(
+                          labelText: isTagalog ? 'Tenure' : 'Tenure Status',
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                        ),
+                        items: ['Owner', 'Tenant', 'Lease']
+                            .map((t) => DropdownMenuItem(value: t, child: Text(t)))
+                            .toList(),
+                        onChanged: (val) => setDialogState(() => selectedTenure = val ?? 'Owner'),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx), child: Text(isTagalog ? 'Kanselahin' : 'Cancel')),
+            ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0056B3), foregroundColor: Colors.white),
+              icon: const Icon(Icons.check_rounded, size: 16),
+              label: Text(isTagalog ? 'I-save ang Bagong Lupa' : 'Save New Lot'),
+              onPressed: () async {
+                final haVal = double.tryParse(areaCtrl.text.trim()) ?? 1.0;
+                await service.addFarmRecord(
+                  farmerId: farmer.id,
+                  farmerName: farmer.profileName,
+                  locationName: locationCtrl.text.trim().isEmpty ? 'Farm Lot, Brgy. $selectedBrgy' : locationCtrl.text.trim(),
+                  latitude: 14.2790,
+                  longitude: 121.4550,
+                  landAreaHectares: haVal,
+                  tenureStatus: selectedTenure,
+                  cropType: selectedCrop,
+                  barangay: selectedBrgy,
+                  boundaryPoints: [],
+                );
+                if (ctx.mounted) {
+                  Navigator.pop(ctx);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        isTagalog
+                            ? 'Matagumpay na naidagdag ang panibagong sakahan/lupa kay ${farmer.profileName}!'
+                            : 'Successfully added new farm lot for ${farmer.profileName}!',
+                      ),
+                      backgroundColor: const Color(0xFF0056B3),
+                    ),
+                  );
+                }
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+
+
+  void _showFarmMapDetailModal(BuildContext context, AccountService service, Farmer farmer, List<FarmRecord> farmerFarms, bool isTagalog) {
+    FarmRecord selectedFarm = farmerFarms.isNotEmpty
+        ? farmerFarms.first
+        : FarmRecord(
+            id: 'AUTO_${farmer.id}',
+            farmerId: farmer.id,
+            farmerName: farmer.profileName,
+            locationName: 'Sitio ${farmer.barangay}',
+            latitude: 14.2790,
+            longitude: 121.4550,
+            landAreaHectares: 1.5,
+            tenureStatus: 'Owner',
+            cropType: 'Rice',
+            barangay: farmer.barangay,
+            soilType: 'Clay Loam',
+          );
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setModalState) {
+          final isMultiLot = farmerFarms.length >= 2;
+          final totalHa = farmerFarms.fold(0.0, (sum, f) => sum + f.landAreaHectares);
+          final mapMarkers = <Marker>[
+            Marker(
+              point: LatLng(selectedFarm.latitude, selectedFarm.longitude),
+              width: 44,
+              height: 48,
+              child: const Icon(Icons.location_on_rounded, color: Color(0xFF0056B3), size: 36),
+            ),
+          ];
+
+          return AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+            contentPadding: EdgeInsets.zero,
+            backgroundColor: const Color(0xFFF8FAFC),
+            title: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+              decoration: const BoxDecoration(
+                color: Color(0xFF0056B3),
+                borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.map_rounded, color: Colors.white, size: 24),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '${isTagalog ? "Mapa ng Sakahan ni" : "Farm Map -"} ${farmer.profileName}',
+                          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
+                        ),
+                        Text(
+                          'Brgy. ${farmer.barangay} • ${farmerFarms.length} Farm Lot(s) • Total: ${totalHa.toStringAsFixed(1)} ha',
+                          style: const TextStyle(fontSize: 11.5, color: Color(0xFFBFDBFE)),
+                        ),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close_rounded, color: Colors.white),
+                    onPressed: () => Navigator.pop(ctx),
+                  ),
+                ],
+              ),
+            ),
+            content: SizedBox(
+              width: 680,
+              height: 560,
+              child: Column(
+                children: [
+                  if (isMultiLot)
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      color: const Color(0xFFEFF6FF),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.holiday_village_rounded, color: Color(0xFF0056B3), size: 18),
+                          const SizedBox(width: 8),
+                          Text(
+                            isTagalog ? 'Pumili ng Lupa na Tingnan:' : 'Select Farm Lot:',
+                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Color(0xFF0056B3)),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: DropdownButtonFormField<String>(
+                              initialValue: selectedFarm.id,
+                              isExpanded: true,
+                              decoration: InputDecoration(
+                                isDense: true,
+                                contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                                filled: true,
+                                fillColor: Colors.white,
+                              ),
+                              items: farmerFarms.map((f) => DropdownMenuItem(
+                                value: f.id,
+                                child: Text('${f.cropType} (${f.landAreaHectares} ha) - ${f.locationName}', overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                              )).toList(),
+                              onChanged: (selectedId) {
+                                if (selectedId != null) {
+                                  setModalState(() {
+                                    selectedFarm = farmerFarms.firstWhere((f) => f.id == selectedId);
+                                  });
+                                }
+                              },
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  Expanded(
+                    child: PagsanjanMapWidget(
+                      initialCenter: selectedFarm.latitude != 0 ? LatLng(selectedFarm.latitude, selectedFarm.longitude) : const LatLng(14.2790, 121.4550),
+                      initialZoom: 16.5,
+                      markers: mapMarkers,
+                      extraPolygons: [
+                        if (selectedFarm.boundaryPoints.length >= 3)
+                          Polygon(
+                            points: selectedFarm.boundaryPoints,
+                            color: const Color(0xFF0284C7).withValues(alpha: 0.35),
+                            borderColor: const Color(0xFF0056B3),
+                            borderStrokeWidth: 3.0,
+                          ),
+                      ],
+                      extraPolylines: selectedFarm.boundaryPoints.length >= 2
+                          ? [
+                              Polyline(
+                                points: selectedFarm.boundaryPoints.length >= 3 ? [...selectedFarm.boundaryPoints, selectedFarm.boundaryPoints.first] : selectedFarm.boundaryPoints,
+                                color: const Color(0xFF0056B3),
+                                strokeWidth: 3.5,
+                              )
+                            ]
+                          : [],
+                    ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    color: Colors.white,
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                '🌾 ${selectedFarm.cropType} (${selectedFarm.landAreaHectares} ha)',
+                                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF0056B3)),
+                              ),
+                              Text(
+                                'Soil: ${selectedFarm.soilType.isEmpty ? "Clay Loam" : selectedFarm.soilType} • Location: ${selectedFarm.locationName}',
+                                style: const TextStyle(fontSize: 11, color: Colors.grey),
+                              ),
+                            ],
+                          ),
+                        ),
+                        ElevatedButton.icon(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF0056B3),
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                          ),
+                          icon: const Icon(Icons.polyline_rounded, size: 16),
+                          label: Text(
+                            isTagalog ? '✏️ Iguhit / Edit Boundary' : '✏️ Draw / Edit Boundary',
+                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                          ),
+                          onPressed: () {
+                            Navigator.pop(ctx);
+                            _showEditFarmBoundaryDialog(context, service, selectedFarm, isTagalog);
+                          },
+                        ),
+                        const SizedBox(width: 8),
+                        OutlinedButton.icon(
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: const Color(0xFF16A34A),
+                            side: const BorderSide(color: Color(0xFF16A34A)),
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                          ),
+                          icon: const Icon(Icons.add_location_alt_rounded, size: 16),
+                          label: Text(isTagalog ? '➕ Dagdag Lupa' : '➕ Add Lot', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                          onPressed: () {
+                            Navigator.pop(ctx);
+                            _showAddFarmLotDialog(context, service, farmer, isTagalog);
+                          },
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  void _showVisitMapDetailModal(BuildContext context, AccountService service, TechnicianVisit visit, bool isTagalog) {
+    final farmer = service.farmers.firstWhere(
+      (f) => f.id == visit.farmerId || f.profileName.toLowerCase() == visit.farmerName.toLowerCase(),
+      orElse: () => Farmer(
+        id: visit.farmerId,
+        username: 'farmer',
+        password: '',
+        profileName: visit.farmerName,
+        barangay: visit.barangay,
+        contactNumber: 'N/A',
+        organization: 'Independent',
+      ),
+    );
+
+    final farmerFarm = service.farms.firstWhere(
+      (f) => f.farmerId == visit.farmerId || f.farmerName.toLowerCase() == visit.farmerName.toLowerCase(),
+      orElse: () => FarmRecord(
+        id: 'AUTO_${visit.farmerId}',
+        farmerId: visit.farmerId,
+        farmerName: visit.farmerName,
+        locationName: 'Sitio ${visit.barangay}',
+        latitude: 14.2790,
+        longitude: 121.4550,
+        landAreaHectares: 2.0,
+        tenureStatus: 'Owner',
+        cropType: visit.cropType,
+        barangay: visit.barangay,
+        soilType: 'Clay Loam',
+      ),
+    );
+
+    final isCompleted = visit.status == 'Completed';
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        contentPadding: EdgeInsets.zero,
+        backgroundColor: const Color(0xFFF8FAFC),
+        title: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+          decoration: const BoxDecoration(
+            color: Color(0xFF0056B3),
+            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+          ),
+          child: Row(
+            children: [
+              const Icon(Icons.event_note_rounded, color: Colors.white, size: 24),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '${isTagalog ? "Iskedyul ng Pagbisita kay" : "Field Visit Map -"} ${visit.farmerName}',
+                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
+                    ),
+                    Text(
+                      'Brgy. ${visit.barangay} • ${visit.cropType} • ${DateFormat('MMM dd, yyyy · hh:mm a').format(visit.scheduledDate)}',
+                      style: const TextStyle(fontSize: 11.5, color: Color(0xFFBFDBFE)),
+                    ),
+                  ],
+                ),
+              ),
+              IconButton(
+                icon: const Icon(Icons.close_rounded, color: Colors.white),
+                onPressed: () => Navigator.pop(ctx),
+              ),
+            ],
+          ),
+        ),
+        content: SizedBox(
+          width: 680,
+          height: 560,
+          child: Column(
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                color: const Color(0xFFEFF6FF),
+                child: Row(
+                  children: [
+                    const Icon(Icons.info_outline_rounded, color: Color(0xFF0056B3), size: 18),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        '${isTagalog ? "Layunin" : "Purpose"}: ${visit.purpose}',
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: Color(0xFF0056B3)),
+                      ),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: (isCompleted ? const Color(0xFF16A34A) : const Color(0xFF0284C7)).withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        visit.status,
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                          color: isCompleted ? const Color(0xFF16A34A) : const Color(0xFF0284C7),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Expanded(
+                child: PagsanjanMapWidget(
+                  initialCenter: farmerFarm.latitude != 0 ? LatLng(farmerFarm.latitude, farmerFarm.longitude) : const LatLng(14.2790, 121.4550),
+                  initialZoom: 16.5,
+                  markers: [
+                    Marker(
+                      point: LatLng(farmerFarm.latitude, farmerFarm.longitude),
+                      width: 44,
+                      height: 48,
+                      child: const Icon(Icons.location_on_rounded, color: Color(0xFF0056B3), size: 36),
+                    ),
+                  ],
+                  extraPolygons: [
+                    if (farmerFarm.boundaryPoints.length >= 3)
+                      Polygon(
+                        points: farmerFarm.boundaryPoints,
+                        color: const Color(0xFF0284C7).withValues(alpha: 0.35),
+                        borderColor: const Color(0xFF0056B3),
+                        borderStrokeWidth: 3.0,
+                      ),
+                  ],
+                  extraPolylines: farmerFarm.boundaryPoints.length >= 2
+                      ? [
+                          Polyline(
+                            points: farmerFarm.boundaryPoints.length >= 3 ? [...farmerFarm.boundaryPoints, farmerFarm.boundaryPoints.first] : farmerFarm.boundaryPoints,
+                            color: const Color(0xFF0056B3),
+                            strokeWidth: 3.5,
+                          )
+                        ]
+                      : [],
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.all(12),
+                color: Colors.white,
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            '👤 ${farmer.profileName} (📞 ${farmer.contactNumber})',
+                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFF0056B3)),
+                          ),
+                          Text(
+                            '🌾 ${farmerFarm.cropType} (${farmerFarm.landAreaHectares} ha) • Soil: ${farmerFarm.soilType.isEmpty ? "Clay Loam" : farmerFarm.soilType}',
+                            style: const TextStyle(fontSize: 11, color: Colors.grey),
+                          ),
+                        ],
+                      ),
+                    ),
+                    ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF0056B3),
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      ),
+                      icon: const Icon(Icons.polyline_rounded, size: 16),
+                      label: Text(
+                        isTagalog ? '✏️ Iguhit / Edit Boundary' : '✏️ Draw / Edit Boundary',
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                      ),
+                      onPressed: () {
+                        Navigator.pop(ctx);
+                        _showEditFarmBoundaryDialog(context, service, farmerFarm, isTagalog);
+                      },
+                    ),
+                    if (!isCompleted) ...[
+                      const SizedBox(width: 8),
+                      FilledButton.icon(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF16A34A),
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        ),
+                        icon: const Icon(Icons.check_circle_rounded, size: 16),
+                        label: Text(
+                          isTagalog ? '✅ I-mark Completed' : '✅ Mark Completed',
+                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                        ),
+                        onPressed: () {
+                          Navigator.pop(ctx);
+                          _showAddFindingsDialog(context, visit, isTagalog);
+                        },
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   // ==========================================
   // MODULE 2: FARMER & FARM/PLANTING MONITORING
   // ==========================================
@@ -1300,7 +1980,11 @@ class _TechnicianScreenState extends State<TechnicianScreen> {
       final matchesBrgy = _selectedBarangayFilter == 'All' || f.barangay.toLowerCase() == _selectedBarangayFilter.toLowerCase();
       final query = _searchQuery.toLowerCase();
       final matchesQuery = query.isEmpty || f.profileName.toLowerCase().contains(query) || f.organization.toLowerCase().contains(query);
-      return matchesBrgy && matchesQuery;
+
+      final farmerFarms = service.farms.where((farm) => farm.farmerId == f.id || farm.farmerName.toLowerCase() == f.profileName.toLowerCase()).toList();
+      final hasMappedFarm = farmerFarms.isNotEmpty && farmerFarms.any((farm) => farm.boundaryPoints.isNotEmpty);
+
+      return matchesBrgy && matchesQuery && hasMappedFarm;
     }).toList();
 
     farmers.sort((a, b) {
@@ -1308,7 +1992,7 @@ class _TechnicianScreenState extends State<TechnicianScreen> {
       final bFarms = service.farms.where((f) => f.farmerId == b.id || f.farmerName == b.profileName).toList();
 
       final aNeedsPlot = aFarms.isEmpty || aFarms.any((f) => f.boundaryPoints.isEmpty);
-      final bNeedsPlot = bFarms.isEmpty || bFarms.any((f) => bFarms.any((f) => f.boundaryPoints.isEmpty));
+      final bNeedsPlot = bFarms.isEmpty || bFarms.any((f) => f.boundaryPoints.isEmpty);
 
       if (aNeedsPlot && !bNeedsPlot) return -1;
       if (!aNeedsPlot && bNeedsPlot) return 1;
@@ -1379,7 +2063,7 @@ class _TechnicianScreenState extends State<TechnicianScreen> {
           ),
           const SizedBox(height: 16),
 
-          // MONITORING LIST FROM SUPABASE DATABASE
+          // MONITORING TABLE FROM SUPABASE DATABASE
           if (farmers.isEmpty)
             Center(
               child: Padding(
@@ -1391,170 +2075,184 @@ class _TechnicianScreenState extends State<TechnicianScreen> {
               ),
             )
           else
-            ListView.builder(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              itemCount: farmers.length,
-              itemBuilder: (context, index) {
-                final farmer = farmers[index];
-                final farmerFarms = service.farms.where((f) => f.farmerId == farmer.id || f.farmerName == farmer.profileName).toList();
+            Container(
+              width: double.infinity,
+              decoration: BoxDecoration(
+                color: cardBg,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: cardBorder),
+                boxShadow: const [BoxShadow(color: Colors.black12, blurRadius: 6)],
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(14),
+                child: SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: DataTable(
+                    headingRowColor: WidgetStateProperty.all(isDark ? const Color(0xFF1E293B) : const Color(0xFFEFF6FF)),
+                    dataRowMaxHeight: 68,
+                    columnSpacing: 18,
+                    columns: [
+                      DataColumn(label: Text(isTagalog ? 'Magsasaka' : 'Farmer Name', style: TextStyle(fontWeight: FontWeight.bold, color: primaryAccent))),
+                      DataColumn(label: Text(isTagalog ? 'Barangay & Asosasyon' : 'Barangay & Association', style: TextStyle(fontWeight: FontWeight.bold, color: primaryAccent))),
+                      DataColumn(label: Text(isTagalog ? 'Tanim & Sukat (ha)' : 'Crops & Area (ha)', style: TextStyle(fontWeight: FontWeight.bold, color: primaryAccent))),
+                      DataColumn(label: Text(isTagalog ? 'Uri ng Lupa' : 'Soil Type', style: TextStyle(fontWeight: FontWeight.bold, color: primaryAccent))),
+                      DataColumn(label: Text(isTagalog ? 'Boundary Status' : 'Boundary Status', style: TextStyle(fontWeight: FontWeight.bold, color: primaryAccent))),
+                      DataColumn(label: Text(isTagalog ? 'Mga Aksyon' : 'Actions', style: TextStyle(fontWeight: FontWeight.bold, color: primaryAccent))),
+                    ],
+                    rows: farmers.map((farmer) {
+                      final farmerFarms = service.farms.where((f) => f.farmerId == farmer.id || f.farmerName == farmer.profileName).toList();
+                      final isMultiLotOwner = farmerFarms.length >= 2;
+                      final totalHa = farmerFarms.fold(0.0, (sum, f) => sum + f.landAreaHectares);
 
-                return Card(
-                  color: cardBg,
-                  margin: const EdgeInsets.only(bottom: 14),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14), side: BorderSide(color: cardBorder)),
-                  child: Padding(
-                    padding: const EdgeInsets.all(14),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            CircleAvatar(
-                              backgroundColor: primaryAccent.withValues(alpha: 0.15),
-                              foregroundColor: primaryAccent,
-                              child: Text(farmer.profileName.isNotEmpty ? farmer.profileName[0] : 'F', style: const TextStyle(fontWeight: FontWeight.bold)),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(farmer.profileName, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: textColor)),
-                                  Text('Brgy. ${farmer.barangay} • Contact: ${farmer.contactNumber}', style: TextStyle(fontSize: 12, color: subtextColor)),
-                                  Text('Association: ${farmer.organization}', style: TextStyle(fontSize: 11, color: subtextColor)),
-                                ],
-                              ),
-                            ),
-                            OutlinedButton.icon(
-                              style: OutlinedButton.styleFrom(
-                                foregroundColor: const Color(0xFF0056B3),
-                                side: const BorderSide(color: Color(0xFF0056B3)),
-                              ),
-                              icon: const Icon(Icons.map_rounded, size: 16),
-                              label: Text(isTagalog ? 'Tingnan sa Mapa' : 'View Map'),
-                              onPressed: () {
-                                final farm = farmerFarms.isNotEmpty ? farmerFarms.first : null;
-                                if (farm != null) {
-                                  Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (_) => PagsanjanMapScreen(
-                                        markers: [
-                                          Marker(
-                                            point: LatLng(farm.latitude, farm.longitude),
-                                            width: 36,
-                                            height: 36,
-                                            child: const Icon(Icons.location_on_rounded, color: Color(0xFF0056B3), size: 32),
-                                          )
-                                        ],
-                                      ),
-                                    ),
-                                  );
-                                }
-                              },
-                            ),
-                          ],
-                        ),
-                        const Divider(height: 20),
+                      final farm = farmerFarms.isNotEmpty
+                          ? farmerFarms.first
+                          : FarmRecord(
+                              id: 'AUTO_${farmer.id}',
+                              farmerId: farmer.id,
+                              farmerName: farmer.profileName,
+                              locationName: 'Sitio ${farmer.barangay}',
+                              latitude: 14.2790,
+                              longitude: 121.4550,
+                              landAreaHectares: 1.5,
+                              tenureStatus: 'Owner',
+                              cropType: 'Rice',
+                              barangay: farmer.barangay,
+                              soilType: 'Clay Loam',
+                            );
 
-                        Text(
-                          isTagalog ? 'Mga Rekord ng Taniman at Sakahan mula sa Database:' : 'Monitored Farms & Crops from Database:',
-                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: primaryAccent),
-                        ),
-                        const SizedBox(height: 6),
+                      final isUnmapped = farmerFarms.isEmpty || farmerFarms.any((f) => f.boundaryPoints.isEmpty);
 
-                        if (farmerFarms.any((f) => f.boundaryPoints.isEmpty))
-                          Container(
-                            margin: const EdgeInsets.only(bottom: 8),
-                            padding: const EdgeInsets.all(8),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFFEF3C7),
-                              borderRadius: BorderRadius.circular(8),
-                              border: Border.all(color: const Color(0xFFFDE68A)),
-                            ),
-                            child: Row(
+                      return DataRow(
+                        color: isUnmapped
+                            ? WidgetStateProperty.all(isDark ? const Color(0xFF312E81).withValues(alpha: 0.3) : const Color(0xFFFEF3C7))
+                            : null,
+                        cells: [
+                          DataCell(
+                            Row(
+                              mainAxisSize: MainAxisSize.min,
                               children: [
-                                const Icon(Icons.warning_amber_rounded, color: Color(0xFFD97706), size: 18),
+                                CircleAvatar(
+                                  radius: 16,
+                                  backgroundColor: isMultiLotOwner ? const Color(0xFF7C3AED) : primaryAccent,
+                                  foregroundColor: Colors.white,
+                                  child: Text(farmer.profileName.isNotEmpty ? farmer.profileName[0] : 'F', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                                ),
                                 const SizedBox(width: 8),
-                                Expanded(
-                                  child: Text(
-                                    isTagalog ? '⚠️ Naghihintay ng pagbisita ng technician para i-plot ang boundary at uri ng lupa.' : '⚠️ Pending technician visit for farm boundary mapping & soil typing.',
-                                    style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF92400E)),
-                                  ),
+                                Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Text(farmer.profileName, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: textColor)),
+                                        if (isMultiLotOwner) ...[
+                                          const SizedBox(width: 6),
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                            decoration: BoxDecoration(color: const Color(0xFF7C3AED).withValues(alpha: 0.18), borderRadius: BorderRadius.circular(6)),
+                                            child: Text(
+                                              '🏡 Multi-Farm (${farmerFarms.length} Lots)',
+                                              style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Color(0xFF6D28D9)),
+                                            ),
+                                          ),
+                                        ],
+                                      ],
+                                    ),
+                                    Text('📞 ${farmer.contactNumber}', style: TextStyle(fontSize: 11, color: subtextColor)),
+                                  ],
                                 ),
                               ],
                             ),
                           ),
-
-                        if (farmerFarms.isEmpty)
-                          Text(isTagalog ? 'Walang nakatalagang sakahan.' : 'No farm records logged yet in database.', style: TextStyle(fontSize: 12, fontStyle: FontStyle.italic, color: subtextColor))
-                        else
-                          ...farmerFarms.map((farm) {
-                            return Container(
-                              margin: const EdgeInsets.only(top: 6),
-                              padding: const EdgeInsets.all(10),
+                          DataCell(
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Text('Brgy. ${farmer.barangay}', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 12, color: textColor)),
+                                Text(farmer.organization, style: TextStyle(fontSize: 11, color: subtextColor)),
+                              ],
+                            ),
+                          ),
+                          DataCell(
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Text(
+                                  isMultiLotOwner ? farmerFarms.map((f) => f.cropType).toSet().join(', ') : farm.cropType,
+                                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: const Color(0xFF16A34A)),
+                                ),
+                                Text(
+                                  isMultiLotOwner
+                                      ? 'Kabuuang Sukat: ${totalHa.toStringAsFixed(1)} ha (${farmerFarms.length} Lots)'
+                                      : '${farm.landAreaHectares} ha (${farm.tenureStatus})',
+                                  style: TextStyle(fontSize: 11, color: subtextColor),
+                                ),
+                              ],
+                            ),
+                          ),
+                          DataCell(
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                               decoration: BoxDecoration(
                                 color: isDark ? const Color(0xFF1E293B) : const Color(0xFFEFF6FF),
-                                borderRadius: BorderRadius.circular(10),
-                                border: Border.all(color: isDark ? const Color(0xFF334155) : const Color(0xFFBFDBFE)),
+                                borderRadius: BorderRadius.circular(6),
+                                border: Border.all(color: const Color(0xFFBFDBFE)),
                               ),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Row(
-                                    children: [
-                                      const Icon(Icons.eco_rounded, color: Color(0xFF16A34A), size: 20),
-                                      const SizedBox(width: 8),
-                                      Expanded(
-                                        child: Column(
-                                          crossAxisAlignment: CrossAxisAlignment.start,
-                                          children: [
-                                            Text(
-                                              'Crop: ${farm.cropType} (${farm.landAreaHectares} ha) • Soil: ${farm.soilType}',
-                                              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: textColor),
-                                            ),
-                                            Text(
-                                              'Location: ${farm.locationName} • Tenure: ${farm.tenureStatus}',
-                                              style: TextStyle(fontSize: 11, color: subtextColor),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                      Container(
-                                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                        decoration: BoxDecoration(color: const Color(0xFF16A34A).withValues(alpha: 0.15), borderRadius: BorderRadius.circular(8)),
-                                        child: const Text('Database Active', style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Color(0xFF16A34A))),
-                                      ),
-                                    ],
-                                  ),
-                                  const SizedBox(height: 8),
-                                  SizedBox(
-                                    width: double.infinity,
-                                    child: ElevatedButton.icon(
-                                      style: ElevatedButton.styleFrom(
-                                        backgroundColor: const Color(0xFF0056B3),
-                                        foregroundColor: Colors.white,
-                                        padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
-                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                                      ),
-                                      icon: const Icon(Icons.polyline_rounded, size: 16),
-                                      label: Text(
-                                        isTagalog ? '🗺️ Iguhit / I-edit ang Boundary at Uri ng Lupa' : '🗺️ Draw / Edit Farm Boundary & Soil',
-                                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
-                                      ),
-                                      onPressed: () => _showEditFarmBoundaryDialog(context, service, farm, isTagalog),
+                              child: Text(farm.soilType.isEmpty ? 'Clay Loam' : farm.soilType, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: textColor)),
+                            ),
+                          ),
+                          DataCell(
+                            isUnmapped
+                                ? Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                    decoration: BoxDecoration(color: const Color(0xFFF59E0B).withValues(alpha: 0.15), borderRadius: BorderRadius.circular(8)),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        const Icon(Icons.warning_amber_rounded, size: 14, color: Color(0xFFD97706)),
+                                        const SizedBox(width: 4),
+                                        Text(isTagalog ? 'Kailangan i-plot' : 'Needs Boundary Plotting', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFFD97706))),
+                                      ],
+                                    ),
+                                  )
+                                : Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                    decoration: BoxDecoration(color: const Color(0xFF16A34A).withValues(alpha: 0.15), borderRadius: BorderRadius.circular(8)),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        const Icon(Icons.check_circle_rounded, size: 14, color: Color(0xFF16A34A)),
+                                        const SizedBox(width: 4),
+                                        Text(isTagalog ? 'Na-plot na' : 'Mapped', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF16A34A))),
+                                      ],
                                     ),
                                   ),
-                                ],
+                          ),
+                          DataCell(
+                            ElevatedButton.icon(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFF0056B3),
+                                foregroundColor: Colors.white,
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                               ),
-                            );
-                          }),
-                      ],
-                    ),
+                              icon: const Icon(Icons.map_rounded, size: 16),
+                              label: Text(
+                                isTagalog ? '📍 Tingnan sa Mapa' : '📍 View Map',
+                                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                              ),
+                              onPressed: () => _showFarmMapDetailModal(context, service, farmer, farmerFarms, isTagalog),
+                            ),
+                          ),
+                        ],
+                      );
+                    }).toList(),
                   ),
-                );
-              },
+                ),
+              ),
             ),
         ],
       ),
@@ -1625,80 +2323,6 @@ class _TechnicianScreenState extends State<TechnicianScreen> {
             _showMapSidePanel = false;
           });
         }));
-      }
-    }
-
-    if (_showLandmarks) {
-      final List<Map<String, dynamic>> landmarks = [
-        {'name': 'Pagsanjan Municipal Hall (MAO)', 'lat': 14.2758, 'lng': 121.4542, 'icon': Icons.account_balance_rounded, 'color': Color(0xFFD97706)},
-        {'name': 'Pagsanjan Public Market', 'lat': 14.2735, 'lng': 121.4558, 'icon': Icons.storefront_rounded, 'color': Color(0xFFEA580C)},
-        {'name': 'Pagsanjan Church (Our Lady of Guadalupe)', 'lat': 14.2782, 'lng': 121.4538, 'icon': Icons.church_rounded, 'color': Color(0xFF7C3AED)},
-        {'name': 'Pagsanjan Tourist Port (Falls Boat Station)', 'lat': 14.2835, 'lng': 121.4480, 'icon': Icons.water_rounded, 'color': Color(0xFF0284C7)},
-      ];
-      for (final entry in _barangayCenterMap.entries) {
-        landmarks.add({
-          'name': 'Brgy. Hall - ${entry.key}',
-          'lat': entry.value.latitude + 0.0006,
-          'lng': entry.value.longitude + 0.0006,
-          'icon': Icons.location_city_rounded,
-          'color': Color(0xFFDC2626),
-        });
-      }
-
-      for (final lm in landmarks) {
-        final lmName = lm['name'] as String;
-        final lmLat = lm['lat'] as double;
-        final lmLng = lm['lng'] as double;
-        final lmIcon = lm['icon'] as IconData;
-        final lmColor = lm['color'] as Color;
-
-        mapMarkers.add(
-          Marker(
-            point: LatLng(lmLat, lmLng),
-            width: 40,
-            height: 44,
-            child: Tooltip(
-              message: '🏛️ Landmark: $lmName',
-              preferBelow: false,
-              decoration: BoxDecoration(
-                color: Color(0xFF0F172A),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              textStyle: TextStyle(color: Colors.white, fontSize: 11.5, fontWeight: FontWeight.bold),
-              child: GestureDetector(
-                onTap: () {
-                  setState(() {
-                    _mapCenter = LatLng(lmLat, lmLng);
-                    _mapZoom = 17.5;
-                  });
-                },
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(5),
-                      decoration: BoxDecoration(
-                        color: lmColor,
-                        shape: BoxShape.circle,
-                        border: Border.all(color: Colors.white, width: 2),
-                        boxShadow: const [BoxShadow(color: Colors.black38, blurRadius: 4, offset: const Offset(0, 2))],
-                      ),
-                      child: Icon(lmIcon, color: Colors.white, size: 15),
-                    ),
-                    ClipPath(
-                      clipper: _TriangleClipper(),
-                      child: Container(
-                        width: 7,
-                        height: 5,
-                        color: lmColor,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        );
       }
     }
 
@@ -1880,21 +2504,6 @@ class _TechnicianScreenState extends State<TechnicianScreen> {
                                 ),
                               ],
                             ),
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Text(
-                                  isTagalog ? 'Ipakita ang Landmarks' : 'Show Landmarks',
-                                  style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: subtextColor),
-                                ),
-                                const SizedBox(width: 4),
-                                Switch(
-                                  value: _showLandmarks,
-                                  activeThumbColor: const Color(0xFFD97706),
-                                  onChanged: (val) => setState(() => _showLandmarks = val),
-                                ),
-                              ],
-                            ),
                             const SizedBox(height: 6),
                             TextField(
                               onChanged: (val) => setState(() => _searchQuery = val),
@@ -2059,7 +2668,7 @@ class _TechnicianScreenState extends State<TechnicianScreen> {
                   ),
                   shape: BoxShape.circle,
                   border: Border.all(color: Colors.white, width: 2),
-                  boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 6, offset: const Offset(0, 3))],
+                  boxShadow: const [BoxShadow(color: Colors.black26, blurRadius: 6)],
                 ),
                 child: Icon(cropIcon, color: Colors.white, size: 18),
               ),
